@@ -10,27 +10,27 @@ Route::get('/', function () {
 
 // Admin Routes 
 
-Route::get('/admin/dashboard', function () {
-    return view('pages.users.admin.pages.common.dashboard');
+Route::get('/dashboard', function () {
+    return view('pages.users.pages.common.dashboard');
 })->name('dashboard');
 
-Route::get('/admin/users/manage', function () {
-    return view('pages.users.admin.pages.users.manageUsers');
+Route::get('/users/manage', function () {
+    return view('pages.users.pages.users.manageUsers');
 });
 
-Route::get('/admin/quizz/create', function () {
-    return view('pages.users.admin.pages.quizz.createQuizz');
+Route::get('/quizz/create', function () {
+    return view('pages.users.pages.quizz.createQuizz');
 });
-Route::get('/admin/quizz/manage', function () {
-    return view('pages.users.admin.pages.quizz.manageQuizz');
-});
-
-Route::get('/admin/quizz/questions/manage', function () {
-    return view('pages.users.admin.pages.questions.manageQuestion');
+Route::get('/quizz/manage', function () {
+    return view('pages.users.pages.quizz.manageQuizz');
 });
 
-Route::get('/admin/quizz/results', function () {
-    return view('pages.users.admin.pages.quizz.allResult');
+Route::get('/quizz/questions/manage', function () {
+    return view('pages.users.pages.questions.manageQuestion');
+});
+
+Route::get('/quizz/results', function () {
+    return view('pages.users.pages.quizz.allResult');
 });
 
 
@@ -43,12 +43,12 @@ Route::get('/exam/{quiz}', function (\Illuminate\Http\Request $r, $quiz) {
 
 // Student Routes
 
-Route::get('/student/dashboard', function () {
-    return view('pages.users.student.pages.common.dashboard');
-})->name('student.dashboard');
+// Route::get('student/dashboard', function () {
+//     return view('modules.common.studentDashboard');
+// })->name('student.dashboard');
 
-Route::get('/student/quizzes', function () {
-    return view('pages.users.student.pages.quizz.myQuizz');
+Route::get('/quizzes', function () {
+    return view('pages.users.pages.quizz.myQuizz');
 });
 
 Route::get('/exam/results/{resultId}/view', function ($resultId) {
@@ -58,24 +58,41 @@ Route::get('/exam/results/{resultId}/view', function ($resultId) {
 
 // Examiner Routes 
 
-Route::get('/examiner/dashboard', function () {
-    return view('pages.users.examiner.pages.common.dashboard');
-})->name('dashboard');
+// Route::get('examiner/dashboard', function () {
+//     return view('modules.common.examinerDashboard');
+// })->name('dashboard');
 
-Route::get('/examiner/users/manage', function () {
-    return view('pages.users.examiner.pages.users.manageUsers');
+// Route::get('/examiner/users/manage', function () {
+//     return view('pages.users.pages.users.manageUsers');
+// });
+
+// Route::get('/examiner/quizz/create', function () {
+//     return view('pages.users.pages.quizz.createQuizz');
+// });
+// Route::get('/examiner/quizz/manage', function () {
+//     return view('pages.users.pages.quizz.manageQuizz');
+// });
+
+// Route::get('/examiner/quizz/questions/manage', function () {
+//     return view('pages.users.pages.questions.manageQuestion');
+// });
+Route::get('/quizz/result/manage', function () {
+    return view('pages.users.pages.result.viewAssignedStudentResult');
 });
 
-Route::get('/examiner/quizz/create', function () {
-    return view('pages.users.examiner.pages.quizz.createQuizz');
-});
-Route::get('/examiner/quizz/manage', function () {
-    return view('pages.users.examiner.pages.quizz.manageQuizz');
-});
+//Dashboard menus & privileges
+Route::get('/dashboard-menu/manage', fn () => view('modules.dashboardMenu.manageDashboardMenu'));
+Route::get('/dashboard-menu/create', fn () => view('modules.dashboardMenu.createDashboardMenu'));
 
-Route::get('/examiner/quizz/questions/manage', function () {
-    return view('pages.users.examiner.pages.questions.manageQuestion');
-});
-Route::get('/examiner/quizz/result/manage', function () {
-    return view('pages.users.examiner.pages.result.viewAssignedStudentResult');
-});
+Route::get('/page-privilege/manage', fn () => view('modules.privileges.managePagePrivileges'));
+Route::get('/page-privilege/create', fn () => view('modules.privileges.createPagePrivileges'));
+
+Route::get('/user-privileges/manage', function () {
+    $userUuid = request('user_uuid');
+    $userId   = request('user_id');
+
+    return view('modules.privileges.assignPrivileges', [
+        'userUuid' => $userUuid,
+        'userId'   => $userId,
+    ]);
+})->name('modules.privileges.assign.user');

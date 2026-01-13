@@ -704,40 +704,82 @@ class UserController extends Controller
      * POST /api/users/{id}/image
      * file: image (multipart/form-data)
      */
-    public function updateImage(Request $request, int $id)
-    {
-        $v = Validator::make($request->all(), [
-            'image' => 'required|file|mimes:jpg,jpeg,png,webp,gif,svg|max:5120',
-        ]);
-        if ($v->fails()) {
-            return response()->json(['status'=>'error','errors'=>$v->errors()], 422);
-        }
+   public function updateImage(Request $request, int $id)
+{
+    $v = Validator::make($request->all(), [
+        // If your saveProfileImage() cannot handle SVG, REMOVE svg from here.
+        'image' => 'required|file|max:5120|mimes:jpg,jpeg,png,webp,gif,svg',
+    ]);
 
-        $user = DB::table('users')->where('id', $id)->whereNull('deleted_at')->first();
+    if ($v->fails()) {
+        return response()->json(['status' => 'error', 'errors' => $v->errors()], 422);
+    }
+
+    $file = $request->file('image');
+    if (!$file || !$file->isValid()) {
+        return response()->json(['status' => 'error', 'message' => 'Invalid image upload'], 422);
+    }
+
+    $newUrl = $this->saveProfileImage($file);
+    if ($newUrl === false) {
+        // Common cause: saveProfileImage() can’t process SVG/GIF/WebP if it tries to resize.
+        return response()->json(['status' => 'error', 'message' => 'Invalid image upload'], 422);
+    }
+
+    $oldUrl = null;
+
+    try {
+        DB::beginTransaction();
+
+        // Lock row to avoid race updates
+        $user = DB::table('users')
+            ->where('id', $id)
+            ->whereNull('deleted_at')
+            ->lockForUpdate()
+            ->first();
+
         if (!$user) {
-            return response()->json(['status'=>'error','message'=>'User not found'], 404);
+            DB::rollBack();
+            // Cleanup newly uploaded file since user doesn't exist
+            $this->deleteManagedProfileImage($newUrl);
+
+            return response()->json(['status' => 'error', 'message' => 'User not found'], 404);
         }
 
-        $newUrl = $this->saveProfileImage($request->file('image'));
-        if ($newUrl === false) {
-            return response()->json(['status'=>'error','message'=>'Invalid image upload'], 422);
-        }
-
-        $this->deleteManagedProfileImage($user->image);
+        $oldUrl = $user->image;
 
         DB::table('users')->where('id', $id)->update([
             'image'      => $newUrl,
             'updated_at' => now(),
         ]);
 
-        $fresh = DB::table('users')->where('id', $id)->first();
+        DB::commit();
+    } catch (\Throwable $e) {
+        DB::rollBack();
 
+        // If DB failed, remove newly uploaded file so you don't leave junk
+        $this->deleteManagedProfileImage($newUrl);
+
+        report($e);
         return response()->json([
-            'status'=>'success',
-            'message'=>'Image updated',
-            'user'=>$this->publicUserPayload($fresh),
-        ]);
+            'status'  => 'error',
+            'message' => 'Failed to update image. Please try again.',
+        ], 500);
     }
+
+    // Delete old image ONLY after DB commit succeeds
+    if (!empty($oldUrl)) {
+        $this->deleteManagedProfileImage($oldUrl);
+    }
+
+    $fresh = DB::table('users')->where('id', $id)->first();
+
+    return response()->json([
+        'status'  => 'success',
+        'message' => 'Image updated',
+        'user'    => $this->publicUserPayload($fresh),
+    ]);
+}
 
     /* =========================================================
      |                     Helper methods
@@ -789,19 +831,19 @@ class UserController extends Controller
 
     /** Public payload sent to FE (no sensitive fields). */
     protected function publicUserPayload(object $user): array
-    {
-        return [
-            'id'              => (int)$user->id,
-            'uuid'            => (string)($user->uuid ?? ''),
-            'name'            => (string)($user->name ?? ''),
-            'email'           => (string)($user->email ?? ''),
-            'role'            => (string)($user->role ?? ''),
-            'role_short_form' => (string)($user->role_short_form ?? ''),
-            'slug'            => (string)($user->slug ?? ''),
-            'image'           => (string)($user->image ?? ''),
-            'status'          => (string)($user->status ?? ''),
-        ];
-    }
+{
+    return [
+        'id'              => (int)$user->id,
+        'uuid'            => (string)($user->uuid ?? ''),
+        'name'            => (string)($user->name ?? ''),
+        'email'           => (string)($user->email ?? ''),
+        'role'            => (string)($user->role ?? ''),
+        'role_short_form' => (string)($user->role_short_form ?? ''),
+        'slug'            => (string)($user->slug ?? ''),
+        'image'           => $this->publicImageUrl($user->image ?? null), // ✅ FIXED
+        'status'          => (string)($user->status ?? ''),
+    ];
+}
 
         /** Generate unique 10-char UPPERCASE alphanumeric assignment code. */
     protected function generateAssignmentCode(): string
@@ -855,35 +897,54 @@ class UserController extends Controller
     }
 
     /** Save profile image into /Public/UserProfileImage and return absolute URL (or false on failure). */
-    protected function saveProfileImage($uploadedFile)
-    {
-        if (!$uploadedFile || !$uploadedFile->isValid()) return false;
+    /** Save profile image into /public/UserProfileImage and return RELATIVE path (or false). */
+protected function saveProfileImage($uploadedFile)
+{
+    if (!$uploadedFile || !$uploadedFile->isValid()) return false;
 
-        $destDir = public_path('UserProfileImage');
-        if (!File::isDirectory($destDir)) {
-            File::makeDirectory($destDir, 0755, true);
-        }
-
-        $ext      = strtolower($uploadedFile->getClientOriginalExtension() ?: 'bin');
-        $filename = 'usr_' . date('Ymd_His') . '_' . Str::lower(Str::random(16)) . '.' . $ext;
-
-        $uploadedFile->move($destDir, $filename);
-
-        return rtrim(config('app.url'), '/') . '/UserProfileImage/' . $filename;
+    $destDir = public_path('UserProfileImage');
+    if (!File::isDirectory($destDir)) {
+        File::makeDirectory($destDir, 0755, true);
     }
+
+    $ext      = strtolower($uploadedFile->getClientOriginalExtension() ?: 'bin');
+    $filename = 'usr_' . date('Ymd_His') . '_' . Str::lower(Str::random(16)) . '.' . $ext;
+
+    $uploadedFile->move($destDir, $filename);
+
+    // ✅ store relative path (works on any port/domain)
+    return '/UserProfileImage/' . $filename;
+}
+/** Convert stored image (absolute/relative) into current-host absolute URL. */
+protected function publicImageUrl(?string $value): string
+{
+    if (empty($value)) return '';
+
+    // If DB contains absolute url, extract only path
+    $path = parse_url($value, PHP_URL_PATH);
+    $path = $path ?: $value;
+
+    // force leading slash
+    $path = '/' . ltrim($path, '/');
+
+    // ✅ uses current request host/port automatically
+    return url($path);
+}
 
     /** Delete a managed profile image if it resides in /Public/UserProfileImage. */
     protected function deleteManagedProfileImage(?string $url): void
-    {
-        if (empty($url)) return;
-        $pathUrl = parse_url($url, PHP_URL_PATH) ?? '';
-        if (Str::startsWith($pathUrl, '/UserProfileImage/')) {
-            $abs = public_path(ltrim($pathUrl, '/'));
-            if (File::exists($abs)) {
-                @File::delete($abs);
-            }
-        }
+{
+    if (empty($url)) return;
+
+    $path = parse_url($url, PHP_URL_PATH);
+    $path = $path ?: $url; // if it's already relative
+    $path = '/' . ltrim($path, '/');
+
+    if (Str::startsWith($path, '/UserProfileImage/')) {
+        $abs = public_path(ltrim($path, '/'));
+        if (File::exists($abs)) @File::delete($abs);
     }
+}
 
         /**
      * POST /api/users/{id}/quizzes/assign
@@ -1223,6 +1284,60 @@ public function importUsersCsv(Request $request)
             'message' => 'Import failed',
         ], 500);
     }
+}
+public function getProfile(Request $request)
+{
+    $userId = $this->currentUserId($request);
+
+    if (!$userId) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Unauthorized'
+        ], 401);
+    }
+
+    $user = DB::table('users')->where('id', $userId)->first();
+
+    if (!$user) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'User not found'
+        ], 404);
+    }
+
+    // Role-based frontend permissions
+    $isEditable = in_array($user->role, ['admin', 'super_admin','student','instructor']);
+
+    $permissions = [
+        'can_edit_profile'   => $isEditable,
+        'can_change_image'   => $isEditable,
+        'can_change_password'=> $isEditable,
+        'can_view_profile'   => true
+    ];
+
+    // API endpoints to be used by frontend
+    $endpoints = [
+        'update_profile' => "/api/users/{$user->id}",
+        'update_image'   => "/api/users/{$user->id}/image",
+        'update_password'=> "/api/users/{$user->id}/password"
+    ];
+
+    return response()->json([
+        'status' => 'success',
+        'user' => [
+            'id'              => $user->id,
+            'name'            => $user->name,
+            'email'           => $user->email,
+            'phone_number'    => $user->phone_number,
+            'address'         => $user->address,
+            'role'            => $user->role,
+            'role_short_form' => $user->role_short_form,
+'image' => $this->publicImageUrl($user->image ?? null), // ✅ FIXED
+            'status'          => $user->status,
+        ],
+        'permissions' => $permissions,
+        'endpoints' => $endpoints
+    ]);
 }
 
 

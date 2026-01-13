@@ -1,5 +1,4 @@
 {{-- resources/views/examiner/quiz/viewAssignedStudentResult.blade.php --}}
-@extends('pages.users.examiner.layout.structure')
 @section('title','Assigned Students Results')
 
 @section('content')

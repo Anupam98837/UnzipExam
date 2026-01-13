@@ -96,3 +96,10 @@ Route::get('/user-privileges/manage', function () {
         'userId'   => $userId,
     ]);
 })->name('modules.privileges.assign.user');
+
+
+Route::get('/bubblegame', function () {
+    return view('modules.bubbleGame.manageBubbleGameQuestions');
+});
+//profile
+Route::get('/profile', fn () => view('pages.users.pages.common.profile'))->name('profile');

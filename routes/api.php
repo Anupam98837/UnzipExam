@@ -12,6 +12,8 @@ use App\Http\Controllers\API\QuizzResultController;
 use App\Http\Controllers\API\PagePrivilegeController;
 use App\Http\Controllers\API\DashboardMenuController;
 use App\Http\Controllers\API\UserPrivilegeController;
+use App\Http\Controllers\BubbleGameController;
+use App\Http\Controllers\BubbleGameQuestionController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
@@ -25,6 +27,7 @@ Route::post('/auth/logout', [UserController::class, 'logout'])
     ->middleware('checkRole');
 Route::get('/auth/check',   [UserController::class, 'authenticateToken']);
 Route::get('/auth/me-role', [UserController::class, 'getMyRole']);
+Route::get('/profile', [UserController::class, 'getProfile']);
 
 
 // Users Routes
@@ -37,7 +40,7 @@ Route::middleware(['checkRole:examiner,admin,super_admin'])->group(function () {
 });
 
 // Full management – only admins / super admins
-Route::middleware(['checkRole:admin,super_admin'])->group(function () {
+Route::middleware(['checkRole:admin,super_admin,student,examiner'])->group(function () {
     Route::post('/users',                        [UserController::class, 'store']);
     Route::match(['put','patch'], '/users/{id}', [UserController::class, 'update']);
     Route::delete('/users/{id}',                 [UserController::class, 'destroy']);
@@ -319,4 +322,87 @@ Route::middleware('checkRole')->group(function () {
   
     Route::get('/my/sidebar-menus', [\App\Http\Controllers\API\UserPrivilegeController::class, 'mySidebarMenus']);
     
+});
+// Bubble Game CRUD Routes
+Route::middleware('checkRole')->prefix('bubble-games')->group(function () {
+    
+    // List all games
+    Route::get('/', [BubbleGameController::class, 'index'])->name('bubble-games.index');
+    
+    // Create new game
+    Route::post('/', [BubbleGameController::class, 'store'])->name('bubble-games.store');
+    
+    // Show specific game
+    Route::get('/{uuid}', [BubbleGameController::class, 'show'])->name('bubble-games.show');
+    
+    // Update game
+    Route::put('/{uuid}', [BubbleGameController::class, 'update'])->name('bubble-games.update');
+    Route::patch('/{uuid}', [BubbleGameController::class, 'update'])->name('bubble-games.patch');
+    
+    // Delete game (soft delete)
+    Route::delete('/{uuid}', [BubbleGameController::class, 'destroy'])->name('bubble-games.destroy');
+    
+    // Restore soft-deleted game
+    Route::post('/{uuid}/restore', [BubbleGameController::class, 'restore'])->name('bubble-games.restore');
+    
+    // Permanently delete game
+    Route::delete('/{uuid}/force', [BubbleGameController::class, 'forceDelete'])->name('bubble-games.force-delete');
+    
+    // Duplicate game
+    Route::post('/{uuid}/duplicate', [BubbleGameController::class, 'duplicate'])->name('bubble-games.duplicate');
+
+    /*
+    |--------------------------------------------------------------------------
+    | Bubble Game Questions Routes (Nested)
+    |--------------------------------------------------------------------------
+    */
+    
+    // List all questions for a game
+    Route::get('/{gameUuid}/questions', [BubbleGameQuestionController::class, 'index'])
+        ->name('bubble-games.questions.index');
+    
+    // Create new question for a game
+    Route::post('/{gameUuid}/questions', [BubbleGameQuestionController::class, 'store'])
+        ->name('bubble-games.questions.store');
+    
+    // Bulk create questions
+    Route::post('/{gameUuid}/questions/bulk', [BubbleGameQuestionController::class, 'bulkStore'])
+        ->name('bubble-games.questions.bulk-store');
+    
+    // Reorder questions
+    Route::post('/{gameUuid}/questions/reorder', [BubbleGameQuestionController::class, 'reorder'])
+        ->name('bubble-games.questions.reorder');
+    
+    // Show specific question
+    Route::get('/{gameUuid}/questions/{questionUuid}', [BubbleGameQuestionController::class, 'show'])
+        ->name('bubble-games.questions.show');
+    
+    // Update question
+    Route::put('/{gameUuid}/questions/{questionUuid}', [BubbleGameQuestionController::class, 'update'])
+        ->name('bubble-games.questions.update');
+    Route::patch('/{gameUuid}/questions/{questionUuid}', [BubbleGameQuestionController::class, 'update'])
+        ->name('bubble-games.questions.patch');
+    
+    // Delete question
+    Route::delete('/{gameUuid}/questions/{questionUuid}', [BubbleGameQuestionController::class, 'destroy'])
+        ->name('bubble-games.questions.destroy');
+    
+    // Duplicate question
+    Route::post('/{gameUuid}/questions/{questionUuid}/duplicate', [BubbleGameQuestionController::class, 'duplicate'])
+        ->name('bubble-games.questions.duplicate');
+         /*
+    |--------------------------------------------------------------------------
+    | Bubble Game Results Routes
+    |--------------------------------------------------------------------------
+    */
+    Route::prefix('/results')->group(function () {
+        Route::get('/', [BubbleGameResultController::class, 'index']);
+        Route::post('/', [BubbleGameResultController::class, 'store']);
+        Route::get('/{uuid}', [BubbleGameResultController::class, 'show']);
+        Route::put('/{uuid}', [BubbleGameResultController::class, 'update']);
+        Route::patch('/{uuid}', [BubbleGameResultController::class, 'update']);
+        Route::delete('/{uuid}', [BubbleGameResultController::class, 'destroy']);
+        Route::post('/{uuid}/restore', [BubbleGameResultController::class, 'restore']);
+        Route::delete('/{uuid}/force', [BubbleGameResultController::class, 'forceDelete']);
+    });
 });

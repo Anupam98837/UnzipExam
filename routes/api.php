@@ -14,6 +14,7 @@ use App\Http\Controllers\API\DashboardMenuController;
 use App\Http\Controllers\API\UserPrivilegeController;
 use App\Http\Controllers\API\BubbleGameController;
 use App\Http\Controllers\API\BubbleGameQuestionController;
+use App\Http\Controllers\API\BubbleGameResultController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
@@ -390,14 +391,18 @@ Route::middleware('checkRole')->prefix('bubble-games')->group(function () {
     // Duplicate question
     Route::post('/{gameUuid}/questions/{questionUuid}/duplicate', [BubbleGameQuestionController::class, 'duplicate'])
         ->name('bubble-games.questions.duplicate');
-         /*
+      
+});
+   /*
     |--------------------------------------------------------------------------
     | Bubble Game Results Routes
     |--------------------------------------------------------------------------
     */
-    Route::prefix('/results')->group(function () {
+    Route::middleware('checkRole')->prefix('bubble-games-results')->group(function () {
         Route::get('/', [BubbleGameResultController::class, 'index']);
         Route::post('/', [BubbleGameResultController::class, 'store']);
+            Route::post('/submit/{gameUuid}', [BubbleGameResultController::class, 'submit'])->name('bubble-game-results.submit');
+
         Route::get('/{uuid}', [BubbleGameResultController::class, 'show']);
         Route::put('/{uuid}', [BubbleGameResultController::class, 'update']);
         Route::patch('/{uuid}', [BubbleGameResultController::class, 'update']);
@@ -405,4 +410,3 @@ Route::middleware('checkRole')->prefix('bubble-games')->group(function () {
         Route::post('/{uuid}/restore', [BubbleGameResultController::class, 'restore']);
         Route::delete('/{uuid}/force', [BubbleGameResultController::class, 'forceDelete']);
     });
-});

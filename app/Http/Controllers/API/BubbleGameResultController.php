@@ -1,6 +1,7 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\API;
+use App\Http\Controllers\Controller;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -11,6 +12,27 @@ use Illuminate\Validation\Rule;
 
 class BubbleGameResultController extends Controller
 {
+     private function actor(Request $request): array
+    {
+        return [
+            'role' => $request->attributes->get('auth_role'),
+            'type' => $request->attributes->get('auth_tokenable_type'),
+            'id'   => (int) ($request->attributes->get('auth_tokenable_id') ?? 0),
+        ];
+    }
+private function requireRole(Request $request, array $allowed)
+    {
+        $actor = $this->actor($request);
+
+        if (!$actor['role'] || !in_array($actor['role'], $allowed, true)) {
+            return response()->json([
+                'error'   => 'Unauthorized Access',
+                'message' => 'You do not have permission to access this resource.',
+            ], 403);
+        }
+
+        return null;
+    }
     /**
      * Display a listing of results.
      */
@@ -28,55 +50,66 @@ class BubbleGameResultController extends Controller
             )
             ->whereNull('bubble_game_results.deleted_at');
 
-        // Filter by game UUID
-        if ($request->has('game_uuid')) {
+        if ($request->filled('game_uuid')) {
             $query->where('bubble_game.uuid', $request->game_uuid);
         }
 
-        // Filter by user ID
-        if ($request->has('user_id')) {
-            $query->where('bubble_game_results.user_id', $request->user_id);
+        if ($request->filled('user_id')) {
+            $query->where('bubble_game_results.user_id', (int) $request->user_id);
         }
 
-        // Filter by current authenticated user
-        if ($request->get('my_results', false)) {
-            $query->where('bubble_game_results.user_id', Auth::id());
+        if ($request->boolean('my_results')) {
+            $query->where('bubble_game_results.user_id', (int) Auth::id());
         }
 
-        // Filter by attempt number
-        if ($request->has('attempt_no')) {
-            $query->where('bubble_game_results.attempt_no', $request->attempt_no);
+        if ($request->filled('attempt_no')) {
+            $query->where('bubble_game_results.attempt_no', (int) $request->attempt_no);
         }
 
-        // Filter by score range
-        if ($request->has('min_score')) {
-            $query->where('bubble_game_results.score', '>=', $request->min_score);
-        }
-        if ($request->has('max_score')) {
-            $query->where('bubble_game_results.score', '<=', $request->max_score);
+        if ($request->filled('min_score')) {
+            $query->where('bubble_game_results.score', '>=', (int) $request->min_score);
         }
 
-        // Search by game title
-        if ($request->has('search')) {
+        if ($request->filled('max_score')) {
+            $query->where('bubble_game_results.score', '<=', (int) $request->max_score);
+        }
+
+        if ($request->filled('search')) {
             $query->where('bubble_game.title', 'like', '%' . $request->search . '%');
         }
 
-        // Order by
+        // ✅ Whitelist ordering to avoid unsafe column injection
+        $allowedOrderBy = [
+            'bubble_game_results.created_at',
+            'bubble_game_results.updated_at',
+            'bubble_game_results.score',
+            'bubble_game_results.attempt_no',
+            'users.name',
+            'bubble_game.title',
+        ];
+
         $orderBy = $request->get('order_by', 'bubble_game_results.created_at');
-        $orderDir = $request->get('order_dir', 'desc');
+        if (!in_array($orderBy, $allowedOrderBy, true)) {
+            $orderBy = 'bubble_game_results.created_at';
+        }
+
+        $orderDir = strtolower($request->get('order_dir', 'desc'));
+        $orderDir = in_array($orderDir, ['asc', 'desc'], true) ? $orderDir : 'desc';
+
         $query->orderBy($orderBy, $orderDir);
 
-        // Paginate
-        $perPage = $request->get('per_page', 15);
-        $page = $request->get('page', 1);
+        // Paginate (manual)
+        $perPage = max(1, (int) $request->get('per_page', 15));
+        $page = max(1, (int) $request->get('page', 1));
         $offset = ($page - 1) * $perPage;
 
-        $total = $query->count();
+        $total = (clone $query)->count();
         $results = $query->offset($offset)->limit($perPage)->get();
 
-        // Decode JSON fields
         foreach ($results as $result) {
-            $result->user_answer_json = json_decode($result->user_answer_json);
+            $result->user_answer_json = $result->user_answer_json
+                ? json_decode($result->user_answer_json, true)
+                : null;
         }
 
         return response()->json([
@@ -86,12 +119,156 @@ class BubbleGameResultController extends Controller
                 'total' => $total,
                 'per_page' => $perPage,
                 'current_page' => $page,
-                'last_page' => ceil($total / $perPage),
-                'from' => $offset + 1,
-                'to' => min($offset + $perPage, $total)
-            ]
+                'last_page' => (int) ceil($total / $perPage),
+                'from' => $total ? ($offset + 1) : 0,
+                'to' => min($offset + $perPage, $total),
+            ],
         ]);
     }
+
+public function submit(Request $request)
+{
+    // ✅ use actor() (your middleware fills these)
+    $actor  = $this->actor($request);
+    $userId = (int) ($actor['id'] ?? 0);
+
+    if ($userId <= 0) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Unable to resolve user from token (actor id missing).'
+        ], 403);
+    }
+
+    // (Optional) restrict who can submit
+    // if ($resp = $this->requireRole($request, ['student'])) return $resp;
+
+    // ✅ validate: NO time_taken_sec here (not in your table)
+    $validator = Validator::make($request->all(), [
+        'game_uuid' => ['required', 'uuid'],
+        'answers' => ['required', 'array', 'min:1'],
+        'answers.*.question_uuid' => ['required', 'uuid'],
+        'answers.*.selected' => ['nullable'],
+
+        // Optional fields (stored inside JSON)
+        'answers.*.is_correct' => ['nullable', Rule::in(['yes','no'])],
+        'answers.*.spent_time_sec' => ['nullable', 'integer', 'min:0'],
+        'answers.*.is_skipped' => ['nullable', Rule::in(['yes','no'])],
+        'answers.*.selected_row_json' => ['nullable'],
+    ]);
+
+    if ($validator->fails()) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Validation failed',
+            'errors'  => $validator->errors(),
+        ], 422);
+    }
+
+    // ✅ Load game
+    $game = DB::table('bubble_game')
+        ->where('uuid', $request->game_uuid)
+        ->whereNull('deleted_at')
+        ->first();
+
+    if (!$game) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Game not found'
+        ], 404);
+    }
+
+    $answers = $request->input('answers', []);
+
+    // ✅ Validate questions belong to this game (prevents null id issues)
+    $questionUuids = array_values(array_unique(array_filter(array_map(
+        fn ($a) => $a['question_uuid'] ?? null,
+        $answers
+    ))));
+
+    $questionMap = DB::table('bubble_game_questions')
+        ->where('bubble_game_id', $game->id)
+        ->whereIn('uuid', $questionUuids)
+        ->pluck('id', 'uuid'); // [uuid => id]
+
+    $missing = array_values(array_diff($questionUuids, $questionMap->keys()->all()));
+    if (!empty($missing)) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Some questions are invalid / not in this game',
+            'missing_question_uuids' => $missing
+        ], 422);
+    }
+
+    try {
+        return DB::transaction(function () use ($request, $userId, $game, $answers, $questionMap) {
+
+            // ✅ attempt_no computed only inside transaction
+            $attemptNo = (int) (DB::table('bubble_game_results')
+                ->where('bubble_game_id', $game->id)
+                ->where('user_id', $userId)
+                ->max('attempt_no') ?? 0) + 1;
+
+            // ✅ Build JSON to store in user_answer_json (matches your migration)
+            $normalized = [];
+            foreach ($answers as $a) {
+                $qUuid = $a['question_uuid'];
+
+                $normalized[] = [
+                    'question_id'       => (int) $questionMap->get($qUuid), // stored inside JSON only
+                    'question_uuid'     => $qUuid,
+                    'selected'          => $a['selected'] ?? null,
+                    'is_correct'        => $a['is_correct'] ?? null,
+                    'spent_time_sec'    => $a['spent_time_sec'] ?? null,
+                    'is_skipped'        => $a['is_skipped'] ?? null,
+                    'selected_row_json' => $a['selected_row_json'] ?? null,
+                ];
+            }
+
+            // ✅ Score (only if is_correct present)
+            $score = 0;
+            if (!empty($normalized) && array_key_exists('is_correct', $normalized[0]) && $normalized[0]['is_correct'] !== null) {
+                $score = $this->calculateScore(
+                    $normalized,
+                    (int) ($game->points_correct ?? 1),
+                    (int) ($game->points_wrong ?? 0)
+                );
+            }
+
+            $resultUuid = (string) Str::uuid();
+
+            $resultId = DB::table('bubble_game_results')->insertGetId([
+                'uuid'            => $resultUuid,
+                'bubble_game_id'  => (int) $game->id,
+                'user_id'         => (int) $userId,
+                'attempt_no'      => (int) $attemptNo,
+                'user_answer_json'=> json_encode($normalized, JSON_UNESCAPED_UNICODE),
+                'score'           => (int) $score,
+
+                'created_at'      => now(),
+                'updated_at'      => now(),
+                'created_at_ip'   => $request->ip(),
+                'updated_at_ip'   => $request->ip(),
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Submitted successfully',
+                'data' => [
+                    'id' => $resultId,
+                    'uuid' => $resultUuid,
+                    'attempt_no' => $attemptNo,
+                    'score' => (int) $score
+                ]
+            ], 201);
+        });
+    } catch (\Throwable $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Submit failed',
+            'error'   => $e->getMessage()
+        ], 500);
+    }
+}
 
     /**
      * Display results for a specific game.
@@ -554,6 +731,8 @@ class BubbleGameResultController extends Controller
         $score = 0;
 
         foreach ($answers as $answer) {
+            if (!is_array($answer)) continue;
+
             if (isset($answer['is_correct'])) {
                 if ($answer['is_correct'] === 'yes') {
                     $score += $pointsCorrect;
@@ -563,8 +742,9 @@ class BubbleGameResultController extends Controller
             }
         }
 
-        return max(0, $score); // Ensure score is never negative
+        return max(0, $score);
     }
+
 
     /**
      * Get detailed analytics for a game.

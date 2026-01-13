@@ -1,1104 +1,898 @@
+@extends('pages.users.layout.structure')
 
-        @extends('pages.users.layout.structure')
 @push('styles')
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"/>
-    <link rel="stylesheet" href="{{ asset('assets/css/common/main.css') }}"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"/>
+  <link rel="stylesheet" href="{{ asset('assets/css/common/main.css') }}"/>
 
-    <style>
+  <style>
     :root{
-        --ink: #111827;
-        --muted: #6b7280;
-        --surface: #ffffff;
-        --border: #e5e7eb;
-        --primary: #4f46e5;
-        --secondary: #0ea5e9;
-        --danger: #ef4444;
-        --success: #10b981;
-        --warning: #f59e0b;
-        --bg-gray: #f9fafb;
+      --ink: #111827;
+      --muted: #6b7280;
+      --surface: #ffffff;
+      --border: #e5e7eb;
+      --primary: #4f46e5;
+      --secondary: #0ea5e9;
+      --danger: #ef4444;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --bg-gray: #f9fafb;
     }
-    html.theme-dark :root{ 
-        --surface: #1e293b; 
-        --border: #334155; 
-        --bg-gray: #0f172a; 
-        --ink: #f1f5f9;
+    html.theme-dark :root{
+      --surface: #1e293b;
+      --border: #334155;
+      --bg-gray: #0f172a;
+      --ink: #f1f5f9;
     }
 
-    body{ 
-        background: var(--bg-gray); 
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; 
-        margin: 0; 
-        padding: 0; 
+    body{
+      background: var(--bg-gray);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      margin: 0;
+      padding: 0;
     }
-    
-    .container{ 
-        max-width: 1400px; 
-        margin: 0 auto; 
-        padding: 20px; 
+
+    .container{
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 20px;
     }
 
     /* Game Header */
     .game-header{
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        padding: 20px;
-        margin-bottom: 24px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }
     .game-header-top{
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        margin-bottom: 16px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 16px;
     }
     .game-chip{
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        padding: 4px 12px;
-        border-radius: 999px;
-        font-size: 12px;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        background: linear-gradient(135deg, #a5b4fc, #818cf8);
-        color: white;
-        margin-bottom: 8px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      background: linear-gradient(135deg, #a5b4fc, #818cf8);
+      color: white;
+      margin-bottom: 8px;
     }
     .game-title{
-        margin: 0 0 8px;
-        font-size: 20px;
-        font-weight: 700;
-        color: var(--ink);
+      margin: 0 0 8px;
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--ink);
     }
     .game-desc{
-        margin: 0;
-        font-size: 14px;
-        color: var(--muted);
-        max-width: 600px;
+      margin: 0;
+      font-size: 14px;
+      color: var(--muted);
+      max-width: 600px;
     }
     .game-meta{
-        display: flex;
-        gap: 24px;
-        flex-wrap: wrap;
+      display: flex;
+      gap: 24px;
+      flex-wrap: wrap;
     }
     .meta-item{
-        text-align: center;
-        min-width: 100px;
+      text-align: center;
+      min-width: 100px;
     }
     .meta-label{
-        font-size: 12px;
-        color: var(--muted);
-        margin-bottom: 4px;
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 4px;
     }
     .meta-value{
-        font-size: 16px;
-        font-weight: 600;
-        color: var(--ink);
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--ink);
     }
 
     /* Layout */
-    .layout-grid{ 
-        display: grid; 
-        grid-template-columns: 300px 1fr; 
-        gap: 20px; 
-        align-items: start;
+    .layout-grid{
+      display: grid;
+      grid-template-columns: 300px 1fr;
+      gap: 20px;
+      align-items: start;
     }
-    @media (max-width: 1024px){ 
-        .layout-grid{ 
-            grid-template-columns: 1fr; 
-        } 
+    @media (max-width: 1024px){
+      .layout-grid{ grid-template-columns: 1fr; }
     }
 
     /* Sidebar */
-    .sidebar{ 
-        background: var(--surface); 
-        border: 1px solid var(--border); 
-        border-radius: 12px; 
-        overflow: hidden;
-        position: sticky;
-        top: 20px;
-        height: calc(100vh - 200px);
-        display: flex;
-        flex-direction: column;
+    .sidebar{
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      position: sticky;
+      top: 20px;
+      height: calc(100vh - 200px);
+      display: flex;
+      flex-direction: column;
     }
-    .sidebar-header{ 
-        padding: 16px; 
-        border-bottom: 1px solid var(--border);
-        background: var(--bg-gray);
+    .sidebar-header{
+      padding: 16px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-gray);
     }
-    .sidebar-header h6{ 
-        margin: 0; 
-        font-size: 14px; 
-        font-weight: 600; 
-        color: var(--ink);
+    .sidebar-header h6{
+      margin: 0;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--ink);
     }
     .sidebar-actions{
-        padding: 12px 16px;
-        border-bottom: 1px solid var(--border);
-        display: flex;
-        gap: 8px;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      gap: 8px;
     }
     .sidebar-search{
-        flex: 1;
-        position: relative;
+      flex: 1;
+      position: relative;
     }
     .sidebar-search input{
-        width: 100%;
-        padding: 8px 12px 8px 36px;
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        font-size: 13px;
-        background: var(--surface);
+      width: 100%;
+      padding: 8px 12px 8px 36px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 13px;
+      background: var(--surface);
     }
     .sidebar-search .search-icon{
-        position: absolute;
-        left: 12px;
-        top: 50%;
-        transform: translateY(-50%);
-        color: var(--muted);
-        font-size: 12px;
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--muted);
+      font-size: 12px;
     }
     .sidebar-body{
-        flex: 1;
-        overflow-y: auto;
-        padding: 8px 0;
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 0;
     }
 
     /* Question List */
-    .question-list{ 
-        padding: 0; 
-        margin: 0; 
-        list-style: none; 
+    .question-list{ padding: 0; margin: 0; list-style: none; }
+    .question-item{
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      position: relative;
     }
-    .question-item{ 
-        padding: 12px 16px; 
-        border-bottom: 1px solid var(--border); 
-        cursor: pointer; 
-        transition: all 0.2s;
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        position: relative;
+    .question-item:hover{ background: var(--bg-gray); }
+    .question-item.active{
+      background: #eef2ff;
+      border-left: 3px solid var(--primary);
     }
-    .question-item:hover{ 
-        background: var(--bg-gray); 
-    }
-    .question-item.active{ 
-        background: #eef2ff; 
-        border-left: 3px solid var(--primary);
-    }
-    html.theme-dark .question-item.active{ 
-        background: #312e81; 
-    }
+    html.theme-dark .question-item.active{ background: #312e81; }
     .q-number{
-        width: 28px;
-        height: 28px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: var(--bg-gray);
-        border-radius: 6px;
-        font-size: 12px;
-        font-weight: 600;
-        color: var(--muted);
-        flex-shrink: 0;
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg-gray);
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      flex-shrink: 0;
     }
     .question-item.active .q-number{
-        background: var(--primary);
-        color: white;
+      background: var(--primary);
+      color: white;
     }
-    .q-content{
-        flex: 1;
-        min-width: 0;
-    }
+    .q-content{ flex: 1; min-width: 0; }
     .q-title{
-        font-size: 13px;
-        font-weight: 500;
-        color: var(--ink);
-        margin: 0 0 4px;
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--ink);
+      margin: 0 0 4px;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
     }
     .q-meta{
-        display: flex;
-        gap: 6px;
-        align-items: center;
+      display: flex;
+      gap: 6px;
+      align-items: center;
     }
     .q-badge{
-        padding: 2px 6px;
-        border-radius: 4px;
-        font-size: 10px;
-        font-weight: 600;
-        white-space: nowrap;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 600;
+      white-space: nowrap;
     }
-    .q-badge.bubbles{
-        background: #dbeafe;
-        color: #1e40af;
-    }
-    .q-badge.points{
-        background: #dcfce7;
-        color: #166534;
-    }
-    .q-badge.type-asc{
-        background: #f0f9ff;
-        color: #0369a1;
-    }
-    .q-badge.type-desc{
-        background: #fef7cd;
-        color: #92400e;
-    }
-    .question-menu{
-        position: relative;
-    }
-    .menu-btn{
-        width: 24px;
-        height: 24px;
-        border: none;
-        background: transparent;
-        border-radius: 4px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        color: var(--muted);
-        transition: all 0.2s;
-    }
-    .menu-btn:hover{
-        background: var(--bg-gray);
-        color: var(--ink);
-    }
-    .menu-dropdown{
-        position: absolute;
-        top: 100%;
-        right: 0;
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        z-index: 100;
-        min-width: 120px;
-        display: none;
-    }
-    .menu-dropdown.show{
-        display: block;
-    }
-    .menu-item{
-        padding: 8px 12px;
-        font-size: 13px;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        transition: all 0.2s;
-        white-space: nowrap;
-    }
-    .menu-item:hover{
-        background: var(--bg-gray);
-    }
-    .menu-item.view{ color: var(--secondary); }
-    .menu-item.edit{ color: var(--primary); }
-    .menu-item.delete{ color: var(--danger); }
+    .q-badge.bubbles{ background: #dbeafe; color: #1e40af; }
+    .q-badge.points{ background: #dcfce7; color: #166534; }
+    .q-badge.type-asc{ background: #f0f9ff; color: #0369a1; }
+    .q-badge.type-desc{ background: #fef7cd; color: #92400e; }
 
     /* Main Content */
     .main-content{
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        overflow: hidden;
-        position: relative;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      position: relative;
     }
     .content-header{
-        padding: 16px 20px;
-        border-bottom: 1px solid var(--border);
-        background: var(--bg-gray);
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-gray);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
     }
     .content-header h5{
-        margin: 0;
-        font-size: 16px;
-        font-weight: 600;
-        color: var(--ink);
+      margin: 0;
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--ink);
     }
-    .content-header-actions{
-        display: flex;
-        gap: 8px;
-        align-items: center;
-    }
-    .content-body{
-        padding: 24px;
-        min-height: 500px;
-        position: relative;
-    }
+    .content-header-actions{ display: flex; gap: 8px; align-items: center; }
+    .content-body{ padding: 24px; min-height: 500px; position: relative; }
 
     /* Form Elements */
     .section-title{
-        font-size: 15px;
-        font-weight: 600;
-        color: var(--ink);
-        margin: 0 0 16px;
-        padding-bottom: 8px;
-        border-bottom: 2px solid var(--border);
-        display: flex;
-        align-items: center;
-        gap: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--ink);
+      margin: 0 0 16px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
     }
-    .row{ 
-        display: flex; 
-        gap: 16px; 
-        margin-bottom: 20px; 
-    }
-    .col{ 
-        flex: 1; 
-    }
-    .form-group{ 
-        margin-bottom: 20px; 
-    }
-    .form-label{ 
-        display: block; 
-        margin-bottom: 6px; 
-        font-size: 13px; 
-        font-weight: 600; 
-        color: var(--ink);
+    .section-title .st-left{ display:flex; align-items:center; gap:8px; }
+    .row{ display: flex; gap: 16px; margin-bottom: 20px; }
+    .col{ flex: 1; }
+    .form-group{ margin-bottom: 20px; }
+    .form-label{
+      display: block;
+      margin-bottom: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--ink);
     }
     .form-control, .form-select{
-        width: 100%;
-        padding: 10px 12px;
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        font-size: 14px;
-        background: var(--surface);
-        color: var(--ink);
-        transition: all 0.2s;
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 14px;
+      background: var(--surface);
+      color: var(--ink);
+      transition: all 0.2s;
     }
     .form-control:focus, .form-select:focus{
-        outline: none;
-        border-color: var(--primary);
-        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
     }
 
     /* Bubbles Editor */
     .bubbles-editor{
-        background: var(--bg-gray);
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        padding: 16px;
-        margin-bottom: 20px;
+      background: var(--bg-gray);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 20px;
     }
     .bubbles-list{
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-        margin-bottom: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 16px;
     }
     .bubble-item{
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        padding: 12px;
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      transition: all 0.2s;
     }
     .bubble-item:hover{
-        border-color: var(--primary);
-        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+      border-color: var(--primary);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
     }
-    .bubble-handle{
-        color: var(--muted);
-        cursor: move;
-        font-size: 14px;
-    }
-    .bubble-inputs{
-        flex: 1;
-        display: flex;
-        gap: 12px;
-    }
-    .bubble-label{
-        flex: 2;
-    }
-    .bubble-value{
-        flex: 1;
-    }
-    .bubble-actions{
-        display: flex;
-        gap: 8px;
-    }
+    .bubble-handle{ color: var(--muted); cursor: move; font-size: 14px; }
+    .bubble-inputs{ flex: 1; display: flex; gap: 12px; }
+    .bubble-label{ flex: 2; }
+    .bubble-value{ flex: 1; }
+    .bubble-actions{ display: flex; gap: 8px; }
     .bubble-btn{
-        width: 32px;
-        height: 32px;
-        border: none;
-        background: transparent;
-        border-radius: 6px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        color: var(--muted);
-        transition: all 0.2s;
+      width: 32px;
+      height: 32px;
+      border: none;
+      background: transparent;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: var(--muted);
+      transition: all 0.2s;
     }
-    .bubble-btn:hover{
-        background: var(--bg-gray);
-    }
-    .bubble-btn.delete:hover{
-        background: #fee;
-        color: var(--danger);
-    }
+    .bubble-btn:hover{ background: var(--bg-gray); }
+    .bubble-btn.delete:hover{ background: #fee; color: var(--danger); }
     .add-bubble-btn{
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 10px 16px;
-        border: 2px dashed var(--border);
-        background: transparent;
-        border-radius: 8px;
-        font-size: 13px;
-        font-weight: 500;
-        color: var(--primary);
-        cursor: pointer;
-        transition: all 0.2s;
-        width: 100%;
-        justify-content: center;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      border: 2px dashed var(--border);
+      background: transparent;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--primary);
+      cursor: pointer;
+      transition: all 0.2s;
+      width: 100%;
+      justify-content: center;
     }
-    .add-bubble-btn:hover{
-        border-color: var(--primary);
-        background: #f5f3ff;
-    }
+    .add-bubble-btn:hover{ border-color: var(--primary); background: #f5f3ff; }
 
-    /* JSON Editors */
-    .json-editor{
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        overflow: hidden;
-        margin-bottom: 16px;
+    /* Answer Order Builder */
+    .answer-wrap{
+      background: var(--bg-gray);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+      margin-bottom: 16px;
     }
-    .json-header{
-        padding: 12px 16px;
-        background: var(--bg-gray);
-        border-bottom: 1px solid var(--border);
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
+    .answer-toolbar{
+      display:flex;
+      gap:8px;
+      align-items:center;
+      justify-content: space-between;
+      margin-bottom: 12px;
     }
-    .json-title{
-        font-size: 13px;
-        font-weight: 600;
-        color: var(--ink);
-        display: flex;
-        align-items: center;
-        gap: 6px;
+    .answer-hint{
+      font-size: 12px;
+      color: var(--muted);
+      margin: 0;
     }
-    .json-help{
-        font-size: 12px;
-        color: var(--muted);
-        cursor: help;
+    .answer-list{
+      display:flex;
+      flex-direction:column;
+      gap: 10px;
     }
-    .json-area{
-        width: 100%;
-        min-height: 100px;
-        padding: 12px;
-        border: none;
-        background: var(--surface);
-        color: var(--ink);
-        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-        font-size: 13px;
-        line-height: 1.5;
-        resize: vertical;
-        outline: none;
+    .answer-item{
+      display:flex;
+      align-items:center;
+      gap: 12px;
+      padding: 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      transition: all .2s;
     }
-    .json-area:focus{
-        background: var(--bg-gray);
+    .answer-item:hover{
+      border-color: var(--primary);
+      box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    }
+    .answer-handle{
+      color: var(--muted);
+      cursor: move;
+      font-size: 14px;
+      width: 24px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      flex-shrink:0;
+    }
+    .answer-orderno{
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      background: #eef2ff;
+      color: #3730a3;
+      font-weight: 700;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      flex-shrink:0;
+      font-size: 13px;
+    }
+    html.theme-dark .answer-orderno{
+      background:#312e81;
+      color:#fff;
+    }
+    .answer-main{ flex:1; min-width:0; }
+    .answer-eq{
+      margin: 0 0 6px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--ink);
+      word-break: break-word;
+    }
+    .answer-meta{
+      display:flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items:center;
+    }
+    .answer-pill{
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--bg-gray);
+      color: var(--ink);
+      display:inline-flex;
+      align-items:center;
+      gap: 6px;
+    }
+    .answer-pill.ok{
+      background: #dcfce7;
+      border-color: #bbf7d0;
+      color: #166534;
+    }
+    .answer-pill.err{
+      background: #fee2e2;
+      border-color: #fecaca;
+      color: #991b1b;
     }
 
     /* Buttons */
     .btn{
-        padding: 10px 20px;
-        border: none;
-        border-radius: 8px;
-        font-size: 14px;
-        font-weight: 500;
-        cursor: pointer;
-        transition: all 0.2s;
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
     }
-    .btn-primary{
-        background: var(--primary);
-        color: white;
-    }
-    .btn-primary:hover{
-        background: #4338ca;
-        transform: translateY(-1px);
-    }
-    .btn-secondary{
-        background: var(--secondary);
-        color: white;
-    }
-    .btn-secondary:hover{
-        background: #0284c7;
-        transform: translateY(-1px);
-    }
-    .btn-light{
-        background: var(--surface);
-        color: var(--ink);
-        border: 1px solid var(--border);
-    }
-    .btn-light:hover{
-        background: var(--bg-gray);
-        border-color: var(--primary);
-    }
-    .btn-danger{
-        background: var(--danger);
-        color: white;
-    }
-    .btn-danger:hover{
-        background: #dc2626;
-    }
-    .btn-sm{
-        padding: 6px 12px;
-        font-size: 13px;
-    }
+    .btn-primary{ background: var(--primary); color: white; }
+    .btn-primary:hover{ background: #4338ca; transform: translateY(-1px); }
+    .btn-secondary{ background: var(--secondary); color: white; }
+    .btn-secondary:hover{ background: #0284c7; transform: translateY(-1px); }
+    .btn-light{ background: var(--surface); color: var(--ink); border: 1px solid var(--border); }
+    .btn-light:hover{ background: var(--bg-gray); border-color: var(--primary); }
+    .btn-danger{ background: var(--danger); color: white; }
+    .btn-danger:hover{ background: #dc2626; }
+    .btn-sm{ padding: 6px 12px; font-size: 13px; }
 
     /* Footer */
     .content-footer{
-        padding: 16px 24px;
-        border-top: 1px solid var(--border);
-        display: flex;
-        justify-content: flex-end;
-        gap: 12px;
-        background: var(--bg-gray);
+      padding: 16px 24px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+      background: var(--bg-gray);
     }
 
     /* Empty State */
     .empty-state{
-        padding: 60px 20px;
-        text-align: center;
-        color: var(--muted);
+      padding: 60px 20px;
+      text-align: center;
+      color: var(--muted);
     }
     .empty-state i{
-        font-size: 48px;
-        opacity: 0.3;
-        margin-bottom: 16px;
+      font-size: 48px;
+      opacity: 0.3;
+      margin-bottom: 16px;
     }
 
     /* Loader */
     .loader-overlay{
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(255,255,255,0.8);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 100;
-        border-radius: 12px;
-        display: none;
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(255,255,255,0.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      border-radius: 12px;
+      display: none;
     }
-    html.theme-dark .loader-overlay{
-        background: rgba(0,0,0,0.6);
-    }
+    html.theme-dark .loader-overlay{ background: rgba(0,0,0,0.6); }
     .loader{
-        width: 40px;
-        height: 40px;
-        border: 4px solid var(--border);
-        border-top: 4px solid var(--primary);
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
+      width: 40px;
+      height: 40px;
+      border: 4px solid var(--border);
+      border-top: 4px solid var(--primary);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
     }
-    @keyframes spin{
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-    }
+    @keyframes spin{ 0%{transform:rotate(0)} 100%{transform:rotate(360deg)} }
 
     /* Toast */
     .toast-container{
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        z-index: 9999;
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 9999;
     }
     .toast{
-        min-width: 300px;
-        padding: 16px;
-        border-radius: 8px;
-        margin-bottom: 12px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        display: none;
-        align-items: center;
-        gap: 12px;
-        animation: slideIn 0.3s ease;
+      min-width: 300px;
+      padding: 16px;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      display: none;
+      align-items: center;
+      gap: 12px;
+      animation: slideIn 0.3s ease;
     }
-    .toast.show{ 
-        display: flex; 
-    }
-    .toast.success{
-        background: var(--success);
-        color: white;
-    }
-    .toast.error{
-        background: var(--danger);
-        color: white;
-    }
-    @keyframes slideIn{
-        from{ transform: translateX(100%); opacity: 0; }
-        to{ transform: translateX(0); opacity: 1; }
-    }
+    .toast.show{ display:flex; }
+    .toast.success{ background: var(--success); color:#fff; }
+    .toast.error{ background: var(--danger); color:#fff; }
+    @keyframes slideIn{ from{transform:translateX(100%);opacity:0} to{transform:translateX(0);opacity:1} }
 
     /* Preview Modal */
     .preview-overlay{
-        position: fixed;
-        inset: 0;
-        background: rgba(15,23,42,0.35);
-        backdrop-filter: blur(3px);
-        display: none;
-        align-items: center;
-        justify-content: center;
-        z-index: 9998;
-        padding: 20px;
+      position: fixed;
+      inset: 0;
+      background: rgba(15,23,42,0.35);
+      backdrop-filter: blur(3px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 9998;
+      padding: 20px;
     }
     .preview-modal{
-        width: min(800px, 100%);
-        max-height: 90vh;
-        background: var(--surface);
-        border-radius: 18px;
-        border: 1px solid var(--border);
-        box-shadow: 0 22px 55px rgba(15,23,42,0.45);
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
+      width: min(800px, 100%);
+      max-height: 90vh;
+      background: var(--surface);
+      border-radius: 18px;
+      border: 1px solid var(--border);
+      box-shadow: 0 22px 55px rgba(15,23,42,0.45);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
     }
     .preview-header{
-        padding: 20px;
-        border-bottom: 1px solid var(--border);
-        background: linear-gradient(135deg, var(--bg-gray), rgba(79,70,229,0.04));
+      padding: 20px;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(135deg, var(--bg-gray), rgba(79,70,229,0.04));
     }
     .preview-title{
-        margin: 0 0 8px;
-        font-size: 18px;
-        font-weight: 600;
-        color: var(--ink);
+      margin: 0 0 8px;
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--ink);
     }
-    .preview-chips{
-        display: flex;
-        gap: 8px;
-        flex-wrap: wrap;
-    }
-    .preview-chip{
-        padding: 4px 10px;
-        border-radius: 999px;
-        font-size: 11px;
-        font-weight: 600;
-        text-transform: uppercase;
-    }
-    .preview-body{
-        padding: 20px;
-        overflow-y: auto;
-        flex: 1;
-    }
+    .preview-chips{ display:flex; gap:8px; flex-wrap:wrap; }
+    .preview-body{ padding: 20px; overflow-y:auto; flex:1; }
     .preview-footer{
-        padding: 16px 20px;
-        border-top: 1px solid var(--border);
-        display: flex;
-        justify-content: flex-end;
-        gap: 8px;
-    }
-
-    /* Bubble Preview */
-    .bubbles-preview{
-        display: flex;
-        flex-wrap: wrap;
-        gap: 12px;
-        margin: 20px 0;
-    }
-    .bubble-preview{
-        min-width: 100px;
-        padding: 16px;
-        background: linear-gradient(135deg, #818cf8, #6366f1);
-        color: white;
-        border-radius: 12px;
-        text-align: center;
-        font-weight: 600;
-        font-size: 14px;
-        box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
-        position: relative;
-    }
-    .bubble-label-preview{
-        font-size: 12px;
-        opacity: 0.9;
-        margin-bottom: 4px;
-    }
-    .bubble-value-preview{
-        font-size: 16px;
-    }
-    .bubble-index{
-        position: absolute;
-        top: -8px;
-        right: -8px;
-        width: 24px;
-        height: 24px;
-        background: var(--primary);
-        color: white;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 12px;
-        font-weight: 600;
-    }
-
-    /* Answer Preview */
-    .answer-preview{
-        margin-top: 24px;
-        padding: 16px;
-        background: var(--bg-gray);
-        border-radius: 8px;
-        border: 1px solid var(--border);
-    }
-    .answer-title{
-        font-size: 14px;
-        font-weight: 600;
-        margin: 0 0 12px;
-        color: var(--ink);
-        display: flex;
-        align-items: center;
-        gap: 6px;
-    }
-    .answer-sequence{
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        flex-wrap: wrap;
-        margin-bottom: 12px;
-    }
-    .seq-item{
-        padding: 8px 12px;
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: 6px;
-        font-family: monospace;
-        font-size: 13px;
+      padding: 16px 20px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
     }
 
     /* Drag & Drop */
-    .sortable-ghost{
-        opacity: 0.4;
-        background: #f0f0f0;
-    }
-    .sortable-drag{
-        opacity: 0.8;
-        transform: rotate(5deg);
-    }
+    .sortable-ghost{ opacity: 0.4; background: #f0f0f0; }
+    .sortable-drag{ opacity: 0.8; transform: rotate(2deg); }
 
     /* Scrollbar */
     .sidebar-body::-webkit-scrollbar,
-    .preview-body::-webkit-scrollbar{
-        width: 6px;
-    }
+    .preview-body::-webkit-scrollbar{ width: 6px; }
     .sidebar-body::-webkit-scrollbar-track,
-    .preview-body::-webkit-scrollbar-track{
-        background: transparent;
-    }
+    .preview-body::-webkit-scrollbar-track{ background: transparent; }
     .sidebar-body::-webkit-scrollbar-thumb,
-    .preview-body::-webkit-scrollbar-thumb{
-        background: var(--border);
-        border-radius: 3px;
-    }
+    .preview-body::-webkit-scrollbar-thumb{ background: var(--border); border-radius: 3px; }
 
     /* Responsive */
     @media (max-width: 768px){
-        .row{ flex-direction: column; gap: 12px; }
-        .bubble-inputs{ flex-direction: column; }
-        .game-header-top{ flex-direction: column; gap: 16px; }
-        .content-header{ flex-direction: column; gap: 12px; align-items: flex-start; }
-        .content-footer{ flex-direction: column; }
-        .content-footer .btn{ width: 100%; }
+      .row{ flex-direction: column; gap: 12px; }
+      .bubble-inputs{ flex-direction: column; }
+      .game-header-top{ flex-direction: column; gap: 16px; }
+      .content-header{ flex-direction: column; gap: 12px; align-items: flex-start; }
+      .content-footer{ flex-direction: column; }
+      .content-footer .btn{ width: 100%; }
     }
-    </style>
+  </style>
 @endpush
-    @section('content')
-    <div class="container">
-        <!-- Game Header -->
-        <div class="game-header">
-            <div class="game-header-top">
-                <div>
-                    <div class="game-chip">
-                        <i class="fa fa-gamepad"></i>
-                        <span>Bubble Game</span>
-                    </div>
-                    <h1 class="game-title" id="gameTitle">Loading...</h1>
-                    <p class="game-desc" id="gameDesc"></p>
-                </div>
-                <div class="game-meta">
-                    <div class="meta-item">
-                        <div class="meta-label">Questions</div>
-                        <div class="meta-value" id="questionsCount">0</div>
-                    </div>
-                    <div class="meta-item">
-                        <div class="meta-label">Bubbles</div>
-                        <div class="meta-value" id="totalBubbles">0</div>
-                    </div>
-                    <div class="meta-item">
-                        <div class="meta-label">Points</div>
-                        <div class="meta-value" id="totalPoints">0</div>
-                    </div>
-                </div>
-            </div>
-            <div class="game-meta">
-                <div class="meta-item">
-                    <div class="meta-label">Time per Question</div>
-                    <div class="meta-value" id="perQuestionTime">30s</div>
-                </div>
-                <div class="meta-item">
-                    <div class="meta-label">Max Attempts</div>
-                    <div class="meta-value" id="maxAttempts">1</div>
-                </div>
-                <div class="meta-item">
-                    <div class="meta-label">Points Correct</div>
-                    <div class="meta-value" id="pointsCorrect">1</div>
-                </div>
-                <div class="meta-item">
-                    <div class="meta-label">Points Wrong</div>
-                    <div class="meta-value" id="pointsWrong">0</div>
-                </div>
-            </div>
+
+@section('content')
+  <div class="container">
+    <!-- Game Header -->
+    <div class="game-header">
+      <div class="game-header-top">
+        <div>
+          <div class="game-chip">
+            <i class="fa fa-gamepad"></i>
+            <span>Bubble Game</span>
+          </div>
+          <h1 class="game-title" id="gameTitle">Loading...</h1>
+          <p class="game-desc" id="gameDesc"></p>
         </div>
-
-        <div class="layout-grid">
-            <!-- Sidebar -->
-            <div class="sidebar">
-                <div class="sidebar-header">
-                    <h6><i class="fa fa-list-ol me-2"></i>Questions (<span id="sidebarQuestionsCount">0</span>)</h6>
-                </div>
-                <div class="sidebar-actions">
-                    <div class="sidebar-search">
-                        <i class="fa fa-search search-icon"></i>
-                        <input type="text" id="qSearch" placeholder="Search questions...">
-                    </div>
-                    <button id="btnNewQuestion" class="btn btn-primary btn-sm">
-                        <i class="fa fa-plus"></i>
-                    </button>
-                </div>
-                <div class="sidebar-body">
-                    <div id="qList" class="question-list">
-                        <div class="empty-state">
-                            <i class="fa fa-spinner fa-spin"></i>
-                            <div>Loading questions...</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Main Content -->
-            <div class="main-content">
-                <div class="loader-overlay" id="contentLoader">
-                    <div class="loader"></div>
-                </div>
-                
-                <div class="content-header">
-                    <div>
-                        <button id="btnBack" class="btn btn-light btn-sm" onclick="window.history.back()">
-                            <i class="fa fa-arrow-left"></i> Back
-                        </button>
-                        <h5 class="mt-2 mb-0" id="formTitle">New Question</h5>
-                    </div>
-                    <div class="content-header-actions">
-                        <button id="btnHelp" class="btn btn-light btn-sm" title="Help">
-                            <i class="fa fa-circle-question"></i>
-                        </button>
-                        <button id="btnPreview" class="btn btn-secondary btn-sm">
-                            <i class="fa fa-eye"></i> Preview
-                        </button>
-                    </div>
-                </div>
-
-                <div class="content-body">
-                    <form id="qForm" novalidate>
-                        <input type="hidden" id="qId">
-                        <!-- Get gameUuid from query parameter -->
-<input type="hidden" id="gameUuid" value="{{ request()->query('game') ?? request()->query('game_uuid') ?? request()->query('uuid') ?? request()->query('id') }}">
-
-                        <!-- Basic Information -->
-                        <div class="section-title">
-                            <i class="fa fa-info-circle"></i> Basic Information
-                        </div>
-                        
-                        <div class="row">
-                            <div class="col">
-                                <div class="form-group">
-                                    <label class="form-label">Question Title (Optional)</label>
-                                    <input id="qTitle" type="text" class="form-control" placeholder="Enter question title">
-                                </div>
-                            </div>
-                            <div class="col">
-                                <div class="form-group">
-                                    <label class="form-label">Select Type</label>
-                                    <select id="qSelectType" class="form-select">
-                                        <option value="ascending">Ascending</option>
-                                        <option value="descending">Descending</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="row">
-                            <div class="col">
-                                <div class="form-group">
-                                    <label class="form-label">Points</label>
-                                    <input id="qPoints" type="number" min="1" class="form-control" value="1">
-                                </div>
-                            </div>
-                            <div class="col">
-                                <div class="form-group">
-                                    <label class="form-label">Display Order</label>
-                                    <input id="qOrder" type="number" min="0" class="form-control" value="1">
-                                </div>
-                            </div>
-                            <div class="col">
-                                <div class="form-group">
-                                    <label class="form-label">Status</label>
-                                    <select id="qStatus" class="form-select">
-                                        <option value="active">Active</option>
-                                        <option value="inactive">Inactive</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Bubbles Editor -->
-                        <div class="section-title">
-                            <i class="fa fa-circle-nodes"></i> Bubbles
-                            <span class="ml-2 text-sm text-muted" id="bubblesCount">0 bubbles</span>
-                        </div>
-                        
-                        <div class="bubbles-editor">
-                            <div class="form-group">
-                                <label class="form-label">Bubble List</label>
-                                <p class="text-sm text-muted mb-3">Drag to reorder bubbles. Each bubble should have a label and an optional value.</p>
-                                
-                                <div id="bubblesList" class="bubbles-list">
-                                    <!-- Bubbles will be generated here -->
-                                </div>
-                                
-                                <button type="button" id="btnAddBubble" class="add-bubble-btn">
-                                    <i class="fa fa-plus"></i> Add Bubble
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- Answer Sequence -->
-                        <div class="section-title">
-                            <i class="fa fa-list-ol"></i> Answer Configuration
-                        </div>
-                        
-                        <div class="row">
-                            <div class="col">
-                                <div class="json-editor">
-                                    <div class="json-header">
-                                        <div class="json-title">
-                                            <i class="fa fa-arrow-up-1-9"></i>
-                                            Answer Sequence (Optional)
-                                            <i class="fa fa-info-circle json-help" title="JSON array of indices representing the correct sequence"></i>
-                                        </div>
-                                    </div>
-                                    <textarea id="answerSequence" class="json-area" placeholder="[0, 1, 2, 3]"></textarea>
-                                </div>
-                            </div>
-                            <div class="col">
-                                <div class="json-editor">
-                                    <div class="json-header">
-                                        <div class="json-title">
-                                            <i class="fa fa-hashtag"></i>
-                                            Answer Values (Optional)
-                                            <i class="fa fa-info-circle json-help" title="JSON array of values for the correct sequence"></i>
-                                        </div>
-                                    </div>
-                                    <textarea id="answerValues" class="json-area" placeholder='["value1", "value2", "value3"]'></textarea>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Info Box -->
-                        <div class="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                            <div class="flex items-start gap-3">
-                                <i class="fa fa-info-circle text-blue-500 mt-1"></i>
-                                <div>
-                                    <h6 class="font-semibold text-blue-800 mb-1">How Bubble Games Work</h6>
-                                    <p class="text-sm text-blue-700 mb-2">
-                                        <strong>Ascending</strong>: Bubbles should be arranged from smallest to largest value.<br>
-                                        <strong>Descending</strong>: Bubbles should be arranged from largest to smallest value.<br>
-                                        <strong>Answer Sequence</strong>: Define the correct order of bubble indices (0-based).<br>
-                                        <strong>Answer Values</strong>: Define the correct values in sequence (optional).
-                                    </p>
-                                    <p class="text-xs text-blue-600">
-                                        Tip: Drag bubbles to reorder them. The order shown here is the initial display order.
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    </form>
-                </div>
-
-                <div class="content-footer">
-                    <button id="btnCancel" class="btn btn-light">Cancel</button>
-                    <button id="btnDelete" class="btn btn-danger" style="display: none;">
-                        <i class="fa fa-trash"></i> Delete Question
-                    </button>
-                    <button id="btnSave" class="btn btn-primary">
-                        <i class="fa fa-save"></i> Save Question
-                    </button>
-                </div>
-            </div>
+        <div class="game-meta">
+          <div class="meta-item">
+            <div class="meta-label">Questions</div>
+            <div class="meta-value" id="questionsCount">0</div>
+          </div>
+          <div class="meta-item">
+            <div class="meta-label">Bubbles</div>
+            <div class="meta-value" id="totalBubbles">0</div>
+          </div>
+          <div class="meta-item">
+            <div class="meta-label">Points</div>
+            <div class="meta-value" id="totalPoints">0</div>
+          </div>
         </div>
+      </div>
+      <div class="game-meta">
+        <div class="meta-item">
+          <div class="meta-label">Time per Question</div>
+          <div class="meta-value" id="perQuestionTime">30s</div>
+        </div>
+        <div class="meta-item">
+          <div class="meta-label">Max Attempts</div>
+          <div class="meta-value" id="maxAttempts">1</div>
+        </div>
+        <div class="meta-item">
+          <div class="meta-label">Points Correct</div>
+          <div class="meta-value" id="pointsCorrect">1</div>
+        </div>
+        <div class="meta-item">
+          <div class="meta-label">Points Wrong</div>
+          <div class="meta-value" id="pointsWrong">0</div>
+        </div>
+      </div>
     </div>
 
-    <!-- Toast Container -->
-    <div class="toast-container">
-        <div id="successToast" class="toast success">
-            <i class="fa fa-check-circle"></i>
-            <span id="successMsg">Success!</span>
+    <div class="layout-grid">
+      <!-- Sidebar -->
+      <div class="sidebar">
+        <div class="sidebar-header">
+          <h6><i class="fa fa-list-ol me-2"></i>Questions (<span id="sidebarQuestionsCount">0</span>)</h6>
         </div>
-        <div id="errorToast" class="toast error">
-            <i class="fa fa-exclamation-circle"></i>
-            <span id="errorMsg">Error!</span>
+        <div class="sidebar-actions">
+          <div class="sidebar-search">
+            <i class="fa fa-search search-icon"></i>
+            <input type="text" id="qSearch" placeholder="Search questions...">
+          </div>
+          <button id="btnNewQuestion" class="btn btn-primary btn-sm">
+            <i class="fa fa-plus"></i>
+          </button>
         </div>
-    </div>
+        <div class="sidebar-body">
+          <div id="qList" class="question-list">
+            <div class="empty-state">
+              <i class="fa fa-spinner fa-spin"></i>
+              <div>Loading questions...</div>
+            </div>
+          </div>
+        </div>
+      </div>
 
-    <!-- Preview Modal -->
-    <div id="previewOverlay" class="preview-overlay">
-        <div class="preview-modal">
-            <div class="preview-header">
-                <div>
-                    <div id="previewChips" class="preview-chips"></div>
-                    <h5 id="previewTitle" class="preview-title">Question Preview</h5>
+      <!-- Main Content -->
+      <div class="main-content">
+        <div class="loader-overlay" id="contentLoader">
+          <div class="loader"></div>
+        </div>
+
+        <div class="content-header">
+          <div>
+            <button id="btnBack" class="btn btn-light btn-sm" onclick="window.history.back()">
+              <i class="fa fa-arrow-left"></i> Back
+            </button>
+            <h5 class="mt-2 mb-0" id="formTitle">New Question</h5>
+          </div>
+          <div class="content-header-actions">
+            <button id="btnHelp" class="btn btn-light btn-sm" title="Help">
+              <i class="fa fa-circle-question"></i>
+            </button>
+            <button id="btnPreview" class="btn btn-secondary btn-sm" style="display:none">
+              <i class="fa fa-eye"></i> Preview
+            </button>
+          </div>
+        </div>
+
+        <div class="content-body">
+          <form id="qForm" novalidate>
+            <input type="hidden" id="qId">
+            <!-- Get gameUuid from query parameter -->
+            <input type="hidden" id="gameUuid" value="{{ request()->query('game') ?? request()->query('game_uuid') ?? request()->query('uuid') ?? request()->query('id') }}">
+
+            <!-- Basic Information -->
+            <div class="section-title">
+              <div class="st-left"><i class="fa fa-info-circle"></i> Basic Information</div>
+            </div>
+
+            <div class="row">
+              <div class="col">
+                <div class="form-group">
+                  <label class="form-label">Question Title (Optional)</label>
+                  <input id="qTitle" type="text" class="form-control" placeholder="Enter question title">
                 </div>
-                <button type="button" class="btn btn-light btn-sm" id="previewCloseBtn">
-                    <i class="fa fa-times"></i>
+              </div>
+              <div class="col">
+                <div class="form-group">
+                  <label class="form-label">Select Type</label>
+                  <select id="qSelectType" class="form-select">
+                    <option value="ascending">Ascending</option>
+                    <option value="descending">Descending</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="col">
+                <div class="form-group">
+                  <label class="form-label">Points</label>
+                  <input id="qPoints" type="number" min="1" class="form-control" value="1">
+                </div>
+              </div>
+              <div class="col">
+                <div class="form-group">
+                  <label class="form-label">Display Order</label>
+                  <input id="qOrder" type="number" min="0" class="form-control" value="1">
+                </div>
+              </div>
+              <div class="col">
+                <div class="form-group">
+                  <label class="form-label">Status</label>
+                  <select id="qStatus" class="form-select">
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- Bubbles Editor -->
+            <div class="section-title">
+              <div class="st-left">
+                <i class="fa fa-circle-nodes"></i> Bubbles
+                <span class="ml-2 text-sm text-muted" id="bubblesCount">0 bubbles</span>
+              </div>
+            </div>
+
+            <div class="bubbles-editor">
+              <div class="form-group">
+                <label class="form-label">Bubble List (Equations)</label>
+                <p class="text-sm text-muted mb-3">Drag to reorder bubbles (display order). Each bubble label should be a math equation like <code>(1+2)*3</code>.</p>
+
+                <div id="bubblesList" class="bubbles-list">
+                  <!-- Bubbles will be generated here -->
+                </div>
+
+                <button type="button" id="btnAddBubble" class="add-bubble-btn">
+                  <i class="fa fa-plus"></i> Add Bubble
                 </button>
+              </div>
             </div>
-            <div class="preview-body">
-                <div id="previewContent"></div>
-            </div>
-            <div class="preview-footer">
-                <button type="button" class="btn btn-light" id="previewCloseBtn2">Close</button>
-            </div>
-        </div>
-    </div>
 
-    @endsection
+            <!-- Answer Configuration -->
+            <div class="section-title">
+              <div class="st-left"><i class="fa fa-list-ol"></i> Correct Answer Order</div>
+            </div>
+
+            <div class="answer-wrap">
+              <div class="answer-toolbar">
+                <p class="answer-hint">
+                  Drag to set the <b>correct order</b>. We auto-calculate each equation result and save:
+                  <code>answer_sequence_json</code> + <code>answer_value_json</code>.
+                </p>
+                <div style="display:flex; gap:8px; align-items:center;">
+                  <button type="button" id="btnAutoOrder" class="btn btn-light btn-sm" title="Auto arrange based on Asc/Desc and computed results">
+                    <i class="fa fa-wand-magic-sparkles"></i> Auto Arrange
+                  </button>
+                </div>
+              </div>
+
+              <div id="answerOrderList" class="answer-list">
+                <div class="empty-state" style="padding:26px 10px;">
+                  <i class="fa fa-circle-info"></i>
+                  <div>Add bubbles to see computed answers here.</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Info Box (kept as you had, text updated slightly) -->
+            <div class="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <div class="flex items-start gap-3">
+                <i class="fa fa-info-circle text-blue-500 mt-1"></i>
+                <div>
+                  <h6 class="font-semibold text-blue-800 mb-1">How Bubble Games Work</h6>
+                  <p class="text-sm text-blue-700 mb-2">
+                    <strong>Ascending</strong>: User should arrange bubbles from smallest result to largest result.<br>
+                    <strong>Descending</strong>: User should arrange bubbles from largest result to smallest result.<br>
+                    <strong>Correct Order</strong>: Set by dragging the list above (no manual JSON typing).
+                  </p>
+                  <p class="text-xs text-blue-600">
+                    Tip: Bubble list order is the initial display order. Correct order list is what user must match.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        <div class="content-footer">
+          <button id="btnCancel" class="btn btn-light">Cancel</button>
+          <button id="btnDelete" class="btn btn-danger" style="display: none;">
+            <i class="fa fa-trash"></i> Delete Question
+          </button>
+          <button id="btnSave" class="btn btn-primary">
+            <i class="fa fa-save"></i> Save Question
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div class="toast-container">
+    <div id="successToast" class="toast success">
+      <i class="fa fa-check-circle"></i>
+      <span id="successMsg">Success!</span>
+    </div>
+    <div id="errorToast" class="toast error">
+      <i class="fa fa-exclamation-circle"></i>
+      <span id="errorMsg">Error!</span>
+    </div>
+  </div>
+
+  <!-- Preview Modal -->
+  <div id="previewOverlay" class="preview-overlay">
+    <div class="preview-modal">
+      <div class="preview-header">
+        <div>
+          <div id="previewChips" class="preview-chips"></div>
+          <h5 id="previewTitle" class="preview-title">Question Preview</h5>
+        </div>
+        <button type="button" class="btn btn-light btn-sm" id="previewCloseBtn">
+          <i class="fa fa-times"></i>
+        </button>
+      </div>
+      <div class="preview-body">
+        <div id="previewContent"></div>
+      </div>
+      <div class="preview-footer">
+        <button type="button" class="btn btn-light" id="previewCloseBtn2">Close</button>
+      </div>
+    </div>
+  </div>
+@endsection
+
 @push('scripts')
-    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <script>
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+  <script>
 document.addEventListener('DOMContentLoaded', function() {
   const TOKEN = localStorage.getItem('token') || sessionStorage.getItem('token') || '';
 
@@ -1124,8 +918,6 @@ document.addEventListener('DOMContentLoaded', function() {
     qStatus: document.getElementById('qStatus'),
     bubblesList: document.getElementById('bubblesList'),
     bubblesCount: document.getElementById('bubblesCount'),
-    answerSequence: document.getElementById('answerSequence'),
-    answerValues: document.getElementById('answerValues'),
     btnAddBubble: document.getElementById('btnAddBubble'),
     btnNewQuestion: document.getElementById('btnNewQuestion'),
     btnSave: document.getElementById('btnSave'),
@@ -1142,6 +934,8 @@ document.addEventListener('DOMContentLoaded', function() {
     previewCloseBtn: document.getElementById('previewCloseBtn'),
     previewCloseBtn2: document.getElementById('previewCloseBtn2'),
     qSearch: document.getElementById('qSearch'),
+    answerOrderList: document.getElementById('answerOrderList'),
+    btnAutoOrder: document.getElementById('btnAutoOrder'),
   };
 
   // ========= Helpers =========
@@ -1166,14 +960,45 @@ document.addEventListener('DOMContentLoaded', function() {
     return text.toString().replace(/[&<>"']/g, m => map[m]);
   }
 
-  function parseJsonSafe(jsonString) {
-    try { return jsonString ? JSON.parse(jsonString) : null; }
-    catch(e){ console.error(e); return null; }
+  function formatNumber(n) {
+    if (typeof n !== 'number' || !isFinite(n)) return 'ERR';
+    // keep readable
+    if (Number.isInteger(n)) return String(n);
+    const fixed = n.toFixed(6);
+    return fixed.replace(/\.?0+$/,'');
   }
 
-  function formatJson(json) {
-    try { return JSON.stringify(json, null, 2); }
-    catch(e){ return json || ''; }
+  function safeEvalEquation(raw) {
+    let expr = (raw || '').toString().trim();
+    if (!expr) return { ok:false, value: null, error: 'Empty equation' };
+
+    // normalize common symbols
+    expr = expr.replace(/×/g, '*').replace(/÷/g, '/');
+
+    // support power: 2^3
+    expr = expr.replace(/\^/g, '**');
+
+    // allow only digits, operators, dot, whitespace, parentheses, and *
+    // (after converting ^ to **)
+    if (!/^[0-9+\-*/().\s]*$/.test(expr)) {
+      return { ok:false, value: null, error: 'Invalid characters' };
+    }
+
+    // avoid crazy long inputs
+    if (expr.length > 120) {
+      return { ok:false, value: null, error: 'Too long' };
+    }
+
+    try {
+      // eslint-disable-next-line no-new-func
+      const v = Function('"use strict"; return (' + expr + ');')();
+      if (typeof v !== 'number' || !isFinite(v)) {
+        return { ok:false, value: null, error: 'Not a number' };
+      }
+      return { ok:true, value: v, error: null };
+    } catch (e) {
+      return { ok:false, value: null, error: 'Invalid expression' };
+    }
   }
 
   function resolveGameUuid() {
@@ -1188,16 +1013,13 @@ document.addEventListener('DOMContentLoaded', function() {
       || (p.get('uuid') || '').trim()
       || (p.get('id') || '').trim();
 
-    // handle bad strings
     if (['null','undefined','0'].includes((v || '').toLowerCase())) v = '';
 
-    // optional: extract from path like /bubble-games/{uuid}/questions
     if (!v) {
       const m = url.pathname.match(/bubble-games\/([^\/]+)\//i);
       if (m && m[1]) v = m[1].trim();
     }
 
-    // keep hidden field synced
     const hidden = document.getElementById('gameUuid');
     if (hidden && v) hidden.value = v;
 
@@ -1225,11 +1047,9 @@ document.addEventListener('DOMContentLoaded', function() {
       if (contentType.includes('application/json')) {
         try { data = await res.json(); } catch(e) { data = null; }
       } else {
-        // could be html/text
         try { data = await res.text(); } catch(e) { data = null; }
       }
 
-      // handle auth errors even if JSON
       if (res.status === 401 || res.status === 419) {
         showToast('error', 'Session expired. Please login again.');
         setTimeout(() => window.location.href = '/login', 1500);
@@ -1251,9 +1071,8 @@ document.addEventListener('DOMContentLoaded', function() {
   let editingId = null;
   let currentQuestion = null;
 
-  // ========= Early guard (also stop infinite loading UI) =========
+  // ========= Early guard =========
   if (!gameUuid) {
-    // replace spinner with a clear message
     if (elements.qList) {
       elements.qList.innerHTML = `
         <div class="empty-state">
@@ -1276,32 +1095,56 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   // ========= Sortable =========
-  let sortable;
-  function initSortable() {
+  let sortableBubbles;
+  let sortableAnswers;
+
+  function initSortableBubbles() {
     if (!elements.bubblesList) return;
-    if (sortable) sortable.destroy();
-    sortable = Sortable.create(elements.bubblesList, {
+    if (sortableBubbles) sortableBubbles.destroy();
+    sortableBubbles = Sortable.create(elements.bubblesList, {
       animation: 150,
       ghostClass: 'sortable-ghost',
       dragClass: 'sortable-drag',
       handle: '.bubble-handle',
-      onEnd: function() { updateBubblesCount(); }
+      onEnd: function() {
+        updateBubblesCount();
+        rebuildAnswerOrderList(true); // preserve user-correct order
+      }
+    });
+  }
+
+  function initSortableAnswers() {
+    if (!elements.answerOrderList) return;
+    if (sortableAnswers) sortableAnswers.destroy();
+    sortableAnswers = Sortable.create(elements.answerOrderList, {
+      animation: 150,
+      ghostClass: 'sortable-ghost',
+      dragClass: 'sortable-drag',
+      handle: '.answer-handle',
+      onEnd: function() {
+        refreshAnswerOrderNumbers();
+      }
     });
   }
 
   // ========= Bubble management =========
-  function createBubbleElement(index, label = '', value = '') {
+  function makeKey() {
+    return 'b_' + Math.random().toString(16).slice(2) + '_' + Date.now().toString(16);
+  }
+
+  function createBubbleElement(key, label = '', value = '') {
     const div = document.createElement('div');
     div.className = 'bubble-item';
-    div.dataset.index = index;
+    div.dataset.key = key;
+
     div.innerHTML = `
       <div class="bubble-handle"><i class="fa fa-grip-vertical"></i></div>
       <div class="bubble-inputs">
         <div class="bubble-label">
-          <input type="text" class="form-control bubble-label-input" placeholder="Bubble label" value="${escapeHtml(label)}">
+          <input type="text" class="form-control bubble-label-input" placeholder="Equation (e.g., (1+2)*3)" value="${escapeHtml(label)}">
         </div>
         <div class="bubble-value">
-          <input type="text" class="form-control bubble-value-input" placeholder="Value (optional)" value="${escapeHtml(value)}">
+          <input type="text" class="form-control bubble-value-input" placeholder="(optional) note/value" value="${escapeHtml(value)}">
         </div>
       </div>
       <div class="bubble-actions">
@@ -1309,10 +1152,16 @@ document.addEventListener('DOMContentLoaded', function() {
       </div>
     `;
 
+    const labelInput = div.querySelector('.bubble-label-input');
+    labelInput?.addEventListener('input', () => {
+      updateAnswerRowForKey(key);
+    });
+
     div.querySelector('.bubble-btn.delete')?.addEventListener('click', () => {
       if (elements.bubblesList.children.length > 1) {
         div.remove();
         updateBubblesCount();
+        rebuildAnswerOrderList(true);
       } else {
         showToast('error', 'At least one bubble is required');
       }
@@ -1323,9 +1172,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function addBubble(label = '', value = '') {
     if (!elements.bubblesList) return;
-    const index = elements.bubblesList.children.length;
-    elements.bubblesList.appendChild(createBubbleElement(index, label, value));
+    const key = makeKey();
+    elements.bubblesList.appendChild(createBubbleElement(key, label, value));
     updateBubblesCount();
+    rebuildAnswerOrderList(true);
   }
 
   function updateBubblesCount() {
@@ -1334,9 +1184,14 @@ document.addEventListener('DOMContentLoaded', function() {
     elements.bubblesCount.textContent = `${count} bubble${count !== 1 ? 's' : ''}`;
   }
 
-  function getBubblesData() {
+  function getBubbleEls() {
+    return Array.from(elements.bubblesList?.querySelectorAll('.bubble-item') || []);
+  }
+
+  function getBubblesDataClean() {
+    // IMPORTANT: do not send extra keys if your backend validation is strict
     const bubbles = [];
-    elements.bubblesList?.querySelectorAll('.bubble-item')?.forEach(item => {
+    getBubbleEls().forEach(item => {
       const label = item.querySelector('.bubble-label-input')?.value?.trim() || '';
       const value = item.querySelector('.bubble-value-input')?.value?.trim() || '';
       if (label) bubbles.push({ label, value: value || null });
@@ -1347,11 +1202,170 @@ document.addEventListener('DOMContentLoaded', function() {
   function setBubblesData(bubbles) {
     if (!elements.bubblesList) return;
     elements.bubblesList.innerHTML = '';
-    (bubbles || []).forEach(b => addBubble(b.label, b.value || ''));
-    if (!bubbles || !bubbles.length) addBubble('Bubble 1', '1');
-    initSortable();
+
+    if (Array.isArray(bubbles) && bubbles.length) {
+      bubbles.forEach(b => {
+        const key = makeKey();
+        elements.bubblesList.appendChild(createBubbleElement(key, b?.label || '', b?.value || ''));
+      });
+    } else {
+      const key = makeKey();
+      elements.bubblesList.appendChild(createBubbleElement(key, 'Bubble 1', ''));
+    }
+
+    initSortableBubbles();
     updateBubblesCount();
+    rebuildAnswerOrderList(false);
   }
+
+  // ========= Answer Order Builder =========
+  function buildAnswerRow(key, equation, bubbleIndex) {
+    const ev = safeEvalEquation(equation);
+    const resultText = ev.ok ? formatNumber(ev.value) : 'ERR';
+
+    const row = document.createElement('div');
+    row.className = 'answer-item';
+    row.dataset.key = key;
+
+    row.innerHTML = `
+      <div class="answer-handle"><i class="fa fa-grip-vertical"></i></div>
+      <div class="answer-orderno">1</div>
+      <div class="answer-main">
+        <p class="answer-eq">${escapeHtml(equation || '(empty)')}</p>
+        <div class="answer-meta">
+          <span class="answer-pill ${ev.ok ? 'ok' : 'err'}">
+            <i class="fa ${ev.ok ? 'fa-check' : 'fa-triangle-exclamation'}"></i>
+            = <span class="ans-val">${escapeHtml(resultText)}</span>
+          </span>
+          <span class="answer-pill">
+            <i class="fa fa-circle-nodes"></i>
+            Bubble #<span class="ans-bidx">${bubbleIndex + 1}</span>
+          </span>
+        </div>
+      </div>
+    `;
+
+    return row;
+  }
+
+  function refreshAnswerOrderNumbers() {
+    const items = Array.from(elements.answerOrderList?.querySelectorAll('.answer-item') || []);
+    items.forEach((it, idx) => {
+      const box = it.querySelector('.answer-orderno');
+      if (box) box.textContent = String(idx + 1);
+    });
+  }
+
+  function rebuildAnswerOrderList(preserveExistingOrder) {
+    if (!elements.answerOrderList) return;
+
+    const bubbleEls = getBubbleEls();
+    if (!bubbleEls.length) {
+      elements.answerOrderList.innerHTML = `
+        <div class="empty-state" style="padding:26px 10px;">
+          <i class="fa fa-circle-info"></i>
+          <div>Add bubbles to see computed answers here.</div>
+        </div>
+      `;
+      return;
+    }
+
+    // existing desired order (keys)
+    const existingKeys = preserveExistingOrder
+      ? Array.from(elements.answerOrderList.querySelectorAll('.answer-item')).map(x => x.dataset.key).filter(Boolean)
+      : [];
+
+    const bubbleInfo = bubbleEls.map((el, idx) => {
+      const key = el.dataset.key || (el.dataset.key = makeKey());
+      const eq = el.querySelector('.bubble-label-input')?.value?.trim() || '';
+      return { key, eq, idx };
+    });
+
+    const map = new Map(bubbleInfo.map(b => [b.key, b]));
+
+    // compute final order
+    let ordered = [];
+    if (preserveExistingOrder && existingKeys.length) {
+      existingKeys.forEach(k => { if (map.has(k)) ordered.push(map.get(k)); });
+      // add missing ones (new bubbles)
+      bubbleInfo.forEach(b => { if (!existingKeys.includes(b.key)) ordered.push(b); });
+    } else {
+      ordered = bubbleInfo.slice();
+    }
+
+    elements.answerOrderList.innerHTML = '';
+    ordered.forEach(b => {
+      elements.answerOrderList.appendChild(buildAnswerRow(b.key, b.eq, b.idx));
+    });
+
+    initSortableAnswers();
+    refreshAnswerOrderNumbers();
+  }
+
+  function updateAnswerRowForKey(key) {
+    if (!elements.answerOrderList) return;
+    const row = elements.answerOrderList.querySelector(`.answer-item[data-key="${key}"]`);
+    if (!row) {
+      rebuildAnswerOrderList(true);
+      return;
+    }
+
+    // find bubble index and equation
+    const bubbleEls = getBubbleEls();
+    const bubbleIndex = bubbleEls.findIndex(b => (b.dataset.key === key));
+    const eq = bubbleEls[bubbleIndex]?.querySelector('.bubble-label-input')?.value?.trim() || '';
+
+    // update equation text
+    const eqEl = row.querySelector('.answer-eq');
+    if (eqEl) eqEl.textContent = eq || '(empty)';
+
+    // update bubble index label
+    const idxEl = row.querySelector('.ans-bidx');
+    if (idxEl) idxEl.textContent = String((bubbleIndex >= 0 ? bubbleIndex + 1 : 0));
+
+    // update computed result
+    const ev = safeEvalEquation(eq);
+    const pill = row.querySelector('.answer-pill');
+    const valEl = row.querySelector('.ans-val');
+
+    if (pill) {
+      pill.classList.remove('ok','err');
+      pill.classList.add(ev.ok ? 'ok' : 'err');
+      const icon = pill.querySelector('i');
+      if (icon) icon.className = 'fa ' + (ev.ok ? 'fa-check' : 'fa-triangle-exclamation');
+    }
+    if (valEl) valEl.textContent = ev.ok ? formatNumber(ev.value) : 'ERR';
+  }
+
+  function autoArrangeAnswers() {
+    const items = Array.from(elements.answerOrderList?.querySelectorAll('.answer-item') || []);
+    if (!items.length) return;
+
+    const dir = (elements.qSelectType?.value || 'ascending') === 'descending' ? -1 : 1;
+
+    const withVal = items.map(it => {
+      const key = it.dataset.key;
+      // compute from current bubble
+      const bubbleEls = getBubbleEls();
+      const b = bubbleEls.find(x => x.dataset.key === key);
+      const eq = b?.querySelector('.bubble-label-input')?.value?.trim() || '';
+      const ev = safeEvalEquation(eq);
+      return { it, key, num: (ev.ok ? ev.value : Number.POSITIVE_INFINITY) };
+    });
+
+    withVal.sort((a,b) => (a.num - b.num) * dir);
+
+    elements.answerOrderList.innerHTML = '';
+    withVal.forEach(x => elements.answerOrderList.appendChild(x.it));
+    refreshAnswerOrderNumbers();
+    // refresh bubble index + values (in case)
+    getBubbleEls().forEach(b => updateAnswerRowForKey(b.dataset.key));
+  }
+
+  elements.btnAutoOrder?.addEventListener('click', () => {
+    autoArrangeAnswers();
+    showToast('success', 'Auto arranged based on computed results');
+  });
 
   // ========= Game & Questions =========
   function updateGameHeader() {
@@ -1436,10 +1450,8 @@ document.addEventListener('DOMContentLoaded', function() {
     elements.qPoints.value = '1';
     elements.qOrder.value = (questions.length ? (Math.max(...questions.map(q => q.order_no || 0)) + 1) : 1);
     elements.qStatus.value = 'active';
-    elements.answerSequence.value = '';
-    elements.answerValues.value = '';
 
-    setBubblesData([{ label: 'Bubble 1', value: '1' }]);
+    setBubblesData([{ label: '(1+2)*3', value: '' }]);
 
     elements.formTitle.textContent = 'New Question';
     elements.btnDelete.style.display = 'none';
@@ -1450,13 +1462,11 @@ document.addEventListener('DOMContentLoaded', function() {
   async function loadGameData() {
     showLoader(true);
 
-    // ⚠️ Make sure this endpoint matches your routes
     const res = await apiFetch(`/api/bubble-games/${gameUuid}`);
 
     showLoader(false);
 
     if (!res.ok) {
-      // stop infinite loading UI
       if (elements.qList) {
         elements.qList.innerHTML = `
           <div class="empty-state">
@@ -1470,7 +1480,6 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
 
-    // supports: {success:true,data:{...}} OR {...}
     gameData = res.data?.data || res.data;
     updateGameHeader();
 
@@ -1480,13 +1489,11 @@ document.addEventListener('DOMContentLoaded', function() {
   async function loadQuestions() {
     showLoader(true);
 
-    // ⚠️ Make sure this endpoint matches your routes
     const res = await apiFetch(`/api/bubble-games/${gameUuid}/questions?paginate=false`);
 
     showLoader(false);
 
     if (!res.ok) {
-      // replace spinner so it doesn't look stuck
       if (elements.qList) {
         elements.qList.innerHTML = `
           <div class="empty-state">
@@ -1506,10 +1513,6 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
 
-    // supports:
-    // 1) {success:true,data:[...]}
-    // 2) {data:[...]}
-    // 3) direct array
     const payload = res.data;
     let arr = [];
 
@@ -1546,10 +1549,36 @@ document.addEventListener('DOMContentLoaded', function() {
     elements.qStatus.value = currentQuestion.status || 'active';
 
     if (Array.isArray(currentQuestion.bubbles_json)) setBubblesData(currentQuestion.bubbles_json);
-    else setBubblesData([{ label: 'Bubble 1', value: '1' }]);
+    else setBubblesData([{ label: '(1+2)*3', value: '' }]);
 
-    elements.answerSequence.value = currentQuestion.answer_sequence_json ? formatJson(currentQuestion.answer_sequence_json) : '';
-    elements.answerValues.value = currentQuestion.answer_value_json ? formatJson(currentQuestion.answer_value_json) : '';
+    // If old data exists: answer_sequence_json (indices) -> apply as initial order in builder
+    const seq = currentQuestion.answer_sequence_json;
+    if (Array.isArray(seq) && seq.length && elements.answerOrderList) {
+      const bubbleEls = getBubbleEls();
+      const keysByIndex = bubbleEls.map(b => b.dataset.key);
+
+      const desiredKeys = seq.map(i => keysByIndex[i]).filter(Boolean);
+      const restKeys = keysByIndex.filter(k => !desiredKeys.includes(k));
+
+      // rebuild with desired keys first
+      elements.answerOrderList.innerHTML = '';
+      const finalKeys = desiredKeys.concat(restKeys);
+
+      const bubbleMap = new Map(bubbleEls.map((b, idx) => {
+        const eq = b.querySelector('.bubble-label-input')?.value?.trim() || '';
+        return [b.dataset.key, { eq, idx }];
+      }));
+
+      finalKeys.forEach(k => {
+        const info = bubbleMap.get(k);
+        elements.answerOrderList.appendChild(buildAnswerRow(k, info?.eq || '', info?.idx ?? 0));
+      });
+
+      initSortableAnswers();
+      refreshAnswerOrderNumbers();
+    } else {
+      rebuildAnswerOrderList(false);
+    }
 
     elements.formTitle.textContent = `Edit Question #${currentQuestion.order_no || ''}`;
     elements.btnDelete.style.display = 'inline-flex';
@@ -1562,28 +1591,43 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   async function saveQuestion() {
-    const bubbles = getBubblesData();
+    const bubbles = getBubblesDataClean();
     if (!bubbles.length) {
       showToast('error', 'Add at least one bubble');
       return;
     }
 
-    let answerSequence = null;
-    let answerValues = null;
+    // Build answer order keys from the builder list
+    const answerItems = Array.from(elements.answerOrderList?.querySelectorAll('.answer-item') || []);
+    const answerKeys = answerItems.map(x => x.dataset.key).filter(Boolean);
 
-    if (elements.answerSequence.value.trim()) {
-      answerSequence = parseJsonSafe(elements.answerSequence.value);
-      if (!Array.isArray(answerSequence)) {
-        showToast('error', 'Answer sequence must be a JSON array');
+    // map bubble key -> index in current bubbles DOM order
+    const bubbleEls = getBubbleEls();
+    const keyToIndex = new Map(bubbleEls.map((b, idx) => [b.dataset.key, idx]));
+
+    // validate all equations and also compute answer_value_json
+    const answerValues = [];
+    const answerSequence = [];
+
+    for (const key of answerKeys) {
+      const idx = keyToIndex.get(key);
+      if (typeof idx !== 'number') continue;
+
+      const eq = bubbleEls[idx]?.querySelector('.bubble-label-input')?.value?.trim() || '';
+      const ev = safeEvalEquation(eq);
+
+      if (!ev.ok) {
+        showToast('error', `Invalid equation in Bubble #${idx + 1}. Please fix it before saving.`);
         return;
       }
+
+      answerSequence.push(idx);     // correct order as indices
+      answerValues.push(ev.value);  // correct values in that order
     }
-    if (elements.answerValues.value.trim()) {
-      answerValues = parseJsonSafe(elements.answerValues.value);
-      if (!Array.isArray(answerValues)) {
-        showToast('error', 'Answer values must be a JSON array');
-        return;
-      }
+
+    if (!answerSequence.length) {
+      showToast('error', 'Correct order list is empty.');
+      return;
     }
 
     const payload = {
@@ -1592,10 +1636,12 @@ document.addEventListener('DOMContentLoaded', function() {
       bubbles_json: bubbles,
       points: parseInt(elements.qPoints.value) || 1,
       order_no: parseInt(elements.qOrder.value) || 1,
-      status: elements.qStatus.value
+      status: elements.qStatus.value,
+
+      // ✅ auto-generated
+      answer_sequence_json: answerSequence,
+      answer_value_json: answerValues
     };
-    if (answerSequence) payload.answer_sequence_json = answerSequence;
-    if (answerValues) payload.answer_value_json = answerValues;
 
     const saveBtn = elements.btnSave;
     const original = saveBtn.innerHTML;
@@ -1657,8 +1703,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // ========= Events =========
   elements.btnAddBubble.addEventListener('click', () => {
-    const index = (elements.bubblesList?.children?.length || 0) + 1;
-    addBubble(`Bubble ${index}`, index.toString());
+    addBubble('(2+3)*4', '');
   });
 
   elements.btnNewQuestion.addEventListener('click', resetForm);
@@ -1696,13 +1741,12 @@ document.addEventListener('DOMContentLoaded', function() {
   // ========= Init =========
   function init() {
     console.log('Init bubble question page. gameUuid=', gameUuid);
-    setBubblesData([{ label: 'Bubble 1', value: '1' }]);
+    setBubblesData([{ label: '(1+2)*3', value: '' }]);
     resetForm();
     loadGameData();
   }
 
   init();
 });
-</script>
-
+  </script>
 @endpush

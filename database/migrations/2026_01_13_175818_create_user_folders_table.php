@@ -24,7 +24,7 @@ return new class extends Migration
 
             $table->bigIncrements('id');
  
-            // External identifier (optional but recommended)
+            // External identifier (recommended)
 
             $table->uuid('uuid')->unique();
  
@@ -44,7 +44,7 @@ return new class extends Migration
  
             // Audit
 
-            $table->unsignedBigInteger('created_by')->nullable(); // FK → users.id
+            $table->unsignedBigInteger('created_by')->nullable(); // FK -> users.id
 
             $table->string('created_at_ip', 45)->nullable();
 
@@ -54,7 +54,7 @@ return new class extends Migration
 
             $table->timestamps();
 
-            $table->softDeletes()->index(); // deleted_at indexed
+            $table->softDeletes()->index();
  
             // Indexes
 

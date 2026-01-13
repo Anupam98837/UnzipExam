@@ -782,6 +782,7 @@ html.theme-dark .page-link:hover{ background-color: rgba(255,255,255,.1); }
     const status = String(r.status||'').toLowerCase();
     const isArchived = (status === 'archived');
 
+    
     return `
       <div class="dropdown text-end" data-bs-display="static">
         <button type="button" class="btn btn-light btn-sm dd-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside" title="Actions">
@@ -795,6 +796,13 @@ html.theme-dark .page-link:hover{ background-color: rgba(255,255,255,.1); }
           <li><button class="dropdown-item" data-act="duplicate" data-key="${esc(key)}" data-name="${esc(r.title||'')}">
             <i class="fa fa-copy"></i> Duplicate
           </button></li>
+
+          <li><hr class="dropdown-divider"></li>
+
+          <!-- ADD THIS NEW ITEM FOR MANAGING QUESTIONS -->
+          <li><a class="dropdown-item" href="/bubble-games/questions/manage?game=${esc(key)}">
+            <i class="fa fa-list-check"></i> Manage Questions
+          </a></li>
 
           <li><hr class="dropdown-divider"></li>
 
@@ -848,7 +856,7 @@ html.theme-dark .page-link:hover{ background-color: rgba(255,255,255,.1); }
       tr.innerHTML = `
         <td>
           <div class="fw-semibold">
-            <a href="${basePanel}/bubble-games/${encodeURIComponent(r.uuid || r.id)}" class="link-offset-2 link-underline-opacity-0">${title}</a>
+            <a href="/bubble-games/${encodeURIComponent(r.uuid || r.id)}" class="link-offset-2 link-underline-opacity-0">${title}</a>
           </div>
           ${creator}
           ${desc ? `<div class="text-muted small">${desc}</div>` : ``}
@@ -866,7 +874,7 @@ html.theme-dark .page-link:hover{ background-color: rgba(255,255,255,.1); }
     tr.innerHTML = `
       <td>
         <div class="fw-semibold">
-          <a href="${basePanel}/bubble-games/${encodeURIComponent(r.uuid || r.id)}" class="link-offset-2 link-underline-opacity-0">${title}</a>
+          <a href="/bubble-games/${encodeURIComponent(r.uuid || r.id)}" class="link-offset-2 link-underline-opacity-0">${title}</a>
         </div>
         ${creator}
         ${desc ? `<div class="text-muted small">${desc}</div>` : ``}

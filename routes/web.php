@@ -98,8 +98,23 @@ Route::get('/user-privileges/manage', function () {
 })->name('modules.privileges.assign.user');
 
 
-Route::get('/bubblegame', function () {
-    return view('modules.bubbleGame.manageBubbleGameQuestions');
-});
-//profile
+Route::get('/bubblegame/manage', function () {
+    $gameUuid = request()->query('game');
+    
+    if (!$gameUuid) {
+        // Redirect or show error
+        return view('modules.bubbleGame.manageBubbleGameQuestions', [
+            'gameUuid' => null,
+            'error' => 'Please select a bubble game first'
+        ]);
+    }
+    
+    return view('modules.bubbleGame.manageBubbleGameQuestions', [
+        'gameUuid' => $gameUuid
+    ]);
+})->name('bubblegame.manage');//profile
+
+Route::get('/bubblegame-manage', fn () => view('modules.bubbleGame.manageBubbleGame'));
+
+
 Route::get('/profile', fn () => view('pages.users.pages.common.profile'))->name('profile');

@@ -12,8 +12,8 @@ use App\Http\Controllers\API\QuizzResultController;
 use App\Http\Controllers\API\PagePrivilegeController;
 use App\Http\Controllers\API\DashboardMenuController;
 use App\Http\Controllers\API\UserPrivilegeController;
-use App\Http\Controllers\BubbleGameController;
-use App\Http\Controllers\BubbleGameQuestionController;
+use App\Http\Controllers\API\BubbleGameController;
+use App\Http\Controllers\API\BubbleGameQuestionController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();

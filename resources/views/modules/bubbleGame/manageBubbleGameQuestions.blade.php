@@ -1,13 +1,8 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Manage Bubble Game Questions</title>
-    
+
+        @extends('pages.users.layout.structure')
+@push('styles')
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"/>
     <link rel="stylesheet" href="{{ asset('assets/css/common/main.css') }}"/>
-    @extends('pages.users.layout.structure')
 
     <style>
     :root{
@@ -829,8 +824,7 @@
         .content-footer .btn{ width: 100%; }
     }
     </style>
-</head>
-<body>
+@endpush
     @section('content')
     <div class="container">
         <!-- Game Header -->
@@ -931,7 +925,7 @@
                     <form id="qForm" novalidate>
                         <input type="hidden" id="qId">
                         <!-- Get gameUuid from query parameter -->
-                        <input type="hidden" id="gameUuid" value="{{ request()->query('game') }}">
+<input type="hidden" id="gameUuid" value="{{ request()->query('game') ?? request()->query('game_uuid') ?? request()->query('uuid') ?? request()->query('id') }}">
 
                         <!-- Basic Information -->
                         <div class="section-title">
@@ -1101,834 +1095,614 @@
     </div>
 
     @endsection
-
+@push('scripts')
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Variables
-        const TOKEN = localStorage.getItem('token') || sessionStorage.getItem('token') || '';
-        let gameUuid = document.getElementById('gameUuid')?.value || new URLSearchParams(window.location.search).get('game');
-        let gameData = null;
-        let questions = [];
-        let editingId = null;
-        let currentQuestion = null;
+document.addEventListener('DOMContentLoaded', function() {
+  const TOKEN = localStorage.getItem('token') || sessionStorage.getItem('token') || '';
 
-        // Check if gameUuid is provided
-        if (!gameUuid) {
-            showToast('error', 'Game ID is required. Please select a game first.');
-            setTimeout(() => {
-                window.location.href = '/bubblegame'; // Redirect to bubble games list
-            }, 3000);
-            return;
-        }
+  // DOM Elements (safe)
+  const elements = {
+    gameTitle: document.getElementById('gameTitle'),
+    gameDesc: document.getElementById('gameDesc'),
+    questionsCount: document.getElementById('questionsCount'),
+    sidebarQuestionsCount: document.getElementById('sidebarQuestionsCount'),
+    totalBubbles: document.getElementById('totalBubbles'),
+    totalPoints: document.getElementById('totalPoints'),
+    perQuestionTime: document.getElementById('perQuestionTime'),
+    maxAttempts: document.getElementById('maxAttempts'),
+    pointsCorrect: document.getElementById('pointsCorrect'),
+    pointsWrong: document.getElementById('pointsWrong'),
+    qList: document.getElementById('qList'),
+    qForm: document.getElementById('qForm'),
+    qId: document.getElementById('qId'),
+    qTitle: document.getElementById('qTitle'),
+    qSelectType: document.getElementById('qSelectType'),
+    qPoints: document.getElementById('qPoints'),
+    qOrder: document.getElementById('qOrder'),
+    qStatus: document.getElementById('qStatus'),
+    bubblesList: document.getElementById('bubblesList'),
+    bubblesCount: document.getElementById('bubblesCount'),
+    answerSequence: document.getElementById('answerSequence'),
+    answerValues: document.getElementById('answerValues'),
+    btnAddBubble: document.getElementById('btnAddBubble'),
+    btnNewQuestion: document.getElementById('btnNewQuestion'),
+    btnSave: document.getElementById('btnSave'),
+    btnCancel: document.getElementById('btnCancel'),
+    btnDelete: document.getElementById('btnDelete'),
+    btnHelp: document.getElementById('btnHelp'),
+    btnPreview: document.getElementById('btnPreview'),
+    formTitle: document.getElementById('formTitle'),
+    contentLoader: document.getElementById('contentLoader'),
+    previewOverlay: document.getElementById('previewOverlay'),
+    previewTitle: document.getElementById('previewTitle'),
+    previewChips: document.getElementById('previewChips'),
+    previewContent: document.getElementById('previewContent'),
+    previewCloseBtn: document.getElementById('previewCloseBtn'),
+    previewCloseBtn2: document.getElementById('previewCloseBtn2'),
+    qSearch: document.getElementById('qSearch'),
+  };
 
-        // DOM Elements
-        const elements = {
-            gameTitle: document.getElementById('gameTitle'),
-            gameDesc: document.getElementById('gameDesc'),
-            questionsCount: document.getElementById('questionsCount'),
-            sidebarQuestionsCount: document.getElementById('sidebarQuestionsCount'),
-            totalBubbles: document.getElementById('totalBubbles'),
-            totalPoints: document.getElementById('totalPoints'),
-            perQuestionTime: document.getElementById('perQuestionTime'),
-            maxAttempts: document.getElementById('maxAttempts'),
-            pointsCorrect: document.getElementById('pointsCorrect'),
-            pointsWrong: document.getElementById('pointsWrong'),
-            qList: document.getElementById('qList'),
-            qForm: document.getElementById('qForm'),
-            qId: document.getElementById('qId'),
-            qTitle: document.getElementById('qTitle'),
-            qSelectType: document.getElementById('qSelectType'),
-            qPoints: document.getElementById('qPoints'),
-            qOrder: document.getElementById('qOrder'),
-            qStatus: document.getElementById('qStatus'),
-            bubblesList: document.getElementById('bubblesList'),
-            bubblesCount: document.getElementById('bubblesCount'),
-            answerSequence: document.getElementById('answerSequence'),
-            answerValues: document.getElementById('answerValues'),
-            btnAddBubble: document.getElementById('btnAddBubble'),
-            btnNewQuestion: document.getElementById('btnNewQuestion'),
-            btnSave: document.getElementById('btnSave'),
-            btnCancel: document.getElementById('btnCancel'),
-            btnDelete: document.getElementById('btnDelete'),
-            btnHelp: document.getElementById('btnHelp'),
-            btnPreview: document.getElementById('btnPreview'),
-            formTitle: document.getElementById('formTitle'),
-            contentLoader: document.getElementById('contentLoader'),
-            previewOverlay: document.getElementById('previewOverlay'),
-            previewTitle: document.getElementById('previewTitle'),
-            previewChips: document.getElementById('previewChips'),
-            previewContent: document.getElementById('previewContent'),
-            previewCloseBtn: document.getElementById('previewCloseBtn'),
-            previewCloseBtn2: document.getElementById('previewCloseBtn2'),
-            qSearch: document.getElementById('qSearch')
-        };
+  // ========= Helpers =========
+  function showToast(type, message) {
+    const toast = document.getElementById(`${type}Toast`);
+    const msgEl = document.getElementById(`${type}Msg`);
+    if (!toast || !msgEl) return;
+    msgEl.textContent = message;
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 3000);
+  }
 
-        // Helper Functions
-        function showToast(type, message) {
-            const toast = document.getElementById(`${type}Toast`);
-            const msgEl = document.getElementById(`${type}Msg`);
-            if (toast && msgEl) {
-                msgEl.textContent = message;
-                toast.classList.add('show');
-                setTimeout(() => toast.classList.remove('show'), 3000);
-            }
-        }
+  function showLoader(show) {
+    if (elements.contentLoader) {
+      elements.contentLoader.style.display = show ? 'flex' : 'none';
+    }
+  }
 
-        function showLoader(show) {
-            if (elements.contentLoader) {
-                elements.contentLoader.style.display = show ? 'flex' : 'none';
-            }
-        }
+  function escapeHtml(text) {
+    if (!text) return '';
+    const map = { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;' };
+    return text.toString().replace(/[&<>"']/g, m => map[m]);
+  }
 
-        function parseJsonSafe(jsonString) {
-            try {
-                return jsonString ? JSON.parse(jsonString) : null;
-            } catch (e) {
-                console.error('JSON parse error:', e);
-                return null;
-            }
-        }
+  function parseJsonSafe(jsonString) {
+    try { return jsonString ? JSON.parse(jsonString) : null; }
+    catch(e){ console.error(e); return null; }
+  }
 
-        function formatJson(json) {
-            try {
-                return JSON.stringify(json, null, 2);
-            } catch (e) {
-                return json || '';
-            }
-        }
+  function formatJson(json) {
+    try { return JSON.stringify(json, null, 2); }
+    catch(e){ return json || ''; }
+  }
 
-        async function apiFetch(url, options = {}) {
-            const headers = {
-                'Accept': 'application/json',
-                ...options.headers
-            };
-            
-            if (TOKEN) {
-                headers['Authorization'] = `Bearer ${TOKEN}`;
-            }
-            
-            // Only add Content-Type if not FormData
-            if (!(options.body instanceof FormData) && !options.headers?.['Content-Type']) {
-                headers['Content-Type'] = 'application/json';
-            }
-            
-            try {
-                const response = await fetch(url, { ...options, headers });
-                
-                // Handle HTML responses (like session expired)
-                const contentType = response.headers.get('content-type');
-                if (contentType && contentType.includes('text/html')) {
-                    if (response.status === 401 || response.status === 419) {
-                        showToast('error', 'Session expired. Please login again.');
-                        setTimeout(() => window.location.href = '/login', 2000);
-                        return { ok: false, status: response.status };
-                    }
-                    return { ok: false, status: response.status, data: 'HTML response' };
-                }
-                
-                let data;
-                try {
-                    data = await response.json();
-                } catch (e) {
-                    data = await response.text();
-                }
-                
-                return {
-                    ok: response.ok,
-                    status: response.status,
-                    data: data
-                };
-            } catch (error) {
-                console.error('API Error:', error);
-                showToast('error', 'Network error. Please check your connection.');
-                return { ok: false, status: 0, data: null };
-            }
-        }
+  function resolveGameUuid() {
+    const fromHidden = (document.getElementById('gameUuid')?.value || '').trim();
 
-        // Initialize Sortable for bubbles
-        let sortable;
-        function initSortable() {
-            if (sortable) sortable.destroy();
-            
-            sortable = Sortable.create(elements.bubblesList, {
-                animation: 150,
-                ghostClass: 'sortable-ghost',
-                dragClass: 'sortable-drag',
-                handle: '.bubble-handle',
-                onEnd: function() {
-                    updateBubblesCount();
-                }
-            });
-        }
+    const url = new URL(window.location.href);
+    const p = url.searchParams;
 
-        // Bubble Management
-        function createBubbleElement(index, label = '', value = '') {
-            const div = document.createElement('div');
-            div.className = 'bubble-item';
-            div.dataset.index = index;
-            div.innerHTML = `
-                <div class="bubble-handle">
-                    <i class="fa fa-grip-vertical"></i>
-                </div>
-                <div class="bubble-inputs">
-                    <div class="bubble-label">
-                        <input type="text" class="form-control bubble-label-input" 
-                               placeholder="Bubble label" value="${escapeHtml(label)}">
-                    </div>
-                    <div class="bubble-value">
-                        <input type="text" class="form-control bubble-value-input" 
-                               placeholder="Value (optional)" value="${escapeHtml(value)}">
-                    </div>
-                </div>
-                <div class="bubble-actions">
-                    <button type="button" class="bubble-btn delete" title="Delete bubble">
-                        <i class="fa fa-trash"></i>
-                    </button>
-                </div>
-            `;
-            
-            // Add event listeners
-            const deleteBtn = div.querySelector('.bubble-btn.delete');
-            deleteBtn.addEventListener('click', () => {
-                if (elements.bubblesList.children.length > 1) {
-                    div.remove();
-                    updateBubblesCount();
-                    reindexBubbles();
-                } else {
-                    showToast('error', 'At least one bubble is required');
-                }
-            });
-            
-            return div;
-        }
+    let v = fromHidden
+      || (p.get('game') || '').trim()
+      || (p.get('game_uuid') || '').trim()
+      || (p.get('uuid') || '').trim()
+      || (p.get('id') || '').trim();
 
-        function escapeHtml(text) {
-            if (!text) return '';
-            const map = {
-                '&': '&amp;',
-                '<': '&lt;',
-                '>': '&gt;',
-                '"': '&quot;',
-                "'": '&#039;'
-            };
-            return text.toString().replace(/[&<>"']/g, m => map[m]);
-        }
+    // handle bad strings
+    if (['null','undefined','0'].includes((v || '').toLowerCase())) v = '';
 
-        function addBubble(label = '', value = '') {
-            const index = elements.bubblesList.children.length;
-            const bubble = createBubbleElement(index, label, value);
-            elements.bubblesList.appendChild(bubble);
-            updateBubblesCount();
-        }
+    // optional: extract from path like /bubble-games/{uuid}/questions
+    if (!v) {
+      const m = url.pathname.match(/bubble-games\/([^\/]+)\//i);
+      if (m && m[1]) v = m[1].trim();
+    }
 
-        function updateBubblesCount() {
-            const count = elements.bubblesList.children.length;
-            elements.bubblesCount.textContent = `${count} bubble${count !== 1 ? 's' : ''}`;
-        }
+    // keep hidden field synced
+    const hidden = document.getElementById('gameUuid');
+    if (hidden && v) hidden.value = v;
 
-        function reindexBubbles() {
-            Array.from(elements.bubblesList.children).forEach((child, index) => {
-                child.dataset.index = index;
-            });
-        }
+    return v;
+  }
 
-        function getBubblesData() {
-            const bubbles = [];
-            elements.bubblesList.querySelectorAll('.bubble-item').forEach(item => {
-                const label = item.querySelector('.bubble-label-input').value.trim();
-                const value = item.querySelector('.bubble-value-input').value.trim();
-                if (label) {
-                    bubbles.push({
-                        label: label,
-                        value: value || null
-                    });
-                }
-            });
-            return bubbles;
-        }
+  async function apiFetch(url, options = {}) {
+    const headers = {
+      'Accept': 'application/json',
+      'X-Requested-With': 'XMLHttpRequest',
+      ...options.headers
+    };
 
-        function setBubblesData(bubbles) {
-            elements.bubblesList.innerHTML = '';
-            bubbles.forEach(bubble => {
-                addBubble(bubble.label, bubble.value || '');
-            });
-            updateBubblesCount();
-            initSortable();
-        }
+    if (TOKEN) headers['Authorization'] = `Bearer ${TOKEN}`;
+    if (!(options.body instanceof FormData) && !headers['Content-Type']) {
+      headers['Content-Type'] = 'application/json';
+    }
 
-        // Game Data Management
-        async function loadGameData() {
-            if (!gameUuid) return;
+    try {
+      const res = await fetch(url, { ...options, headers });
 
-            showLoader(true);
-            const response = await apiFetch(`/api/bubble-games/${gameUuid}`);
-            showLoader(false);
+      let data = null;
+      const contentType = res.headers.get('content-type') || '';
 
-            if (response.ok) {
-                gameData = response.data.data || response.data;
-                updateGameHeader();
-                loadQuestions();
-            } else {
-                if (response.status === 404) {
-                    showToast('error', 'Bubble game not found');
-                    setTimeout(() => {
-                        window.location.href = '/bubblegame';
-                    }, 2000);
-                } else {
-                    showToast('error', 'Failed to load game data');
-                }
-                console.error('Game load error:', response);
-            }
-        }
+      if (contentType.includes('application/json')) {
+        try { data = await res.json(); } catch(e) { data = null; }
+      } else {
+        // could be html/text
+        try { data = await res.text(); } catch(e) { data = null; }
+      }
 
-        function updateGameHeader() {
-            if (!gameData) return;
-            
-            elements.gameTitle.textContent = gameData.title || 'Untitled Game';
-            elements.gameDesc.textContent = gameData.description || 'No description provided';
-            elements.perQuestionTime.textContent = `${gameData.per_question_time_sec || 30}s`;
-            elements.maxAttempts.textContent = gameData.max_attempts || 1;
-            elements.pointsCorrect.textContent = gameData.points_correct || 1;
-            elements.pointsWrong.textContent = gameData.points_wrong || 0;
-        }
+      // handle auth errors even if JSON
+      if (res.status === 401 || res.status === 419) {
+        showToast('error', 'Session expired. Please login again.');
+        setTimeout(() => window.location.href = '/login', 1500);
+        return { ok: false, status: res.status, data };
+      }
 
-        // Question Management
-        async function loadQuestions() {
-            showLoader(true);
-            const response = await apiFetch(`/api/bubble-games/${gameUuid}/questions?paginate=false`);
-            showLoader(false);
+      return { ok: res.ok, status: res.status, data };
+    } catch (err) {
+      console.error('API Error:', err);
+      showToast('error', 'Network error. Please check your connection.');
+      return { ok: false, status: 0, data: null };
+    }
+  }
 
-            if (response.ok) {
-                questions = Array.isArray(response.data) ? response.data : [];
-                if (response.data && response.data.data) questions = response.data.data;
-                updateQuestionsCount();
-                renderQuestionList();
-            } else {
-                showToast('error', 'Failed to load questions');
-            }
-        }
+  // ========= State =========
+  let gameUuid = resolveGameUuid();
+  let gameData = null;
+  let questions = [];
+  let editingId = null;
+  let currentQuestion = null;
 
-        function updateQuestionsCount() {
-            const count = questions.length;
-            elements.questionsCount.textContent = count;
-            elements.sidebarQuestionsCount.textContent = count;
-            
-            // Calculate totals
-            let totalBubbles = 0;
-            let totalPoints = 0;
-            
-            questions.forEach(q => {
-                totalBubbles += q.bubbles_count || 0;
-                totalPoints += q.points || 0;
-            });
-            
-            elements.totalBubbles.textContent = totalBubbles;
-            elements.totalPoints.textContent = totalPoints;
-        }
+  // ========= Early guard (also stop infinite loading UI) =========
+  if (!gameUuid) {
+    // replace spinner with a clear message
+    if (elements.qList) {
+      elements.qList.innerHTML = `
+        <div class="empty-state">
+          <i class="fa fa-triangle-exclamation"></i>
+          <div style="margin-top:8px;font-weight:600;">Game ID missing</div>
+          <div style="margin-top:6px;">Open this page with <code>?game=&lt;uuid&gt;</code></div>
+          <div style="margin-top:10px;">
+            <button class="btn btn-primary btn-sm" id="goGamesBtn">
+              <i class="fa fa-list"></i> Go to Games
+            </button>
+          </div>
+        </div>
+      `;
+      document.getElementById('goGamesBtn')?.addEventListener('click', () => {
+        window.location.href = '/bubblegame';
+      });
+    }
+    showToast('error', 'Game ID is required. Please select a game first.');
+    return;
+  }
 
-        function renderQuestionList() {
-            if (!questions.length) {
-                elements.qList.innerHTML = `
-                    <div class="empty-state">
-                        <i class="fa fa-inbox"></i>
-                        <div>No questions yet</div>
-                        <button class="btn btn-primary btn-sm mt-3" id="btnAddFirst">
-                            <i class="fa fa-plus"></i> Add First Question
-                        </button>
-                    </div>
-                `;
-                document.getElementById('btnAddFirst')?.addEventListener('click', resetForm);
-                return;
-            }
-
-            elements.qList.innerHTML = '';
-            
-            questions.sort((a, b) => (a.order_no || 0) - (b.order_no || 0));
-            
-            questions.forEach((q, index) => {
-                const item = document.createElement('div');
-                item.className = 'question-item';
-                item.dataset.id = q.uuid;
-                
-                const typeBadge = q.select_type === 'ascending' ? 
-                    '<span class="q-badge type-asc">Asc</span>' : 
-                    '<span class="q-badge type-desc">Desc</span>';
-                
-                item.innerHTML = `
-                    <div class="q-number">${q.order_no || index + 1}</div>
-                    <div class="q-content">
-                        <div class="q-title">${escapeHtml(q.title || 'Question ' + (index + 1))}</div>
-                        <div class="q-meta">
-                            <span class="q-badge bubbles">${q.bubbles_count || 0} bubbles</span>
-                            <span class="q-badge points">${q.points || 1} pts</span>
-                            ${typeBadge}
-                        </div>
-                    </div>
-                    <div class="question-menu">
-                        <button class="menu-btn">
-                            <i class="fa fa-ellipsis-v"></i>
-                        </button>
-                        <div class="menu-dropdown">
-                            <div class="menu-item view" data-action="view" data-id="${q.uuid}">
-                                <i class="fa fa-eye"></i> Preview
-                            </div>
-                            <div class="menu-item edit" data-action="edit" data-id="${q.uuid}">
-                                <i class="fa fa-edit"></i> Edit
-                            </div>
-                            <div class="menu-item delete" data-action="delete" data-id="${q.uuid}">
-                                <i class="fa fa-trash"></i> Delete
-                            </div>
-                        </div>
-                    </div>
-                `;
-                
-                // Add click event for main item
-                item.addEventListener('click', (e) => {
-                    if (!e.target.closest('.menu-btn') && !e.target.closest('.menu-item')) {
-                        openQuestion(q.uuid);
-                    }
-                });
-                
-                // Add menu events
-                const menuBtn = item.querySelector('.menu-btn');
-                const menuDropdown = item.querySelector('.menu-dropdown');
-                const menuItems = item.querySelectorAll('.menu-item');
-                
-                menuBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    document.querySelectorAll('.menu-dropdown').forEach(d => d.classList.remove('show'));
-                    menuDropdown.classList.toggle('show');
-                });
-                
-                menuItems.forEach(menuItem => {
-                    menuItem.addEventListener('click', async (e) => {
-                        e.stopPropagation();
-                        const action = menuItem.dataset.action;
-                        const id = menuItem.dataset.id;
-                        
-                        menuDropdown.classList.remove('show');
-                        
-                        if (action === 'view') {
-                            previewQuestion(id);
-                        } else if (action === 'edit') {
-                            openQuestion(id);
-                        } else if (action === 'delete') {
-                            deleteQuestion(id);
-                        }
-                    });
-                });
-                
-                elements.qList.appendChild(item);
-            });
-            
-            // Close dropdowns when clicking elsewhere
-            document.addEventListener('click', () => {
-                document.querySelectorAll('.menu-dropdown').forEach(d => d.classList.remove('show'));
-            });
-        }
-
-        function resetForm() {
-            editingId = null;
-            currentQuestion = null;
-            
-            elements.qId.value = '';
-            elements.qTitle.value = '';
-            elements.qSelectType.value = 'ascending';
-            elements.qPoints.value = '1';
-            elements.qOrder.value = (questions.length > 0 ? Math.max(...questions.map(q => q.order_no || 0)) + 1 : 1);
-            elements.qStatus.value = 'active';
-            elements.answerSequence.value = '';
-            elements.answerValues.value = '';
-            
-            // Reset bubbles
-            setBubblesData([{ label: 'Bubble 1', value: '1' }]);
-            
-            elements.formTitle.textContent = 'New Question';
-            elements.btnDelete.style.display = 'none';
-            
-            // Clear active class
-            document.querySelectorAll('.question-item').forEach(item => {
-                item.classList.remove('active');
-            });
-        }
-
-        async function openQuestion(questionUuid) {
-            showLoader(true);
-            const response = await apiFetch(`/api/bubble-games/${gameUuid}/questions/${questionUuid}`);
-            showLoader(false);
-
-            if (response.ok) {
-                currentQuestion = response.data.data || response.data;
-                editingId = questionUuid;
-                
-                // Fill form
-                elements.qId.value = currentQuestion.uuid;
-                elements.qTitle.value = currentQuestion.title || '';
-                elements.qSelectType.value = currentQuestion.select_type || 'ascending';
-                elements.qPoints.value = currentQuestion.points || 1;
-                elements.qOrder.value = currentQuestion.order_no || 1;
-                elements.qStatus.value = currentQuestion.status || 'active';
-                
-                // Set bubbles
-                if (currentQuestion.bubbles_json && Array.isArray(currentQuestion.bubbles_json)) {
-                    setBubblesData(currentQuestion.bubbles_json);
-                } else {
-                    setBubblesData([{ label: 'Bubble 1', value: '1' }]);
-                }
-                
-                // Set answer data
-                if (currentQuestion.answer_sequence_json) {
-                    elements.answerSequence.value = formatJson(currentQuestion.answer_sequence_json);
-                } else {
-                    elements.answerSequence.value = '';
-                }
-                
-                if (currentQuestion.answer_value_json) {
-                    elements.answerValues.value = formatJson(currentQuestion.answer_value_json);
-                } else {
-                    elements.answerValues.value = '';
-                }
-                
-                elements.formTitle.textContent = `Edit Question #${currentQuestion.order_no}`;
-                elements.btnDelete.style.display = 'inline-flex';
-                
-                // Set active class
-                document.querySelectorAll('.question-item').forEach(item => {
-                    item.classList.remove('active');
-                    if (item.dataset.id === questionUuid) {
-                        item.classList.add('active');
-                    }
-                });
-                
-                // Scroll to form
-                elements.qForm.scrollIntoView({ behavior: 'smooth' });
-            } else {
-                showToast('error', 'Failed to load question');
-            }
-        }
-
-        async function saveQuestion() {
-            // Validate bubbles
-            const bubbles = getBubblesData();
-            if (bubbles.length === 0) {
-                showToast('error', 'Add at least one bubble');
-                return;
-            }
-
-            // Validate JSON fields
-            let answerSequence = null;
-            let answerValues = null;
-            
-            if (elements.answerSequence.value.trim()) {
-                answerSequence = parseJsonSafe(elements.answerSequence.value);
-                if (answerSequence === null) {
-                    showToast('error', 'Invalid JSON in answer sequence');
-                    return;
-                }
-                if (!Array.isArray(answerSequence)) {
-                    showToast('error', 'Answer sequence must be a JSON array');
-                    return;
-                }
-            }
-            
-            if (elements.answerValues.value.trim()) {
-                answerValues = parseJsonSafe(elements.answerValues.value);
-                if (answerValues === null) {
-                    showToast('error', 'Invalid JSON in answer values');
-                    return;
-                }
-                if (!Array.isArray(answerValues)) {
-                    showToast('error', 'Answer values must be a JSON array');
-                    return;
-                }
-            }
-
-            const questionData = {
-                title: elements.qTitle.value.trim() || null,
-                select_type: elements.qSelectType.value,
-                bubbles_json: bubbles,
-                points: parseInt(elements.qPoints.value) || 1,
-                order_no: parseInt(elements.qOrder.value) || 1,
-                status: elements.qStatus.value
-            };
-
-            // Add answer data if provided
-            if (answerSequence) {
-                questionData.answer_sequence_json = answerSequence;
-            }
-            
-            if (answerValues) {
-                questionData.answer_value_json = answerValues;
-            }
-
-            // Disable save button
-            const saveBtn = elements.btnSave;
-            const originalText = saveBtn.innerHTML;
-            saveBtn.disabled = true;
-            saveBtn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Saving...';
-            
-            showLoader(true);
-            const url = editingId ? 
-                `/api/bubble-games/${gameUuid}/questions/${editingId}` : 
-                `/api/bubble-games/${gameUuid}/questions`;
-            const method = editingId ? 'PUT' : 'POST';
-
-            const response = await apiFetch(url, {
-                method: method,
-                body: JSON.stringify(questionData)
-            });
-            showLoader(false);
-            
-            // Re-enable save button
-            saveBtn.disabled = false;
-            saveBtn.innerHTML = originalText;
-
-            if (response.ok) {
-                showToast('success', editingId ? 'Question updated successfully' : 'Question created successfully');
-                await loadQuestions();
-                if (!editingId) resetForm();
-            } else {
-                const errorMsg = response.data?.errors ? 
-                    Object.values(response.data.errors).flat().join(', ') :
-                    response.data?.message || 'Failed to save question';
-                showToast('error', errorMsg);
-                console.error('Save error:', response);
-            }
-        }
-
-        async function deleteQuestion(questionUuid) {
-            const result = await Swal.fire({
-                title: 'Delete Question?',
-                text: 'This action cannot be undone',
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonText: 'Delete',
-                cancelButtonText: 'Cancel',
-                confirmButtonColor: '#ef4444'
-            });
-
-            if (!result.isConfirmed) return;
-
-            showLoader(true);
-            const response = await apiFetch(`/api/bubble-games/${gameUuid}/questions/${questionUuid}`, {
-                method: 'DELETE'
-            });
-            showLoader(false);
-
-            if (response.ok) {
-                showToast('success', 'Question deleted successfully');
-                await loadQuestions();
-                if (editingId === questionUuid) {
-                    resetForm();
-                }
-            } else {
-                showToast('error', 'Failed to delete question');
-            }
-        }
-
-        async function previewQuestion(questionUuid) {
-            let q;
-            
-            if (questionUuid === 'preview' && currentQuestion) {
-                q = currentQuestion;
-            } else {
-                const response = await apiFetch(`/api/bubble-games/${gameUuid}/questions/${questionUuid}`);
-                
-                if (!response.ok) {
-                    showToast('error', 'Failed to load question for preview');
-                    return;
-                }
-                q = response.data.data || response.data;
-            }
-            
-            // Update preview modal
-            elements.previewTitle.textContent = q.title || `Question #${q.order_no}`;
-            
-            // Create chips
-            const typeChip = q.select_type === 'ascending' ? 
-                '<span class="preview-chip" style="background:#dbeafe;color:#1e40af;">Ascending</span>' :
-                '<span class="preview-chip" style="background:#fef3c7;color:#92400e;">Descending</span>';
-            
-            elements.previewChips.innerHTML = `
-                ${typeChip}
-                <span class="preview-chip" style="background:#dcfce7;color:#166534;">${q.points || 1} points</span>
-                <span class="preview-chip" style="background:#e0e7ff;color:#3730a3;">${q.bubbles_count || 0} bubbles</span>
-            `;
-            
-            // Create preview content
-            let html = `
-                <div class="bubbles-preview">
-            `;
-            
-            const bubbles = q.bubbles_json || [];
-            bubbles.forEach((bubble, index) => {
-                html += `
-                    <div class="bubble-preview">
-                        <div class="bubble-label-preview">${escapeHtml(bubble.label)}</div>
-                        <div class="bubble-value-preview">${bubble.value ? escapeHtml(bubble.value) : '—'}</div>
-                        <div class="bubble-index">${index}</div>
-                    </div>
-                `;
-            });
-            
-            html += `</div>`;
-            
-            // Add answer info if available
-            const answerSequence = q.answer_sequence_json;
-            const answerValues = q.answer_value_json;
-            
-            if (answerSequence && Array.isArray(answerSequence)) {
-                html += `
-                    <div class="answer-preview">
-                        <div class="answer-title">
-                            <i class="fa fa-check-circle text-green-500"></i>
-                            Correct Sequence
-                        </div>
-                        <div class="answer-sequence">
-                            ${answerSequence.map(index => `
-                                <div class="seq-item">${index}</div>
-                            `).join('')}
-                        </div>
-                        ${answerValues && Array.isArray(answerValues) ? `
-                            <div class="answer-title mt-3">
-                                <i class="fa fa-hashtag"></i>
-                                Correct Values
-                            </div>
-                            <div class="answer-sequence">
-                                ${answerValues.map(value => `
-                                    <div class="seq-item">${JSON.stringify(value)}</div>
-                                `).join('')}
-                            </div>
-                        ` : ''}
-                    </div>
-                `;
-            }
-            
-            elements.previewContent.innerHTML = html;
-            
-            // Show modal
-            elements.previewOverlay.style.display = 'flex';
-            document.body.style.overflow = 'hidden';
-        }
-
-        // Event Listeners
-        elements.btnAddBubble.addEventListener('click', () => {
-            const index = elements.bubblesList.children.length + 1;
-            addBubble(`Bubble ${index}`, index.toString());
-        });
-
-        elements.btnNewQuestion.addEventListener('click', resetForm);
-
-        elements.btnSave.addEventListener('click', (e) => {
-            e.preventDefault();
-            saveQuestion();
-        });
-
-        elements.btnCancel.addEventListener('click', resetForm);
-
-        elements.btnDelete.addEventListener('click', () => {
-            if (editingId) {
-                deleteQuestion(editingId);
-            }
-        });
-
-        elements.btnHelp.addEventListener('click', () => {
-            Swal.fire({
-                title: 'Bubble Game Question Guide',
-                width: 800,
-                html: `
-                    <div style="text-align:left;font-size:13px;line-height:1.6">
-                        <h6>1) Bubble Configuration</h6>
-                        <p>Each bubble has a <b>label</b> (display text) and an optional <b>value</b> (for sorting).</p>
-                        
-                        <h6>2) Select Type</h6>
-                        <ul style="margin:6px 0 12px 18px">
-                            <li><b>Ascending</b>: Arrange bubbles from smallest to largest value</li>
-                            <li><b>Descending</b>: Arrange bubbles from largest to smallest value</li>
-                        </ul>
-                        
-                        <h6>3) Answer Configuration (Optional)</h6>
-                        <ul style="margin:6px 0 12px 18px">
-                            <li><b>Answer Sequence</b>: JSON array of bubble indices (0-based) in correct order</li>
-                            <li><b>Answer Values</b>: JSON array of values for correct sequence</li>
-                            <li>Example sequence: <code>[2, 0, 1, 3]</code></li>
-                            <li>Example values: <code>["high", "medium", "low"]</code></li>
-                        </ul>
-                        
-                        <h6>4) Points & Order</h6>
-                        <p>Set <b>points</b> for correct answer and display <b>order</b> in the game.</p>
-                        
-                        <h6>5) Drag & Drop</h6>
-                        <p>Use the grip handle to reorder bubbles. The displayed order is initial arrangement.</p>
-                    </div>
-                `,
-                confirmButtonText: 'Got it'
-            });
-        });
-
-        elements.btnPreview.addEventListener('click', () => {
-            if (editingId) {
-                previewQuestion(editingId);
-            } else {
-                // Preview current form data
-                currentQuestion = {
-                    uuid: 'preview',
-                    title: elements.qTitle.value.trim() || 'Preview Question',
-                    select_type: elements.qSelectType.value,
-                    order_no: elements.qOrder.value,
-                    points: elements.qPoints.value,
-                    bubbles_json: getBubblesData(),
-                    bubbles_count: getBubblesData().length,
-                    answer_sequence_json: parseJsonSafe(elements.answerSequence.value),
-                    answer_value_json: parseJsonSafe(elements.answerValues.value)
-                };
-                previewQuestion('preview');
-            }
-        });
-
-        elements.previewCloseBtn.addEventListener('click', closePreview);
-        elements.previewCloseBtn2.addEventListener('click', closePreview);
-        elements.previewOverlay.addEventListener('click', (e) => {
-            if (e.target === elements.previewOverlay) closePreview();
-        });
-
-        function closePreview() {
-            elements.previewOverlay.style.display = 'none';
-            document.body.style.overflow = '';
-        }
-
-        // Search functionality
-        elements.qSearch.addEventListener('input', function() {
-            const searchTerm = this.value.toLowerCase().trim();
-            
-            document.querySelectorAll('.question-item').forEach(item => {
-                const title = item.querySelector('.q-title')?.textContent.toLowerCase() || '';
-                const shouldShow = title.includes(searchTerm) || !searchTerm;
-                item.style.display = shouldShow ? '' : 'none';
-            });
-        });
-
-        // Initialize
-        function init() {
-            console.log('Initializing bubble game question manager...');
-            console.log('Game UUID:', gameUuid);
-
-            // Initialize with one bubble
-            addBubble('Bubble 1', '1');
-            initSortable();
-            
-            // Load game data
-            loadGameData();
-            
-            // Set initial order number
-            resetForm();
-        }
-
-        // Start the application
-        init();
+  // ========= Sortable =========
+  let sortable;
+  function initSortable() {
+    if (!elements.bubblesList) return;
+    if (sortable) sortable.destroy();
+    sortable = Sortable.create(elements.bubblesList, {
+      animation: 150,
+      ghostClass: 'sortable-ghost',
+      dragClass: 'sortable-drag',
+      handle: '.bubble-handle',
+      onEnd: function() { updateBubblesCount(); }
     });
-    </script>
-</body>
-</html>
+  }
+
+  // ========= Bubble management =========
+  function createBubbleElement(index, label = '', value = '') {
+    const div = document.createElement('div');
+    div.className = 'bubble-item';
+    div.dataset.index = index;
+    div.innerHTML = `
+      <div class="bubble-handle"><i class="fa fa-grip-vertical"></i></div>
+      <div class="bubble-inputs">
+        <div class="bubble-label">
+          <input type="text" class="form-control bubble-label-input" placeholder="Bubble label" value="${escapeHtml(label)}">
+        </div>
+        <div class="bubble-value">
+          <input type="text" class="form-control bubble-value-input" placeholder="Value (optional)" value="${escapeHtml(value)}">
+        </div>
+      </div>
+      <div class="bubble-actions">
+        <button type="button" class="bubble-btn delete" title="Delete bubble"><i class="fa fa-trash"></i></button>
+      </div>
+    `;
+
+    div.querySelector('.bubble-btn.delete')?.addEventListener('click', () => {
+      if (elements.bubblesList.children.length > 1) {
+        div.remove();
+        updateBubblesCount();
+      } else {
+        showToast('error', 'At least one bubble is required');
+      }
+    });
+
+    return div;
+  }
+
+  function addBubble(label = '', value = '') {
+    if (!elements.bubblesList) return;
+    const index = elements.bubblesList.children.length;
+    elements.bubblesList.appendChild(createBubbleElement(index, label, value));
+    updateBubblesCount();
+  }
+
+  function updateBubblesCount() {
+    if (!elements.bubblesList || !elements.bubblesCount) return;
+    const count = elements.bubblesList.children.length;
+    elements.bubblesCount.textContent = `${count} bubble${count !== 1 ? 's' : ''}`;
+  }
+
+  function getBubblesData() {
+    const bubbles = [];
+    elements.bubblesList?.querySelectorAll('.bubble-item')?.forEach(item => {
+      const label = item.querySelector('.bubble-label-input')?.value?.trim() || '';
+      const value = item.querySelector('.bubble-value-input')?.value?.trim() || '';
+      if (label) bubbles.push({ label, value: value || null });
+    });
+    return bubbles;
+  }
+
+  function setBubblesData(bubbles) {
+    if (!elements.bubblesList) return;
+    elements.bubblesList.innerHTML = '';
+    (bubbles || []).forEach(b => addBubble(b.label, b.value || ''));
+    if (!bubbles || !bubbles.length) addBubble('Bubble 1', '1');
+    initSortable();
+    updateBubblesCount();
+  }
+
+  // ========= Game & Questions =========
+  function updateGameHeader() {
+    if (!gameData) return;
+    elements.gameTitle.textContent = gameData.title || 'Untitled Game';
+    elements.gameDesc.textContent = gameData.description || 'No description provided';
+    elements.perQuestionTime.textContent = `${gameData.per_question_time_sec || 30}s`;
+    elements.maxAttempts.textContent = gameData.max_attempts || 1;
+    elements.pointsCorrect.textContent = gameData.points_correct || 1;
+    elements.pointsWrong.textContent = gameData.points_wrong || 0;
+  }
+
+  function updateQuestionsCount() {
+    const count = questions.length;
+    elements.questionsCount.textContent = count;
+    elements.sidebarQuestionsCount.textContent = count;
+
+    let totalBubbles = 0;
+    let totalPoints = 0;
+    questions.forEach(q => {
+      totalBubbles += (q.bubbles_count || 0);
+      totalPoints += (q.points || 0);
+    });
+
+    elements.totalBubbles.textContent = totalBubbles;
+    elements.totalPoints.textContent = totalPoints;
+  }
+
+  function renderQuestionList() {
+    if (!elements.qList) return;
+
+    if (!questions.length) {
+      elements.qList.innerHTML = `
+        <div class="empty-state">
+          <i class="fa fa-inbox"></i>
+          <div>No questions yet</div>
+          <button class="btn btn-primary btn-sm mt-3" id="btnAddFirst">
+            <i class="fa fa-plus"></i> Add First Question
+          </button>
+        </div>
+      `;
+      document.getElementById('btnAddFirst')?.addEventListener('click', resetForm);
+      return;
+    }
+
+    elements.qList.innerHTML = '';
+    questions.sort((a,b) => (a.order_no || 0) - (b.order_no || 0));
+
+    questions.forEach((q, index) => {
+      const item = document.createElement('div');
+      item.className = 'question-item';
+      item.dataset.id = q.uuid;
+
+      const typeBadge = q.select_type === 'ascending'
+        ? '<span class="q-badge type-asc">Asc</span>'
+        : '<span class="q-badge type-desc">Desc</span>';
+
+      item.innerHTML = `
+        <div class="q-number">${q.order_no || index + 1}</div>
+        <div class="q-content">
+          <div class="q-title">${escapeHtml(q.title || ('Question ' + (index + 1)))}</div>
+          <div class="q-meta">
+            <span class="q-badge bubbles">${q.bubbles_count || 0} bubbles</span>
+            <span class="q-badge points">${q.points || 1} pts</span>
+            ${typeBadge}
+          </div>
+        </div>
+      `;
+
+      item.addEventListener('click', () => openQuestion(q.uuid));
+      elements.qList.appendChild(item);
+    });
+  }
+
+  function resetForm() {
+    editingId = null;
+    currentQuestion = null;
+
+    elements.qId.value = '';
+    elements.qTitle.value = '';
+    elements.qSelectType.value = 'ascending';
+    elements.qPoints.value = '1';
+    elements.qOrder.value = (questions.length ? (Math.max(...questions.map(q => q.order_no || 0)) + 1) : 1);
+    elements.qStatus.value = 'active';
+    elements.answerSequence.value = '';
+    elements.answerValues.value = '';
+
+    setBubblesData([{ label: 'Bubble 1', value: '1' }]);
+
+    elements.formTitle.textContent = 'New Question';
+    elements.btnDelete.style.display = 'none';
+
+    document.querySelectorAll('.question-item').forEach(i => i.classList.remove('active'));
+  }
+
+  async function loadGameData() {
+    showLoader(true);
+
+    // ⚠️ Make sure this endpoint matches your routes
+    const res = await apiFetch(`/api/bubble-games/${gameUuid}`);
+
+    showLoader(false);
+
+    if (!res.ok) {
+      // stop infinite loading UI
+      if (elements.qList) {
+        elements.qList.innerHTML = `
+          <div class="empty-state">
+            <i class="fa fa-triangle-exclamation"></i>
+            <div style="margin-top:8px;font-weight:600;">Failed to load game</div>
+            <div style="margin-top:6px;">Check API route: <code>/api/bubble-games/${escapeHtml(gameUuid)}</code></div>
+          </div>
+        `;
+      }
+      showToast('error', res.data?.message || 'Failed to load game data');
+      return;
+    }
+
+    // supports: {success:true,data:{...}} OR {...}
+    gameData = res.data?.data || res.data;
+    updateGameHeader();
+
+    await loadQuestions();
+  }
+
+  async function loadQuestions() {
+    showLoader(true);
+
+    // ⚠️ Make sure this endpoint matches your routes
+    const res = await apiFetch(`/api/bubble-games/${gameUuid}/questions?paginate=false`);
+
+    showLoader(false);
+
+    if (!res.ok) {
+      // replace spinner so it doesn't look stuck
+      if (elements.qList) {
+        elements.qList.innerHTML = `
+          <div class="empty-state">
+            <i class="fa fa-triangle-exclamation"></i>
+            <div style="margin-top:8px;font-weight:600;">Failed to load questions</div>
+            <div style="margin-top:6px;">Check API route & auth.</div>
+            <div style="margin-top:10px;">
+              <button class="btn btn-primary btn-sm" id="retryBtn">
+                <i class="fa fa-rotate"></i> Retry
+              </button>
+            </div>
+          </div>
+        `;
+        document.getElementById('retryBtn')?.addEventListener('click', loadQuestions);
+      }
+      showToast('error', res.data?.message || 'Failed to load questions');
+      return;
+    }
+
+    // supports:
+    // 1) {success:true,data:[...]}
+    // 2) {data:[...]}
+    // 3) direct array
+    const payload = res.data;
+    let arr = [];
+
+    if (Array.isArray(payload)) arr = payload;
+    else if (payload && Array.isArray(payload.data)) arr = payload.data;
+    else if (payload && payload.success && Array.isArray(payload.data)) arr = payload.data;
+
+    questions = arr;
+
+    updateQuestionsCount();
+    renderQuestionList();
+  }
+
+  async function openQuestion(questionUuid) {
+    showLoader(true);
+
+    const res = await apiFetch(`/api/bubble-games/${gameUuid}/questions/${questionUuid}`);
+
+    showLoader(false);
+
+    if (!res.ok) {
+      showToast('error', 'Failed to load question');
+      return;
+    }
+
+    currentQuestion = res.data?.data || res.data;
+    editingId = questionUuid;
+
+    elements.qId.value = currentQuestion.uuid;
+    elements.qTitle.value = currentQuestion.title || '';
+    elements.qSelectType.value = currentQuestion.select_type || 'ascending';
+    elements.qPoints.value = currentQuestion.points || 1;
+    elements.qOrder.value = currentQuestion.order_no || 1;
+    elements.qStatus.value = currentQuestion.status || 'active';
+
+    if (Array.isArray(currentQuestion.bubbles_json)) setBubblesData(currentQuestion.bubbles_json);
+    else setBubblesData([{ label: 'Bubble 1', value: '1' }]);
+
+    elements.answerSequence.value = currentQuestion.answer_sequence_json ? formatJson(currentQuestion.answer_sequence_json) : '';
+    elements.answerValues.value = currentQuestion.answer_value_json ? formatJson(currentQuestion.answer_value_json) : '';
+
+    elements.formTitle.textContent = `Edit Question #${currentQuestion.order_no || ''}`;
+    elements.btnDelete.style.display = 'inline-flex';
+
+    document.querySelectorAll('.question-item').forEach(item => {
+      item.classList.toggle('active', item.dataset.id === questionUuid);
+    });
+
+    elements.qForm.scrollIntoView({ behavior: 'smooth' });
+  }
+
+  async function saveQuestion() {
+    const bubbles = getBubblesData();
+    if (!bubbles.length) {
+      showToast('error', 'Add at least one bubble');
+      return;
+    }
+
+    let answerSequence = null;
+    let answerValues = null;
+
+    if (elements.answerSequence.value.trim()) {
+      answerSequence = parseJsonSafe(elements.answerSequence.value);
+      if (!Array.isArray(answerSequence)) {
+        showToast('error', 'Answer sequence must be a JSON array');
+        return;
+      }
+    }
+    if (elements.answerValues.value.trim()) {
+      answerValues = parseJsonSafe(elements.answerValues.value);
+      if (!Array.isArray(answerValues)) {
+        showToast('error', 'Answer values must be a JSON array');
+        return;
+      }
+    }
+
+    const payload = {
+      title: elements.qTitle.value.trim() || null,
+      select_type: elements.qSelectType.value,
+      bubbles_json: bubbles,
+      points: parseInt(elements.qPoints.value) || 1,
+      order_no: parseInt(elements.qOrder.value) || 1,
+      status: elements.qStatus.value
+    };
+    if (answerSequence) payload.answer_sequence_json = answerSequence;
+    if (answerValues) payload.answer_value_json = answerValues;
+
+    const saveBtn = elements.btnSave;
+    const original = saveBtn.innerHTML;
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Saving...';
+
+    showLoader(true);
+
+    const url = editingId
+      ? `/api/bubble-games/${gameUuid}/questions/${editingId}`
+      : `/api/bubble-games/${gameUuid}/questions`;
+
+    const method = editingId ? 'PUT' : 'POST';
+
+    const res = await apiFetch(url, { method, body: JSON.stringify(payload) });
+
+    showLoader(false);
+    saveBtn.disabled = false;
+    saveBtn.innerHTML = original;
+
+    if (!res.ok) {
+      const msg = res.data?.errors
+        ? Object.values(res.data.errors).flat().join(', ')
+        : (res.data?.message || 'Failed to save question');
+      showToast('error', msg);
+      return;
+    }
+
+    showToast('success', editingId ? 'Question updated successfully' : 'Question created successfully');
+    await loadQuestions();
+    if (!editingId) resetForm();
+  }
+
+  async function deleteQuestion(questionUuid) {
+    const result = await Swal.fire({
+      title: 'Delete Question?',
+      text: 'This action cannot be undone',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Delete',
+      cancelButtonText: 'Cancel',
+      confirmButtonColor: '#ef4444'
+    });
+    if (!result.isConfirmed) return;
+
+    showLoader(true);
+    const res = await apiFetch(`/api/bubble-games/${gameUuid}/questions/${questionUuid}`, { method: 'DELETE' });
+    showLoader(false);
+
+    if (!res.ok) {
+      showToast('error', 'Failed to delete question');
+      return;
+    }
+
+    showToast('success', 'Question deleted successfully');
+    await loadQuestions();
+    if (editingId === questionUuid) resetForm();
+  }
+
+  // ========= Events =========
+  elements.btnAddBubble.addEventListener('click', () => {
+    const index = (elements.bubblesList?.children?.length || 0) + 1;
+    addBubble(`Bubble ${index}`, index.toString());
+  });
+
+  elements.btnNewQuestion.addEventListener('click', resetForm);
+
+  elements.btnSave.addEventListener('click', (e) => {
+    e.preventDefault();
+    saveQuestion();
+  });
+
+  elements.btnCancel.addEventListener('click', resetForm);
+
+  elements.btnDelete.addEventListener('click', () => {
+    if (editingId) deleteQuestion(editingId);
+  });
+
+  function closePreview() {
+    if (!elements.previewOverlay) return;
+    elements.previewOverlay.style.display = 'none';
+    document.body.style.overflow = '';
+  }
+  elements.previewCloseBtn?.addEventListener('click', closePreview);
+  elements.previewCloseBtn2?.addEventListener('click', closePreview);
+  elements.previewOverlay?.addEventListener('click', (e) => {
+    if (e.target === elements.previewOverlay) closePreview();
+  });
+
+  elements.qSearch.addEventListener('input', function() {
+    const searchTerm = this.value.toLowerCase().trim();
+    document.querySelectorAll('.question-item').forEach(item => {
+      const title = item.querySelector('.q-title')?.textContent?.toLowerCase() || '';
+      item.style.display = (!searchTerm || title.includes(searchTerm)) ? '' : 'none';
+    });
+  });
+
+  // ========= Init =========
+  function init() {
+    console.log('Init bubble question page. gameUuid=', gameUuid);
+    setBubblesData([{ label: 'Bubble 1', value: '1' }]);
+    resetForm();
+    loadGameData();
+  }
+
+  init();
+});
+</script>
+
+@endpush

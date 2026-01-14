@@ -1340,6 +1340,223 @@ public function getProfile(Request $request)
     ]);
 }
 
+    /**
+     * POST /api/users/{id}/bubble-games/assign
+     * Body: { bubble_game_id:int }
+     * Admin/Super Admin only.
+     */
+    public function assignBubbleGame(Request $request, int $id)
+    {
+        // Confirm user exists
+        $user = DB::table('users')
+            ->where('id', $id)
+            ->whereNull('deleted_at')
+            ->first();
+
+        if (!$user) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'User not found',
+            ], 404);
+        }
+
+        $validated = $request->validate([
+            'bubble_game_id' => 'required|integer',
+        ]);
+        $gameId = (int) $validated['bubble_game_id'];
+
+        // Confirm bubble game exists
+        $game = DB::table('bubble_game')
+            ->where('id', $gameId)
+            ->whereNull('deleted_at')
+            ->first();
+
+        if (!$game) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Bubble game not found',
+            ], 404);
+        }
+
+        $now        = now();
+        $assignedBy = $this->currentUserId($request);
+
+        // We want at most one row per (user, bubble_game), even if soft-deleted.
+        $existing = DB::table('user_bubble_game_assignments')
+            ->where('user_id', $id)
+            ->where('bubble_game_id', $gameId)
+            ->first();
+
+        if ($existing) {
+            // If already active, just return its code
+            if ($existing->status === 'active' && !$existing->deleted_at) {
+                return response()->json([
+                    'status'  => 'success',
+                    'message' => 'Already assigned',
+                    'data'    => [
+                        'assignment_code' => (string) $existing->assignment_code,
+                    ],
+                ]);
+            }
+
+            // Reactivate existing row (even if soft-deleted / revoked)
+            $code = $existing->assignment_code ?: $this->generateAssignmentCode();
+
+            DB::table('user_bubble_game_assignments')
+                ->where('id', $existing->id)
+                ->update([
+                    'assignment_code' => $code,
+                    'status'          => 'active',
+                    'assigned_by'     => $assignedBy,
+                    'assigned_at'     => $now,
+                    'deleted_at'      => null,
+                    'updated_at'      => $now,
+                ]);
+
+            return response()->json([
+                'status'  => 'success',
+                'message' => 'Assignment updated',
+                'data'    => [
+                    'assignment_code' => $code,
+                ],
+            ]);
+        }
+
+        // Fresh assignment
+        $code = $this->generateAssignmentCode();
+
+        DB::table('user_bubble_game_assignments')->insert([
+            'uuid'            => (string) Str::uuid(),
+            'user_id'         => $id,
+            'bubble_game_id'  => $gameId,
+            'assignment_code' => $code,
+            'status'          => 'active',
+            'assigned_by'     => $assignedBy,
+            'assigned_at'     => $now,
+            'metadata'        => json_encode(new \stdClass()),
+            'created_at'      => $now,
+            'updated_at'      => $now,
+        ]);
+
+        return response()->json([
+            'status'  => 'success',
+            'message' => 'Bubble game assigned to user',
+            'data'    => [
+                'assignment_code' => $code,
+            ],
+        ], 201);
+    }
+
+    /**
+     * POST /api/users/{id}/bubble-games/unassign
+     * Body: { bubble_game_id:int }
+     * Marks assignment as revoked (keeps row for audit).
+     */
+    public function unassignBubbleGame(Request $request, int $id)
+    {
+        // Confirm user exists
+        $user = DB::table('users')
+            ->where('id', $id)
+            ->whereNull('deleted_at')
+            ->first();
+
+        if (!$user) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'User not found',
+            ], 404);
+        }
+
+        $validated = $request->validate([
+            'bubble_game_id' => 'required|integer',
+        ]);
+        $gameId = (int) $validated['bubble_game_id'];
+
+        $existing = DB::table('user_bubble_game_assignments')
+            ->where('user_id', $id)
+            ->where('bubble_game_id', $gameId)
+            ->whereNull('deleted_at')
+            ->first();
+
+        if (!$existing) {
+            // no-op, but not an error (helps keep FE simple)
+            return response()->json([
+                'status'  => 'noop',
+                'message' => 'No active assignment found',
+            ], 200);
+        }
+
+        DB::table('user_bubble_game_assignments')
+            ->where('id', $existing->id)
+            ->update([
+                'status'     => 'revoked',
+                'updated_at' => now(),
+            ]);
+
+        return response()->json([
+            'status'  => 'success',
+            'message' => 'Assignment revoked',
+        ]);
+    }
+/**
+ * GET /api/users/{id}/bubble-games
+ * For ADMIN / SUPER_ADMIN.
+ * Returns all bubble games + whether this user is assigned to each.
+ */
+public function userBubbleGames(Request $request, int $id)
+{
+    // Ensure user exists & not deleted
+    $user = DB::table('users')
+        ->where('id', $id)
+        ->whereNull('deleted_at')
+        ->first();
+
+    if (!$user) {
+        return response()->json([
+            'status'  => 'error',
+            'message' => 'User not found',
+        ], 404);
+    }
+
+    // All bubble games (excluding soft-deleted)
+    $games = DB::table('bubble_game')
+        ->whereNull('deleted_at')
+        ->orderBy('title') // change to 'title' if that's your column
+        ->get();
+
+    // Existing assignments (any status, not hard deleted)
+    $assignments = DB::table('user_bubble_game_assignments')
+        ->where('user_id', $id)
+        ->whereNull('deleted_at')
+        ->get()
+        ->keyBy('bubble_game_id');
+
+    $data = $games->map(function ($g) use ($assignments) {
+        $a = $assignments->get($g->id);
+
+        return [
+            'bubble_game_id'   => (int) $g->id,
+            'bubble_game_uuid' => (string) ($g->uuid ?? ''),
+            'bubble_game_name' => (string) (($g->game_name ?? $g->title ?? '') ),
+
+            // keep these aligned with your UI columns
+            'total_time'       => $g->total_time ?? null,       // duration/minutes
+            'total_questions'  => $g->total_questions ?? null,
+            'is_public'        => (string) ($g->is_public ?? 'no'),
+            'status'           => (string) ($g->status ?? 'active'),
+
+            'assigned'         => $a && $a->status === 'active',
+            'assignment_code'  => $a && $a->status === 'active'
+                                    ? (string) $a->assignment_code
+                                    : null,
+        ];
+    });
+
+    return response()->json([
+        'status' => 'success',
+        'data'   => $data,
+    ]);
+}
 
 
 }

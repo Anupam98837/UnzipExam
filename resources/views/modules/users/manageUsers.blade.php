@@ -335,12 +335,14 @@ html.theme-dark .badge-code{
               <th>Email</th>
               <th style="width:160px;">Role</th>
               <th style="width:140px;" class="text-center">Quizzes</th>
+              <th style="width:160px;" class="text-center">Bubble Games</th>
+
               <th style="width:110px;" class="text-end">Actions</th>
             </tr>
           </thead>
           <tbody id="usersTbody">
             <tr>
-              <td colspan="7" class="empty-state">
+              <td colspan="8" class="empty-state">
                 <i class="fa fa-circle-notch fa-spin mb-2" style="font-size:20px;"></i>
                 <div>Loading users…</div>
               </td>
@@ -704,6 +706,66 @@ html.theme-dark .badge-code{
     </div>
   </div>
 </div>
+{{-- ================= Manage User Bubble Games Modal ================= --}}
+<div class="modal fade" id="userBubbleGamesModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="fa fa-gamepad me-2"></i>
+          Manage Bubble Games — <span id="ubg_user_name">User</span>
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body">
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+          <div class="position-relative" style="max-width:280px;">
+            <input id="ubg_search" class="form-control ps-5" placeholder="Search bubble games…">
+            <i class="fa fa-search position-absolute" style="left:12px;top:50%;transform:translateY(-50%);opacity:.65;"></i>
+          </div>
+
+          <div class="d-flex align-items-center gap-2">
+            <label class="small text-muted mb-0">Filter</label>
+            <select id="ubg_filter" class="form-select" style="width:180px;">
+              <option value="all">All bubble games</option>
+              <option value="assigned">Assigned only</option>
+              <option value="unassigned">Unassigned only</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead>
+              <tr>
+                <th>Bubble Game</th>
+                <th style="width:140px;">Duration</th>
+                <th style="width:140px;">Questions</th>
+                <th style="width:120px;">Status</th>
+                <th style="width:120px;">Public</th>
+                <th style="width:170px;">Assignment Code</th>
+                <th class="text-center" style="width:120px;">Assigned</th>
+              </tr>
+            </thead>
+            <tbody id="ubg_rows">
+              <tr id="ubg_loader">
+                <td colspan="7" class="p-3 text-center text-muted">
+                  <i class="fa fa-circle-notch fa-spin me-1"></i> Loading bubble games…
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 {{-- ================= Toasts ================= --}}
 <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index:2100;">
@@ -841,6 +903,14 @@ document.addEventListener('DOMContentLoaded', function(){
   const uq_loader          = document.getElementById('uq_loader');
   const uq_search          = document.getElementById('uq_search');
   const uq_filter          = document.getElementById('uq_filter');
+    // Manage bubble games modal
+  const userBubbleGamesModalEl = document.getElementById('userBubbleGamesModal');
+  const userBubbleGamesModal   = new bootstrap.Modal(userBubbleGamesModalEl);
+  const ubg_user_name          = document.getElementById('ubg_user_name');
+  const ubg_rows               = document.getElementById('ubg_rows');
+  const ubg_loader             = document.getElementById('ubg_loader');
+  const ubg_search             = document.getElementById('ubg_search');
+  const ubg_filter             = document.getElementById('ubg_filter');
 
   // Toasts
   const toastOk  = new bootstrap.Toast(document.getElementById('toastSuccess'));
@@ -914,6 +984,8 @@ document.addEventListener('DOMContentLoaded', function(){
 
   let uq_userId   = null;
   let uq_data     = [];
+  let ubg_userId  = null;
+  let ubg_data    = [];
 
   /* =================== CSV IMPORT FEATURE =================== */
   // Download CSV template
@@ -1296,6 +1368,11 @@ document.addEventListener('DOMContentLoaded', function(){
              <i class="fa fa-question-circle me-1"></i>Manage
            </button>`
         : `<span class="text-muted small">—</span>`;
+      const bubbleBtn = CAN_WRITE
+  ? `<button type="button" class="btn btn-light btn-sm js-manage-bubble">
+       <i class="fa fa-gamepad me-1"></i>Manage
+     </button>`
+  : `<span class="text-muted small">—</span>`;
 
       let actions = `
         <div class="dropdown text-end" data-bs-display="static">
@@ -1321,6 +1398,11 @@ document.addEventListener('DOMContentLoaded', function(){
             <li>
               <button type="button" class="dropdown-item" data-action="quizzes">
                 <i class="fa fa-question-circle"></i> Manage Quizzes
+              </button>
+            </li>
+                        <li>
+              <button type="button" class="dropdown-item" data-action="bubble">
+                <i class="fa fa-gamepad"></i> Manage Bubble Games
               </button>
             </li>`;
       }
@@ -1349,6 +1431,7 @@ document.addEventListener('DOMContentLoaded', function(){
             </span>
           </td>
           <td class="text-center">${quizzesBtn}</td>
+          <td class="text-center">${bubbleBtn}</td>
           <td class="text-end">${actions}</td>
         </tr>`;
     }).join('');
@@ -1685,6 +1768,14 @@ document.addEventListener('DOMContentLoaded', function(){
       openUserQuizzes(id);
       return;
     }
+          if (e.target.closest('.js-manage-bubble')){
+      if (!CAN_WRITE){
+        err('You do not have permission to manage bubble games');
+        return;
+      }
+      openUserBubbleGames(id);
+      return;
+    }
 
     const actionBtn = e.target.closest('[data-action]');
     if (!actionBtn) return;
@@ -1704,6 +1795,13 @@ document.addEventListener('DOMContentLoaded', function(){
         return;
       }
       openUserQuizzes(id);
+          }else if (act === 'bubble'){
+      if (!CAN_WRITE){
+        err('You do not have permission to manage bubble games');
+        return;
+      }
+      openUserBubbleGames(id);
+    
     }else if (act === 'delete'){
       if (!CAN_DELETE){
         err('Only Super Admin can delete users');
@@ -1897,6 +1995,162 @@ document.addEventListener('DOMContentLoaded', function(){
       });
     });
   }
+  /* =================== USER BUBBLE GAMES =================== */
+  async function openUserBubbleGames(id){
+    ubg_userId = parseInt(id,10);
+    const targetUser = usersCache.find(u => String(u.id) === String(id));
+    ubg_user_name.textContent = targetUser?.name || ('User #'+id);
+
+    ubg_search.value = '';
+    ubg_filter.value = 'all';
+    ubg_rows.innerHTML = '';
+    ubg_loader.style.display = '';
+
+    userBubbleGamesModal.show();
+
+    try{
+      const res = await fetch(`/api/users/${id}/bubble-games`, {
+        headers: authHeaders({'Accept':'application/json'})
+      });
+      const j = await res.json().catch(()=> ({}));
+      if (!res.ok) throw new Error(j.message || 'Failed to load bubble games');
+
+      ubg_data = Array.isArray(j.data) ? j.data : [];
+      renderUserBubbleGames();
+    }catch(e){
+      console.error('User bubble games load error', e);
+      ubg_rows.innerHTML =
+        `<tr><td colspan="7" class="p-3 text-danger text-center">${esc(e.message || 'Failed to load bubble games')}</td></tr>`;
+    }finally{
+      ubg_loader.style.display = 'none';
+    }
+  }
+
+  function renderUserBubbleGames(){
+    ubg_rows.querySelectorAll('tr:not(#ubg_loader)').forEach(tr => tr.remove());
+
+    let list = ubg_data.slice();
+    const qText = ubg_search.value.trim().toLowerCase();
+    const filter = ubg_filter.value;
+
+    if (qText){
+      list = list.filter(x => {
+        const nm = (x.bubble_game_name || x.game_name || x.title || '').toLowerCase();
+        return nm.includes(qText);
+      });
+    }
+
+    if (filter === 'assigned'){
+      list = list.filter(x => !!x.assigned);
+    }else if (filter === 'unassigned'){
+      list = list.filter(x => !x.assigned);
+    }
+
+    if (!list.length){
+      ubg_rows.innerHTML =
+        `<tr><td colspan="7" class="p-3 text-center text-muted">No bubble games.</td></tr>`;
+      return;
+    }
+
+    const frag = document.createDocumentFragment();
+    list.forEach(gm => {
+      const assigned = !!gm.assigned;
+      const status  = (gm.status || '').toLowerCase();
+      const isPublic = (gm.is_public || '').toLowerCase();
+      const code = gm.assignment_code || '';
+
+      const statusBadge = status === 'active'
+        ? `<span class="badge badge-soft-active text-uppercase">${esc(status)}</span>`
+        : `<span class="badge badge-soft-inactive text-uppercase">${esc(status||'-')}</span>`;
+
+      const publicBadge = (isPublic === 'yes' || isPublic === 'public')
+        ? `<span class="badge bg-success-subtle text-success border border-success-subtle">Yes</span>`
+        : `<span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">No</span>`;
+
+      const codeHtml = code
+        ? `<button type="button" class="badge-code js-copy-assignment" data-code="${esc(code)}" title="Click to copy assignment code">
+             <span>${esc(code)}</span>
+             <i class="fa-regular fa-copy"></i>
+           </button>`
+        : '<span class="text-muted small">—</span>';
+
+      // These fields are flexible; adjust to your API response if needed:
+      const name = gm.bubble_game_name || gm.game_name || gm.title || '';
+      const duration = (gm.duration_min ?? gm.total_time ?? gm.duration ?? null);
+      const questions = (gm.total_questions ?? gm.questions_count ?? null);
+
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="fw-semibold">${esc(name)}</td>
+        <td>${duration != null ? esc(String(duration)) : '—'}</td>
+        <td>${questions != null ? esc(String(questions)) : '—'}</td>
+        <td>${statusBadge}</td>
+        <td>${publicBadge}</td>
+        <td>${codeHtml}</td>
+        <td class="text-center">
+          <div class="form-check form-switch d-inline-block m-0">
+            <input class="form-check-input ubg-toggle" type="checkbox" data-gid="${gm.bubble_game_id}" ${assigned?'checked':''}>
+          </div>
+        </td>
+      `;
+      frag.appendChild(tr);
+    });
+
+    ubg_rows.appendChild(frag);
+
+    ubg_rows.querySelectorAll('.ubg-toggle').forEach(ch => {
+      ch.addEventListener('change', async ()=>{
+        const gameId   = parseInt(ch.dataset.gid,10);
+        const assigned = !!ch.checked;
+        await toggleUserBubbleGame(gameId, assigned, ch);
+      });
+    });
+  }
+
+  async function toggleUserBubbleGame(gameId, assigned, checkboxEl){
+    if (!ubg_userId || !gameId) return;
+
+    try{
+      const url = assigned
+        ? `/api/users/${ubg_userId}/bubble-games/assign`
+        : `/api/users/${ubg_userId}/bubble-games/unassign`;
+
+      const res = await fetch(url, {
+        method:'POST',
+        headers: authHeaders({'Content-Type':'application/json','Accept':'application/json'}),
+        body: JSON.stringify({ bubble_game_id: gameId })
+      });
+
+      const j = await res.json().catch(()=> ({}));
+      if (!res.ok) throw new Error(firstError(j) || 'Operation failed');
+
+      const item = ubg_data.find(x => Number(x.bubble_game_id) === Number(gameId));
+      if (assigned){
+        const code = j.data?.assignment_code || item?.assignment_code || '';
+        if (item){
+          item.assigned = true;
+          item.assignment_code = code;
+          item.status = 'active';
+        }
+        ok('Bubble game assigned to user');
+      }else{
+        if (item){
+          item.assigned = false;
+          item.assignment_code = null;
+          item.status = 'revoked';
+        }
+        ok('Bubble game unassigned from user');
+      }
+
+      renderUserBubbleGames();
+    }catch(e){
+      if (checkboxEl) checkboxEl.checked = !assigned;
+      err(e.message || 'Failed to update bubble game assignment');
+    }
+  }
+
+  ubg_search.addEventListener('input', debounce(renderUserBubbleGames, 250));
+  ubg_filter.addEventListener('change', renderUserBubbleGames);
 
   async function toggleUserQuiz(quizId, assigned, checkboxEl){
     if (!uq_userId || !quizId) return;

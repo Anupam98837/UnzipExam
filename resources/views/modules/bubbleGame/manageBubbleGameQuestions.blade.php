@@ -369,7 +369,7 @@
     .answer-toolbar{
       display:flex;
       gap:8px;
-      align-items:center;
+      align-items:flex-start;
       justify-content: space-between;
       margin-bottom: 12px;
     }
@@ -377,6 +377,7 @@
       font-size: 12px;
       color: var(--muted);
       margin: 0;
+      line-height: 1.35;
     }
     .answer-list{
       display:flex;
@@ -619,6 +620,8 @@
       .content-header{ flex-direction: column; gap: 12px; align-items: flex-start; }
       .content-footer{ flex-direction: column; }
       .content-footer .btn{ width: 100%; }
+      .answer-toolbar{ flex-direction: column; }
+      .answer-toolbar .btn{ width: 100%; }
     }
   </style>
 @endpush
@@ -722,7 +725,6 @@
         <div class="content-body">
           <form id="qForm" novalidate>
             <input type="hidden" id="qId">
-            <!-- Get gameUuid from query parameter -->
             <input type="hidden" id="gameUuid" value="{{ request()->query('game') ?? request()->query('game_uuid') ?? request()->query('uuid') ?? request()->query('id') }}">
 
             <!-- Basic Information -->
@@ -785,9 +787,7 @@
                 <label class="form-label">Bubble List (Equations)</label>
                 <p class="text-sm text-muted mb-3">Drag to reorder bubbles (display order). Each bubble label should be a math equation like <code>(1+2)*3</code>.</p>
 
-                <div id="bubblesList" class="bubbles-list">
-                  <!-- Bubbles will be generated here -->
-                </div>
+                <div id="bubblesList" class="bubbles-list"></div>
 
                 <button type="button" id="btnAddBubble" class="add-bubble-btn">
                   <i class="fa fa-plus"></i> Add Bubble
@@ -803,14 +803,14 @@
             <div class="answer-wrap">
               <div class="answer-toolbar">
                 <p class="answer-hint">
-                  Drag to set the <b>correct order</b>. We auto-calculate each equation result and save:
-                  <code>answer_sequence_json</code> + <code>answer_value_json</code>.
+                  Correct order is <b>auto-arranged</b> based on <b>Asc/Desc</b> and computed results.
+                  Saved automatically as <code>answer_sequence_json</code> + <code>answer_value_json</code>.
                 </p>
-                <div style="display:flex; gap:8px; align-items:center;">
-                  <button type="button" id="btnAutoOrder" class="btn btn-light btn-sm" title="Auto arrange based on Asc/Desc and computed results">
-                    <i class="fa fa-wand-magic-sparkles"></i> Auto Arrange
-                  </button>
-                </div>
+
+                <!-- ✅ keep manual button too (just in case) -->
+                <button type="button" id="btnAutoOrder" class="btn btn-light btn-sm" title="Auto arrange now">
+                  <i class="fa fa-wand-magic-sparkles"></i> Auto Arrange
+                </button>
               </div>
 
               <div id="answerOrderList" class="answer-list">
@@ -821,7 +821,7 @@
               </div>
             </div>
 
-            <!-- Info Box (kept as you had, text updated slightly) -->
+            <!-- Info Box -->
             <div class="p-4 bg-blue-50 border border-blue-200 rounded-lg">
               <div class="flex items-start gap-3">
                 <i class="fa fa-info-circle text-blue-500 mt-1"></i>
@@ -830,10 +830,10 @@
                   <p class="text-sm text-blue-700 mb-2">
                     <strong>Ascending</strong>: User should arrange bubbles from smallest result to largest result.<br>
                     <strong>Descending</strong>: User should arrange bubbles from largest result to smallest result.<br>
-                    <strong>Correct Order</strong>: Set by dragging the list above (no manual JSON typing).
+                    <strong>Correct Order</strong>: Auto-generated (no manual JSON typing).
                   </p>
                   <p class="text-xs text-blue-600">
-                    Tip: Bubble list order is the initial display order. Correct order list is what user must match.
+                    Tip: Bubble list order is the initial display order. Correct order is always computed from results.
                   </p>
                 </div>
               </div>
@@ -896,7 +896,6 @@
 document.addEventListener('DOMContentLoaded', function() {
   const TOKEN = localStorage.getItem('token') || sessionStorage.getItem('token') || '';
 
-  // DOM Elements (safe)
   const elements = {
     gameTitle: document.getElementById('gameTitle'),
     gameDesc: document.getElementById('gameDesc'),
@@ -938,7 +937,6 @@ document.addEventListener('DOMContentLoaded', function() {
     btnAutoOrder: document.getElementById('btnAutoOrder'),
   };
 
-  // ========= Helpers =========
   function showToast(type, message) {
     const toast = document.getElementById(`${type}Toast`);
     const msgEl = document.getElementById(`${type}Msg`);
@@ -962,7 +960,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function formatNumber(n) {
     if (typeof n !== 'number' || !isFinite(n)) return 'ERR';
-    // keep readable
     if (Number.isInteger(n)) return String(n);
     const fixed = n.toFixed(6);
     return fixed.replace(/\.?0+$/,'');
@@ -971,39 +968,23 @@ document.addEventListener('DOMContentLoaded', function() {
   function safeEvalEquation(raw) {
     let expr = (raw || '').toString().trim();
     if (!expr) return { ok:false, value: null, error: 'Empty equation' };
-
-    // normalize common symbols
     expr = expr.replace(/×/g, '*').replace(/÷/g, '/');
-
-    // support power: 2^3
     expr = expr.replace(/\^/g, '**');
-
-    // allow only digits, operators, dot, whitespace, parentheses, and *
-    // (after converting ^ to **)
-    if (!/^[0-9+\-*/().\s]*$/.test(expr)) {
-      return { ok:false, value: null, error: 'Invalid characters' };
-    }
-
-    // avoid crazy long inputs
-    if (expr.length > 120) {
-      return { ok:false, value: null, error: 'Too long' };
-    }
+    if (!/^[0-9+\-*/().\s]*$/.test(expr)) return { ok:false, value:null, error:'Invalid characters' };
+    if (expr.length > 120) return { ok:false, value:null, error:'Too long' };
 
     try {
       // eslint-disable-next-line no-new-func
       const v = Function('"use strict"; return (' + expr + ');')();
-      if (typeof v !== 'number' || !isFinite(v)) {
-        return { ok:false, value: null, error: 'Not a number' };
-      }
-      return { ok:true, value: v, error: null };
+      if (typeof v !== 'number' || !isFinite(v)) return { ok:false, value:null, error:'Not a number' };
+      return { ok:true, value:v, error:null };
     } catch (e) {
-      return { ok:false, value: null, error: 'Invalid expression' };
+      return { ok:false, value:null, error:'Invalid expression' };
     }
   }
 
   function resolveGameUuid() {
     const fromHidden = (document.getElementById('gameUuid')?.value || '').trim();
-
     const url = new URL(window.location.href);
     const p = url.searchParams;
 
@@ -1027,51 +1008,38 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   async function apiFetch(url, options = {}) {
-    const headers = {
-      'Accept': 'application/json',
-      'X-Requested-With': 'XMLHttpRequest',
-      ...options.headers
-    };
-
+    const headers = { 'Accept':'application/json', 'X-Requested-With':'XMLHttpRequest', ...options.headers };
     if (TOKEN) headers['Authorization'] = `Bearer ${TOKEN}`;
-    if (!(options.body instanceof FormData) && !headers['Content-Type']) {
-      headers['Content-Type'] = 'application/json';
-    }
+    if (!(options.body instanceof FormData) && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
 
     try {
       const res = await fetch(url, { ...options, headers });
 
       let data = null;
       const contentType = res.headers.get('content-type') || '';
-
-      if (contentType.includes('application/json')) {
-        try { data = await res.json(); } catch(e) { data = null; }
-      } else {
-        try { data = await res.text(); } catch(e) { data = null; }
-      }
+      if (contentType.includes('application/json')) { try { data = await res.json(); } catch(e) { data = null; } }
+      else { try { data = await res.text(); } catch(e) { data = null; } }
 
       if (res.status === 401 || res.status === 419) {
         showToast('error', 'Session expired. Please login again.');
         setTimeout(() => window.location.href = '/login', 1500);
-        return { ok: false, status: res.status, data };
+        return { ok:false, status:res.status, data };
       }
 
-      return { ok: res.ok, status: res.status, data };
+      return { ok:res.ok, status:res.status, data };
     } catch (err) {
       console.error('API Error:', err);
       showToast('error', 'Network error. Please check your connection.');
-      return { ok: false, status: 0, data: null };
+      return { ok:false, status:0, data:null };
     }
   }
 
-  // ========= State =========
   let gameUuid = resolveGameUuid();
   let gameData = null;
   let questions = [];
   let editingId = null;
   let currentQuestion = null;
 
-  // ========= Early guard =========
   if (!gameUuid) {
     if (elements.qList) {
       elements.qList.innerHTML = `
@@ -1086,9 +1054,7 @@ document.addEventListener('DOMContentLoaded', function() {
           </div>
         </div>
       `;
-      document.getElementById('goGamesBtn')?.addEventListener('click', () => {
-        window.location.href = '/bubblegame';
-      });
+      document.getElementById('goGamesBtn')?.addEventListener('click', () => window.location.href = '/bubblegame');
     }
     showToast('error', 'Game ID is required. Please select a game first.');
     return;
@@ -1108,7 +1074,7 @@ document.addEventListener('DOMContentLoaded', function() {
       handle: '.bubble-handle',
       onEnd: function() {
         updateBubblesCount();
-        rebuildAnswerOrderList(true); // preserve user-correct order
+        rebuildAnswerOrderList(true);
       }
     });
   }
@@ -1122,7 +1088,8 @@ document.addEventListener('DOMContentLoaded', function() {
       dragClass: 'sortable-drag',
       handle: '.answer-handle',
       onEnd: function() {
-        refreshAnswerOrderNumbers();
+        // always snap back to computed order (auto-arrange always)
+        autoArrangeAnswers();
       }
     });
   }
@@ -1130,6 +1097,12 @@ document.addEventListener('DOMContentLoaded', function() {
   // ========= Bubble management =========
   function makeKey() {
     return 'b_' + Math.random().toString(16).slice(2) + '_' + Date.now().toString(16);
+  }
+
+  let autoArrangeTimer = null;
+  function scheduleAutoArrange() {
+    clearTimeout(autoArrangeTimer);
+    autoArrangeTimer = setTimeout(() => autoArrangeAnswers(), 220);
   }
 
   function createBubbleElement(key, label = '', value = '') {
@@ -1152,9 +1125,9 @@ document.addEventListener('DOMContentLoaded', function() {
       </div>
     `;
 
-    const labelInput = div.querySelector('.bubble-label-input');
-    labelInput?.addEventListener('input', () => {
+    div.querySelector('.bubble-label-input')?.addEventListener('input', () => {
       updateAnswerRowForKey(key);
+      scheduleAutoArrange(); // ✅ auto arrange while typing
     });
 
     div.querySelector('.bubble-btn.delete')?.addEventListener('click', () => {
@@ -1175,7 +1148,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const key = makeKey();
     elements.bubblesList.appendChild(createBubbleElement(key, label, value));
     updateBubblesCount();
-    rebuildAnswerOrderList(true);
+    rebuildAnswerOrderList(true); // ✅ auto arrange inside
   }
 
   function updateBubblesCount() {
@@ -1189,7 +1162,6 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function getBubblesDataClean() {
-    // IMPORTANT: do not send extra keys if your backend validation is strict
     const bubbles = [];
     getBubbleEls().forEach(item => {
       const label = item.querySelector('.bubble-label-input')?.value?.trim() || '';
@@ -1218,7 +1190,7 @@ document.addEventListener('DOMContentLoaded', function() {
     rebuildAnswerOrderList(false);
   }
 
-  // ========= Answer Order Builder =========
+  // ========= Answer Order (AUTO ARRANGE ALWAYS) =========
   function buildAnswerRow(key, equation, bubbleIndex) {
     const ev = safeEvalEquation(equation);
     const resultText = ev.ok ? formatNumber(ev.value) : 'ERR';
@@ -1244,7 +1216,6 @@ document.addEventListener('DOMContentLoaded', function() {
         </div>
       </div>
     `;
-
     return row;
   }
 
@@ -1254,6 +1225,44 @@ document.addEventListener('DOMContentLoaded', function() {
       const box = it.querySelector('.answer-orderno');
       if (box) box.textContent = String(idx + 1);
     });
+  }
+
+  function autoArrangeAnswers() {
+    const list = elements.answerOrderList;
+    if (!list) return;
+
+    const items = Array.from(list.querySelectorAll('.answer-item'));
+    if (!items.length) return;
+
+    const descending = (elements.qSelectType?.value || 'ascending') === 'descending';
+    const dir = descending ? -1 : 1;
+
+    const bubbleEls = getBubbleEls();
+    const bubbleMap = new Map(bubbleEls.map((b, idx) => {
+      const eq = b.querySelector('.bubble-label-input')?.value?.trim() || '';
+      const ev = safeEvalEquation(eq);
+      const num = ev.ok ? ev.value : (descending ? Number.NEGATIVE_INFINITY : Number.POSITIVE_INFINITY);
+      return [b.dataset.key, { idx, eq, num, ok: ev.ok }];
+    }));
+
+    const withVal = items.map(it => {
+      const key = it.dataset.key;
+      const info = bubbleMap.get(key) || { idx: 999999, num: (descending ? Number.NEGATIVE_INFINITY : Number.POSITIVE_INFINITY) };
+      return { it, key, num: info.num, bidx: info.idx };
+    });
+
+    withVal.sort((a,b) => {
+      const d = (a.num - b.num) * dir;
+      if (d !== 0) return d;
+      return (a.bidx - b.bidx); // stable tie-break
+    });
+
+    list.innerHTML = '';
+    withVal.forEach(x => list.appendChild(x.it));
+
+    // refresh computed labels
+    bubbleEls.forEach(b => updateAnswerRowForKey(b.dataset.key));
+    refreshAnswerOrderNumbers();
   }
 
   function rebuildAnswerOrderList(preserveExistingOrder) {
@@ -1270,7 +1279,6 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
 
-    // existing desired order (keys)
     const existingKeys = preserveExistingOrder
       ? Array.from(elements.answerOrderList.querySelectorAll('.answer-item')).map(x => x.dataset.key).filter(Boolean)
       : [];
@@ -1283,47 +1291,36 @@ document.addEventListener('DOMContentLoaded', function() {
 
     const map = new Map(bubbleInfo.map(b => [b.key, b]));
 
-    // compute final order
     let ordered = [];
     if (preserveExistingOrder && existingKeys.length) {
       existingKeys.forEach(k => { if (map.has(k)) ordered.push(map.get(k)); });
-      // add missing ones (new bubbles)
       bubbleInfo.forEach(b => { if (!existingKeys.includes(b.key)) ordered.push(b); });
     } else {
       ordered = bubbleInfo.slice();
     }
 
     elements.answerOrderList.innerHTML = '';
-    ordered.forEach(b => {
-      elements.answerOrderList.appendChild(buildAnswerRow(b.key, b.eq, b.idx));
-    });
+    ordered.forEach(b => elements.answerOrderList.appendChild(buildAnswerRow(b.key, b.eq, b.idx)));
 
     initSortableAnswers();
-    refreshAnswerOrderNumbers();
+    autoArrangeAnswers(); // ✅ always auto arrange after rebuild
   }
 
   function updateAnswerRowForKey(key) {
     if (!elements.answerOrderList) return;
     const row = elements.answerOrderList.querySelector(`.answer-item[data-key="${key}"]`);
-    if (!row) {
-      rebuildAnswerOrderList(true);
-      return;
-    }
+    if (!row) { rebuildAnswerOrderList(true); return; }
 
-    // find bubble index and equation
     const bubbleEls = getBubbleEls();
-    const bubbleIndex = bubbleEls.findIndex(b => (b.dataset.key === key));
+    const bubbleIndex = bubbleEls.findIndex(b => b.dataset.key === key);
     const eq = bubbleEls[bubbleIndex]?.querySelector('.bubble-label-input')?.value?.trim() || '';
 
-    // update equation text
     const eqEl = row.querySelector('.answer-eq');
     if (eqEl) eqEl.textContent = eq || '(empty)';
 
-    // update bubble index label
     const idxEl = row.querySelector('.ans-bidx');
     if (idxEl) idxEl.textContent = String((bubbleIndex >= 0 ? bubbleIndex + 1 : 0));
 
-    // update computed result
     const ev = safeEvalEquation(eq);
     const pill = row.querySelector('.answer-pill');
     const valEl = row.querySelector('.ans-val');
@@ -1337,35 +1334,14 @@ document.addEventListener('DOMContentLoaded', function() {
     if (valEl) valEl.textContent = ev.ok ? formatNumber(ev.value) : 'ERR';
   }
 
-  function autoArrangeAnswers() {
-    const items = Array.from(elements.answerOrderList?.querySelectorAll('.answer-item') || []);
-    if (!items.length) return;
-
-    const dir = (elements.qSelectType?.value || 'ascending') === 'descending' ? -1 : 1;
-
-    const withVal = items.map(it => {
-      const key = it.dataset.key;
-      // compute from current bubble
-      const bubbleEls = getBubbleEls();
-      const b = bubbleEls.find(x => x.dataset.key === key);
-      const eq = b?.querySelector('.bubble-label-input')?.value?.trim() || '';
-      const ev = safeEvalEquation(eq);
-      return { it, key, num: (ev.ok ? ev.value : Number.POSITIVE_INFINITY) };
-    });
-
-    withVal.sort((a,b) => (a.num - b.num) * dir);
-
-    elements.answerOrderList.innerHTML = '';
-    withVal.forEach(x => elements.answerOrderList.appendChild(x.it));
-    refreshAnswerOrderNumbers();
-    // refresh bubble index + values (in case)
-    getBubbleEls().forEach(b => updateAnswerRowForKey(b.dataset.key));
-  }
-
+  // ✅ manual button (just in case)
   elements.btnAutoOrder?.addEventListener('click', () => {
     autoArrangeAnswers();
-    showToast('success', 'Auto arranged based on computed results');
+    showToast('success', 'Auto arranged');
   });
+
+  // ✅ whenever select type changes -> auto arrange
+  elements.qSelectType?.addEventListener('change', () => autoArrangeAnswers());
 
   // ========= Game & Questions =========
   function updateGameHeader() {
@@ -1461,9 +1437,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   async function loadGameData() {
     showLoader(true);
-
     const res = await apiFetch(`/api/bubble-games/${gameUuid}`);
-
     showLoader(false);
 
     if (!res.ok) {
@@ -1482,15 +1456,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
     gameData = res.data?.data || res.data;
     updateGameHeader();
-
     await loadQuestions();
   }
 
   async function loadQuestions() {
     showLoader(true);
-
     const res = await apiFetch(`/api/bubble-games/${gameUuid}/questions?paginate=false`);
-
     showLoader(false);
 
     if (!res.ok) {
@@ -1515,28 +1486,21 @@ document.addEventListener('DOMContentLoaded', function() {
 
     const payload = res.data;
     let arr = [];
-
     if (Array.isArray(payload)) arr = payload;
     else if (payload && Array.isArray(payload.data)) arr = payload.data;
     else if (payload && payload.success && Array.isArray(payload.data)) arr = payload.data;
 
     questions = arr;
-
     updateQuestionsCount();
     renderQuestionList();
   }
 
   async function openQuestion(questionUuid) {
     showLoader(true);
-
     const res = await apiFetch(`/api/bubble-games/${gameUuid}/questions/${questionUuid}`);
-
     showLoader(false);
 
-    if (!res.ok) {
-      showToast('error', 'Failed to load question');
-      return;
-    }
+    if (!res.ok) { showToast('error', 'Failed to load question'); return; }
 
     currentQuestion = res.data?.data || res.data;
     editingId = questionUuid;
@@ -1551,35 +1515,6 @@ document.addEventListener('DOMContentLoaded', function() {
     if (Array.isArray(currentQuestion.bubbles_json)) setBubblesData(currentQuestion.bubbles_json);
     else setBubblesData([{ label: '(1+2)*3', value: '' }]);
 
-    // If old data exists: answer_sequence_json (indices) -> apply as initial order in builder
-    const seq = currentQuestion.answer_sequence_json;
-    if (Array.isArray(seq) && seq.length && elements.answerOrderList) {
-      const bubbleEls = getBubbleEls();
-      const keysByIndex = bubbleEls.map(b => b.dataset.key);
-
-      const desiredKeys = seq.map(i => keysByIndex[i]).filter(Boolean);
-      const restKeys = keysByIndex.filter(k => !desiredKeys.includes(k));
-
-      // rebuild with desired keys first
-      elements.answerOrderList.innerHTML = '';
-      const finalKeys = desiredKeys.concat(restKeys);
-
-      const bubbleMap = new Map(bubbleEls.map((b, idx) => {
-        const eq = b.querySelector('.bubble-label-input')?.value?.trim() || '';
-        return [b.dataset.key, { eq, idx }];
-      }));
-
-      finalKeys.forEach(k => {
-        const info = bubbleMap.get(k);
-        elements.answerOrderList.appendChild(buildAnswerRow(k, info?.eq || '', info?.idx ?? 0));
-      });
-
-      initSortableAnswers();
-      refreshAnswerOrderNumbers();
-    } else {
-      rebuildAnswerOrderList(false);
-    }
-
     elements.formTitle.textContent = `Edit Question #${currentQuestion.order_no || ''}`;
     elements.btnDelete.style.display = 'inline-flex';
 
@@ -1592,20 +1527,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
   async function saveQuestion() {
     const bubbles = getBubblesDataClean();
-    if (!bubbles.length) {
-      showToast('error', 'Add at least one bubble');
-      return;
-    }
+    if (!bubbles.length) { showToast('error', 'Add at least one bubble'); return; }
 
-    // Build answer order keys from the builder list
+    autoArrangeAnswers(); // ✅ ensure latest order before saving
+
     const answerItems = Array.from(elements.answerOrderList?.querySelectorAll('.answer-item') || []);
     const answerKeys = answerItems.map(x => x.dataset.key).filter(Boolean);
 
-    // map bubble key -> index in current bubbles DOM order
     const bubbleEls = getBubbleEls();
     const keyToIndex = new Map(bubbleEls.map((b, idx) => [b.dataset.key, idx]));
 
-    // validate all equations and also compute answer_value_json
     const answerValues = [];
     const answerSequence = [];
 
@@ -1616,19 +1547,13 @@ document.addEventListener('DOMContentLoaded', function() {
       const eq = bubbleEls[idx]?.querySelector('.bubble-label-input')?.value?.trim() || '';
       const ev = safeEvalEquation(eq);
 
-      if (!ev.ok) {
-        showToast('error', `Invalid equation in Bubble #${idx + 1}. Please fix it before saving.`);
-        return;
-      }
+      if (!ev.ok) { showToast('error', `Invalid equation in Bubble #${idx + 1}. Please fix it before saving.`); return; }
 
-      answerSequence.push(idx);     // correct order as indices
-      answerValues.push(ev.value);  // correct values in that order
+      answerSequence.push(idx);
+      answerValues.push(ev.value);
     }
 
-    if (!answerSequence.length) {
-      showToast('error', 'Correct order list is empty.');
-      return;
-    }
+    if (!answerSequence.length) { showToast('error', 'Correct order list is empty.'); return; }
 
     const payload = {
       title: elements.qTitle.value.trim() || null,
@@ -1637,8 +1562,6 @@ document.addEventListener('DOMContentLoaded', function() {
       points: parseInt(elements.qPoints.value) || 1,
       order_no: parseInt(elements.qOrder.value) || 1,
       status: elements.qStatus.value,
-
-      // ✅ auto-generated
       answer_sequence_json: answerSequence,
       answer_value_json: answerValues
     };
@@ -1655,7 +1578,6 @@ document.addEventListener('DOMContentLoaded', function() {
       : `/api/bubble-games/${gameUuid}/questions`;
 
     const method = editingId ? 'PUT' : 'POST';
-
     const res = await apiFetch(url, { method, body: JSON.stringify(payload) });
 
     showLoader(false);
@@ -1663,9 +1585,7 @@ document.addEventListener('DOMContentLoaded', function() {
     saveBtn.innerHTML = original;
 
     if (!res.ok) {
-      const msg = res.data?.errors
-        ? Object.values(res.data.errors).flat().join(', ')
-        : (res.data?.message || 'Failed to save question');
+      const msg = res.data?.errors ? Object.values(res.data.errors).flat().join(', ') : (res.data?.message || 'Failed to save question');
       showToast('error', msg);
       return;
     }
@@ -1691,10 +1611,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const res = await apiFetch(`/api/bubble-games/${gameUuid}/questions/${questionUuid}`, { method: 'DELETE' });
     showLoader(false);
 
-    if (!res.ok) {
-      showToast('error', 'Failed to delete question');
-      return;
-    }
+    if (!res.ok) { showToast('error', 'Failed to delete question'); return; }
 
     showToast('success', 'Question deleted successfully');
     await loadQuestions();
@@ -1702,22 +1619,13 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   // ========= Events =========
-  elements.btnAddBubble.addEventListener('click', () => {
-    addBubble('(2+3)*4', '');
-  });
-
+  elements.btnAddBubble.addEventListener('click', () => addBubble('(2+3)*4', ''));
   elements.btnNewQuestion.addEventListener('click', resetForm);
 
-  elements.btnSave.addEventListener('click', (e) => {
-    e.preventDefault();
-    saveQuestion();
-  });
-
+  elements.btnSave.addEventListener('click', (e) => { e.preventDefault(); saveQuestion(); });
   elements.btnCancel.addEventListener('click', resetForm);
 
-  elements.btnDelete.addEventListener('click', () => {
-    if (editingId) deleteQuestion(editingId);
-  });
+  elements.btnDelete.addEventListener('click', () => { if (editingId) deleteQuestion(editingId); });
 
   function closePreview() {
     if (!elements.previewOverlay) return;
@@ -1726,9 +1634,7 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   elements.previewCloseBtn?.addEventListener('click', closePreview);
   elements.previewCloseBtn2?.addEventListener('click', closePreview);
-  elements.previewOverlay?.addEventListener('click', (e) => {
-    if (e.target === elements.previewOverlay) closePreview();
-  });
+  elements.previewOverlay?.addEventListener('click', (e) => { if (e.target === elements.previewOverlay) closePreview(); });
 
   elements.qSearch.addEventListener('input', function() {
     const searchTerm = this.value.toLowerCase().trim();
@@ -1738,7 +1644,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   });
 
-  // ========= Init =========
   function init() {
     console.log('Init bubble question page. gameUuid=', gameUuid);
     setBubblesData([{ label: '(1+2)*3', value: '' }]);

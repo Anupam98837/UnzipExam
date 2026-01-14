@@ -466,6 +466,14 @@
       font-weight: 800;
       padding: 2px 0 10px;
     }
+    /* Always disable Previous */
+#bgxPrevBtn{
+  pointer-events: none !important;
+  opacity: .55 !important;
+  filter: grayscale(1) !important;
+  cursor: not-allowed !important;
+}
+
   </style>
 </head>
 
@@ -480,7 +488,7 @@
         <div class="sub">
           <span class="bgx-pill"><i class="fa-solid fa-layer-group"></i> <span id="bgxRound">Round 0/0</span></span>
           <span class="bgx-pill"><i class="fa-solid fa-clock"></i> Per Q: <span id="bgxPerQ">--</span>s</span>
-          <span class="bgx-pill"><i class="fa-solid fa-database"></i> Auto-saved in sessionStorage</span>
+          <span class="bgx-pill"><i class="fa-solid fa-database"></i> Auto-saved</span>
         </div>
       </div>
 
@@ -488,7 +496,7 @@
         <a class="bgx-btn" href="/dashboard" id="bgxQuitBtn">
           <i class="fa-solid fa-house"></i> Dashboard
         </a>
-        <button class="bgx-btn danger" id="bgxClearLocal" type="button">
+        <button class="bgx-btn danger" id="bgxClearLocal" type="button" style="display:none">
           <i class="fa-solid fa-rotate-left"></i> Reset Attempt
         </button>
       </div>
@@ -610,7 +618,6 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-
 <script>
 (() => {
   /* =========================================================
@@ -695,7 +702,23 @@
     perQTime: 30,
     timers: {},           // timers[qKey] = { timeLeft, lastAt }
     tick: null,
+    isSubmitting: false,
+    autoSubmitted: false,
+    suppressUnloadPrompt: false,
+
   };
+
+  function clampQIndex(){
+    const total = Array.isArray(state.questions) ? state.questions.length : 0;
+
+    let qi = parseInt(state.qIndex, 10);
+    if (!Number.isFinite(qi)) qi = 0;
+
+    if (total > 0) qi = Math.max(0, Math.min(qi, total - 1));
+    else qi = 0;
+
+    state.qIndex = qi;
+  }
 
   /* ============ helpers ============ */
   function getToken() {
@@ -716,6 +739,7 @@
   }
 
   function currentQuestion() {
+    clampQIndex();
     return state.questions[state.qIndex] || null;
   }
 
@@ -1011,7 +1035,6 @@
       div.appendChild(document.createTextNode(label));
 
       div.addEventListener('click', () => {
-        // already selected? remove this and after it (quick undo)
         const pos = state.currentSelection.indexOf(origIdx);
         if (pos !== -1) {
           state.currentSelection = state.currentSelection.slice(0, pos);
@@ -1113,13 +1136,14 @@
   }
 
   function updateNavButtons() {
+    clampQIndex();
+
     const total = state.questions.length;
     const last = total ? total - 1 : 0;
     const q = currentQuestion();
 
     elPrevBtn.disabled = state.qIndex <= 0;
 
-    // Submit appears only on last question
     if (state.qIndex >= last){
       elSubmitBtn.classList.remove('d-none');
       elNextBtn.classList.add('d-none');
@@ -1131,14 +1155,12 @@
     const allowSkip = String(state.game?.allow_skip ?? 'no');
     const need = (q?.bubbles_original || []).length;
 
-    // ✅ show/hide Skip button
     if (allowSkip === 'yes'){
       elSkipBtn.classList.remove('d-none');
     } else {
       elSkipBtn.classList.add('d-none');
     }
 
-    // require all bubbles only when skip disabled
     if (allowSkip === 'no'){
       const ok = state.currentSelection.length === need;
       elNextBtn.disabled = !ok;
@@ -1159,14 +1181,20 @@
 
     persistCurrentAnswer(true, true);
 
-    if (state.qIndex < state.questions.length - 1){
+    const lastIndex = state.questions.length - 1;
+
+    if (state.qIndex < lastIndex){
       state.qIndex += 1;
       loadQuestion();
       notify('warning', 'Time up!', 'Moved to next question.');
-    } else {
-      updateNavButtons();
-      notify('warning', 'Time up!', 'You can submit now.');
+      return;
     }
+
+    if (state.autoSubmitted) return;
+    state.autoSubmitted = true;
+
+    // optional: avoid unhandled promise
+    submitExamNow(true).catch(() => {});
   }
 
   function loadQuestion() {
@@ -1237,8 +1265,10 @@
     persistCurrentAnswer(false, true);
     pauseTimer();
 
+    clampQIndex();
     if (state.qIndex > 0){
-      state.qIndex -= 1;
+      state.qIndex = parseInt(state.qIndex, 10) - 1;
+      clampQIndex();
       loadQuestion();
       saveCache();
     }
@@ -1248,8 +1278,10 @@
     persistCurrentAnswer(false, true);
     pauseTimer();
 
+    clampQIndex();
     if (state.qIndex < state.questions.length - 1){
-      state.qIndex += 1;
+      state.qIndex = parseInt(state.qIndex, 10) + 1;
+      clampQIndex();
       loadQuestion();
       saveCache();
     }
@@ -1259,7 +1291,6 @@
     const allowSkip = String(state.game?.allow_skip ?? 'no');
     if (allowSkip !== 'yes') return;
 
-    // mark skipped for this question
     state.currentSelection = [];
     persistCurrentAnswer(false, true);
     pauseTimer();
@@ -1322,6 +1353,71 @@
     if (r.isConfirmed) window.location.href = DASHBOARD_URL;
   });
 
+  async function submitExamNow(isAuto=false){
+    if (state.isSubmitting) return;
+    state.isSubmitting = true;
+        if (isAuto) {
+  state.suppressUnloadPrompt = true;
+  window.removeEventListener('beforeunload', beforeUnloadHandler);
+}
+
+    try{
+      [elPrevBtn, elNextBtn, elUndoBtn, elClearBtn, elSkipBtn, elSubmitBtn].forEach(b => {
+        if (b) b.disabled = true;
+      });
+
+      persistCurrentAnswer(isAuto, true);
+      pauseTimer();
+
+      const answersArray = buildSubmitAnswersArray();
+      const totalTime = answersArray.reduce((sum, a) => sum + (parseInt(a.spent_time_sec || 0, 10) || 0), 0);
+
+      const payload = {
+        game_uuid: GAME_UUID,
+        answers: answersArray,
+
+        bubble_game_uuid: GAME_UUID,
+        user_answer_json: answersArray,
+        time_taken_sec: totalTime,
+      };
+
+      Swal.fire({
+        title: isAuto ? 'Time up! Submitting...' : 'Submitting...',
+        text: 'Please wait',
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        didOpen: () => Swal.showLoading()
+      });
+
+      await postJson(API.submit, payload);
+
+      Swal.close();
+      clearCache();
+      notify('success', 'Submitted successfully', 'Redirecting to dashboard…');
+      setTimeout(() => window.location.href = DASHBOARD_URL, 900);
+
+    } catch(err){
+      Swal.close();
+
+      [elPrevBtn, elNextBtn, elUndoBtn, elClearBtn, elSkipBtn, elSubmitBtn].forEach(b => {
+        if (b) b.disabled = false;
+      });
+
+      await Swal.fire({
+        icon: 'error',
+        title: 'Submit failed',
+        text: err.message || 'Please try again'
+      });
+
+      if ((err.message || '').toLowerCase().includes('login')){
+        setTimeout(() => window.location.href = '/login', 900);
+      }
+
+    } finally {
+      state.isSubmitting = false;
+    }
+  }
+
   elSubmitBtn.addEventListener('click', async () => {
     persistCurrentAnswer(false, true);
     pauseTimer();
@@ -1337,57 +1433,23 @@
     });
     if (!r.isConfirmed) return;
 
-    const answersArray = buildSubmitAnswersArray();
-    const totalTime = answersArray.reduce((sum, a) => sum + (parseInt(a.spent_time_sec || 0, 10) || 0), 0);
-
-    // ✅ Send BOTH styles (safe), backend can use whatever it validates
-    const payload = {
-      game_uuid: GAME_UUID,
-      answers: answersArray,
-
-      bubble_game_uuid: GAME_UUID,
-      user_answer_json: answersArray,
-      time_taken_sec: totalTime,
-    };
-
-    try{
-      elSubmitBtn.disabled = true;
-      elSubmitBtn.innerHTML = `<span class="spinner-border spinner-border-sm"></span> Submitting…`;
-
-      Swal.fire({
-        title: 'Submitting...',
-        text: 'Please wait',
-        allowOutsideClick: false,
-        allowEscapeKey: false,
-        didOpen: () => Swal.showLoading()
-      });
-
-      await postJson(API.submit, payload);
-
-      Swal.close();
-      notify('success', 'Submitted successfully', 'Redirecting to dashboard…');
-      clearCache();
-
-      setTimeout(() => window.location.href = DASHBOARD_URL, 900);
-
-    }catch(err){
-      Swal.close();
-      await Swal.fire({
-        icon: 'error',
-        title: 'Submit failed',
-        text: err.message || 'Please try again'
-      });
-      elSubmitBtn.disabled = false;
-      elSubmitBtn.innerHTML = `<i class="fa-solid fa-paper-plane"></i> Submit Exam`;
-    }
+    await submitExamNow(false);
   });
 
-  window.addEventListener('beforeunload', (e) => {
-    const has = countAnswered() > 0 || state.currentSelection.length > 0;
-    if (!has) return;
-    e.preventDefault();
-    e.returnValue = '';
-  });
+  // ✅ IMPORTANT: the duplicate submit block that caused "await..." error is REMOVED.
+function beforeUnloadHandler(e) {
+  // ✅ do not show browser "Leave site?" dialog during auto-submit redirect only
+  if (state.suppressUnloadPrompt === true) return;
+
+  const has = countAnswered() > 0 || state.currentSelection.length > 0;
+  if (!has) return;
+
+  e.preventDefault();
+  e.returnValue = '';
+}
+
+window.addEventListener('beforeunload', beforeUnloadHandler);
+
 
   /* ============ init ============ */
   async function init(){

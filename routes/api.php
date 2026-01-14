@@ -332,7 +332,8 @@ Route::middleware('checkRole')->prefix('bubble-games')->group(function () {
     
     // Create new game
     Route::post('/', [BubbleGameController::class, 'store'])->name('bubble-games.store');
-    
+     Route::get('/my', [BubbleGameController::class, 'myBubbleGames'])
+        ->name('bubble-games.my');
     // Show specific game
     Route::get('/{uuid}', [BubbleGameController::class, 'show'])->name('bubble-games.show');
     
@@ -410,3 +411,20 @@ Route::middleware('checkRole')->prefix('bubble-games')->group(function () {
         Route::post('/{uuid}/restore', [BubbleGameResultController::class, 'restore']);
         Route::delete('/{uuid}/force', [BubbleGameResultController::class, 'forceDelete']);
     });
+
+    Route::middleware('checkRole')->group(function () {
+           
+
+
+ // List bubble games for a user (assigned/unassigned info)
+    Route::get('users/{id}/bubble-games', [UserController::class, 'userBubbleGames'])
+        ->name('users.bubble-games.index');
+    // Assign bubble game to user
+    Route::post('/users/{id}/bubble-games/assign',   [UserController::class, 'assignBubbleGame'])
+        ->name('users.bubble-games.assign');
+
+    // Unassign (revoke) bubble game from user
+    Route::post('/users/{id}/bubble-games/unassign', [UserController::class, 'unassignBubbleGame'])
+        ->name('users.bubble-games.unassign');
+
+});

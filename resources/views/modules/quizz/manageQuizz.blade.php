@@ -163,7 +163,7 @@ html.theme-dark .dropdown-menu{background:#0f172a;border-color:var(--line-strong
         </div>
 
         <div class="col-12 col-xl-auto ms-xl-auto d-flex justify-content-xl-end">
-          <a id="btnCreate" href="/admin/quizz/create" class="btn btn-primary">
+          <a id="btnCreate" href="/quizz/create" class="btn btn-primary">
             <i class="fa fa-plus me-1"></i>New Quiz
           </a>
         </div>
@@ -520,7 +520,7 @@ document.addEventListener('click', (e) => {
       .then(()=> location.href='/');
     return;
   }
-  document.getElementById('btnCreate').setAttribute('href', basePanel + '/quizz/create');
+  document.getElementById('btnCreate').setAttribute('href','/quizz/create');
 
   /* ========= Toast helpers ========= */
   const okToast  = new bootstrap.Toast(document.getElementById('okToast'));
@@ -654,7 +654,7 @@ document.addEventListener('click', (e) => {
       tr.innerHTML = `
         <td>
           <div class="fw-semibold">
-            <a href="${basePanel}/quizz/${encodeURIComponent(r.uuid || r.id)}" class="link-offset-2 link-underline-opacity-0">${name}</a>
+            <a href="/quizz/${encodeURIComponent(r.uuid || r.id)}" class="link-offset-2 link-underline-opacity-0">${name}</a>
           </div>
           <div class="text-muted small">${(r.question_count ?? 0)} Qs • ${(r.student_count ?? 0)} students</div>
         </td>
@@ -669,7 +669,7 @@ document.addEventListener('click', (e) => {
       tr.innerHTML = `
         <td>
           <div class="fw-semibold">
-            <a href="${basePanel}/quizz/${encodeURIComponent(r.uuid || r.id)}" class="link-offset-2 link-underline-opacity-0">${name}</a>
+            <a href="/quizz/${encodeURIComponent(r.uuid || r.id)}" class="link-offset-2 link-underline-opacity-0">${name}</a>
           </div>
           <div class="text-muted small">${(r.question_count ?? 0)} Qs • ${(r.student_count ?? 0)} students</div>
         </td>
@@ -684,7 +684,7 @@ document.addEventListener('click', (e) => {
     tr.innerHTML = `
       <td>
         <div class="fw-semibold">
-          <a href="${basePanel}/quizz/${encodeURIComponent(r.uuid || r.id)}" class="link-offset-2 link-underline-opacity-0">${name}</a>
+          <a href="/quizz/${encodeURIComponent(r.uuid || r.id)}" class="link-offset-2 link-underline-opacity-0">${name}</a>
         </div>
         <div class="text-muted small">${(r.question_count ?? 0)} Qs • ${(r.student_count ?? 0)} students</div>
       </td>
@@ -855,11 +855,11 @@ document.addEventListener('click', (e) => {
     const name = it.dataset.name || 'this quiz';
 
     if (act==='edit'){
-      location.href = `${basePanel}/quizz/create?edit=${encodeURIComponent(key)}`;
+      location.href = `/quizz/create?edit=${encodeURIComponent(key)}`;
       return;
     }
     if (act==='questions'){
-      location.href = `${basePanel}/quizz/questions/manage?quiz=${encodeURIComponent(key)}`;
+      location.href = `/quizz/questions/manage?quiz=${encodeURIComponent(key)}`;
       return;
     }
     if (act==='notes'){

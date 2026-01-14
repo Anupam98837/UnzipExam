@@ -11,61 +11,120 @@ use Illuminate\Validation\Rule;
 
 class BubbleGameController extends Controller
 {
+    // ✅ Add inside BubbleGameController
+  /**
+     * Convenience helper to read actor data attached by CheckRole.
+     */
+    private function actor(Request $request): array
+    {
+        return [
+            'role' => $request->attributes->get('auth_role'),
+            'type' => $request->attributes->get('auth_tokenable_type'),
+            'id'   => (int) ($request->attributes->get('auth_tokenable_id') ?? 0),
+        ];
+    }
+
+    /**
+     * Simple role gate (same style as QuizzController).
+     */
+    private function requireRole(Request $request, array $allowed)
+    {
+        $actor = $this->actor($request);
+
+        if (!$actor['role'] || !in_array($actor['role'], $allowed, true)) {
+            return response()->json([
+                'error'   => 'Unauthorized Access',
+                'message' => 'You do not have permission to access this resource.',
+            ], 403);
+        }
+
+        return null;
+    }
+
     /**
      * Display a listing of the resource.
      */
     public function index(Request $request)
-    {
-        $query = DB::table('bubble_game')
-            ->leftJoin('users', 'bubble_game.created_by', '=', 'users.id')
-            ->select(
-                'bubble_game.*',
-                'users.name as creator_name',
-                'users.email as creator_email'
-            )
-            ->whereNull('bubble_game.deleted_at');
+{
+    $query = DB::table('bubble_game')
+        ->leftJoin('users', 'bubble_game.created_by', '=', 'users.id')
+        ->select(
+            'bubble_game.*',
+            'users.name as creator_name',
+            'users.email as creator_email'
+        );
 
-        // Filter by status
-        if ($request->has('status')) {
-            $query->where('bubble_game.status', $request->status);
-        }
+    /**
+     * ✅ Bin / Deleted handling
+     * - only_deleted=1 => ONLY soft-deleted rows
+     * - with_deleted=1 => include both deleted + non-deleted
+     * - default        => ONLY non-deleted rows
+     */
+    $onlyDeleted = $request->boolean('only_deleted') || $request->boolean('bin') || $request->boolean('trash');
+    $withDeleted = $request->boolean('with_deleted') || $request->boolean('include_deleted');
 
-        // Search by title
-        if ($request->has('search')) {
-            $query->where('bubble_game.title', 'like', '%' . $request->search . '%');
-        }
-
-        // Order by
-        $orderBy = $request->get('order_by', 'bubble_game.created_at');
-        $orderDir = $request->get('order_dir', 'desc');
-        $query->orderBy($orderBy, $orderDir);
-
-        // Paginate
-        $perPage = $request->get('per_page', 15);
-        $page = $request->get('page', 1);
-        $offset = ($page - 1) * $perPage;
-
-        $total = $query->count();
-        $bubbleGames = $query->offset($offset)->limit($perPage)->get();
-
-        // Decode JSON fields
-        foreach ($bubbleGames as $game) {
-            $game->metadata = json_decode($game->metadata);
-        }
-
-        return response()->json([
-            'success' => true,
-            'data' => $bubbleGames,
-            'pagination' => [
-                'total' => $total,
-                'per_page' => $perPage,
-                'current_page' => $page,
-                'last_page' => ceil($total / $perPage),
-                'from' => $offset + 1,
-                'to' => min($offset + $perPage, $total)
-            ]
-        ]);
+    if ($onlyDeleted) {
+        $query->whereNotNull('bubble_game.deleted_at');
+    } elseif (!$withDeleted) {
+        $query->whereNull('bubble_game.deleted_at');
     }
+
+    // ✅ Filter by status (active/inactive/archived)
+    // (skip empty string)
+    if ($request->has('status') && $request->status !== '') {
+        $query->where('bubble_game.status', $request->status);
+    }
+
+    // ✅ Search by title
+    if ($request->has('search') && trim($request->search) !== '') {
+        $query->where('bubble_game.title', 'like', '%' . trim($request->search) . '%');
+    }
+
+    // ✅ Safe Order by (WHITELIST)
+    $allowedOrderBy = [
+        'bubble_game.title',
+        'bubble_game.status',
+        'bubble_game.max_attempts',
+        'bubble_game.per_question_time_sec',
+        'bubble_game.created_at',
+        'bubble_game.updated_at',
+        'bubble_game.deleted_at',
+    ];
+
+    $orderBy = $request->get('order_by', 'bubble_game.created_at');
+    if (!in_array($orderBy, $allowedOrderBy, true)) {
+        $orderBy = 'bubble_game.created_at';
+    }
+
+    $orderDir = strtolower($request->get('order_dir', 'desc')) === 'asc' ? 'asc' : 'desc';
+    $query->orderBy($orderBy, $orderDir);
+
+    // ✅ Paginate
+    $perPage = max(1, (int) $request->get('per_page', 15));
+    $page    = max(1, (int) $request->get('page', 1));
+    $offset  = ($page - 1) * $perPage;
+
+    $total = (clone $query)->count();
+    $bubbleGames = $query->offset($offset)->limit($perPage)->get();
+
+    // ✅ Decode JSON fields
+    foreach ($bubbleGames as $game) {
+        $game->metadata = $game->metadata ? json_decode($game->metadata) : null;
+    }
+
+    return response()->json([
+        'success' => true,
+        'data' => $bubbleGames,
+        'pagination' => [
+            'total' => $total,
+            'per_page' => $perPage,
+            'current_page' => $page,
+            'last_page' => (int) ceil($total / $perPage),
+            'from' => $total ? ($offset + 1) : 0,
+            'to' => min($offset + $perPage, $total)
+        ]
+    ]);
+}
 
     /**
      * Store a newly created resource in storage.
@@ -439,4 +498,157 @@ class BubbleGameController extends Controller
             'data' => $duplicate
         ], 201);
     }
+   /* =========================
+ * MY BUBBLE GAMES (student)
+ * GET /api/bubble-games/my
+ * - Shows games assigned to logged-in student (user_bubble_game_assignments)
+ * - Admin/Super Admin: can see all active games
+ * - Includes latest result for that student (and computed status)
+ * - Computes total_questions + total_time from bubble_game_questions + per_question_time_sec
+ * ========================= */
+public function myBubbleGames(Request $r)
+{
+    // ✅ Allow student/admin/super_admin
+    if ($resp = $this->requireRole($r, ['student','admin','super_admin'])) return $resp;
+
+    $actor  = $this->actor($r);
+    $userId = (int) ($actor['id'] ?? 0);
+    $role   = (string) ($actor['role'] ?? '');
+
+    if (!$userId) {
+        return response()->json(['success' => false, 'message' => 'Unable to resolve user from token'], 403);
+    }
+
+    $page    = max(1, (int) $r->query('page', 1));
+    $perPage = max(1, min(50, (int) $r->query('per_page', 12)));
+    $search  = trim((string) $r->query('q', ''));
+
+    // ---- Subquery: question count per game (active questions only) ----
+    $qCountSub = DB::table('bubble_game_questions')
+        ->select('bubble_game_id', DB::raw('COUNT(*) as total_questions'))
+        ->where('status', '=', 'active')
+        ->groupBy('bubble_game_id');
+
+    // ---- Subquery: latest result per game for this user ----
+    $resultSub = DB::table('bubble_game_results')
+        ->select('bubble_game_id', DB::raw('MAX(id) as latest_id'))
+        ->where('user_id', $userId)
+        ->groupBy('bubble_game_id');
+
+    $q = DB::table('bubble_game as bg')
+        // join question counts
+        ->leftJoinSub($qCountSub, 'qc', function ($join) {
+            $join->on('qc.bubble_game_id', '=', 'bg.id');
+        })
+
+        // join latest result
+        ->leftJoinSub($resultSub, 'lr', function ($join) {
+            $join->on('lr.bubble_game_id', '=', 'bg.id');
+        })
+        ->leftJoin('bubble_game_results as bgr', 'bgr.id', '=', 'lr.latest_id')
+
+        // base filters
+        ->whereNull('bg.deleted_at')
+        ->where('bg.status', '=', 'active');
+
+    // ✅ STUDENT VISIBILITY: only assigned games (active assignment, not deleted)
+    if (!in_array($role, ['admin','super_admin'], true)) {
+        $q->whereExists(function ($sq) use ($userId) {
+            $sq->select(DB::raw(1))
+                ->from('user_bubble_game_assignments as uga')
+                ->whereColumn('uga.bubble_game_id', 'bg.id')
+                ->where('uga.user_id', '=', $userId)
+                ->where('uga.status', '=', 'active')
+                ->whereNull('uga.deleted_at');
+        });
+    }
+
+    // Optional text search (your columns are title/description)
+    if ($search !== '') {
+        $q->where(function ($w) use ($search) {
+            $w->where('bg.title', 'like', "%{$search}%")
+              ->orWhere('bg.description', 'like', "%{$search}%");
+        });
+    }
+
+    $select = [
+        'bg.id',
+        'bg.uuid',
+        'bg.title',
+        'bg.description',
+        'bg.max_attempts',
+        'bg.per_question_time_sec',
+        'bg.allow_skip',
+        'bg.status',
+        'bg.created_at',
+
+        DB::raw('COALESCE(qc.total_questions, 0) as total_questions'),
+
+        // latest result (this user)
+        'bgr.id         as result_id',
+        'bgr.created_at as result_created_at',
+        'bgr.score      as result_score',
+        'bgr.attempt_no as result_attempt_no',
+    ];
+
+    $paginator = $q->select($select)
+        ->orderBy('bg.created_at', 'desc')
+        ->paginate($perPage, ['*'], 'page', $page);
+
+    $items = collect($paginator->items())->map(function ($row) {
+        $totalQuestions = (int) ($row->total_questions ?? 0);
+        $perQSec        = (int) ($row->per_question_time_sec ?? 0);
+
+        // total_time shown as minutes (UI prints "min")
+        $totalMinutes = null;
+        if ($totalQuestions > 0 && $perQSec > 0) {
+            $totalMinutes = (int) ceil(($totalQuestions * $perQSec) / 60);
+        }
+
+        // my_status: if result exists => completed, else upcoming
+        $myStatus = $row->result_id ? 'completed' : 'upcoming';
+
+        return [
+            'id'              => (int) $row->id,
+            'uuid'            => (string) $row->uuid,
+
+            // UI fields
+            'title'           => (string) ($row->title ?? 'Bubble Game'),
+            'excerpt'         => (string) ($row->description ?? ''),
+            'total_time'      => $totalMinutes,         // minutes
+            'total_questions' => $totalQuestions,
+            'total_attempts'  => $row->max_attempts !== null ? (int) $row->max_attempts : null,
+            'is_public'       => false,                 // you do not have is_public in schema
+
+            'status'          => (string) ($row->status ?? 'active'),
+            'created_at'      => $row->created_at
+                ? \Carbon\Carbon::parse($row->created_at)->toDateTimeString()
+                : null,
+
+            'my_status'       => $myStatus,
+
+            // Result info (if exists)
+            'result' => $row->result_id ? [
+                'id'         => (int) $row->result_id,
+                'created_at' => $row->result_created_at
+                    ? \Carbon\Carbon::parse($row->result_created_at)->toDateTimeString()
+                    : null,
+                'score'      => $row->result_score !== null ? (int) $row->result_score : null,
+                'attempt_no' => $row->result_attempt_no !== null ? (int) $row->result_attempt_no : null,
+            ] : null,
+        ];
+    })->values();
+
+    return response()->json([
+        'success'    => true,
+        'data'       => $items,
+        'pagination' => [
+            'total'        => (int) $paginator->total(),
+            'per_page'     => (int) $paginator->perPage(),
+            'current_page' => (int) $paginator->currentPage(),
+            'last_page'    => (int) $paginator->lastPage(),
+        ],
+    ]);
+}
+
 }

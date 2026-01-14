@@ -1,4 +1,5 @@
-@section('title','My Quizzes')
+{{-- resources/views/exam/my-quizzes-and-games.blade.php --}}
+@section('title','My Quizzes & Games')
 
 @section('content')
 <style>
@@ -251,12 +252,65 @@
   html.theme-dark .qz-empty{background:#020b13;}
   html.theme-dark .qz-head{background:#020b13;}
 
-  /* ===========================
-   * Attempts Modal
-   * =========================== */
-  body.modal-open{
-    overflow:hidden;
+  /* ==========================
+   * Tabs (scoped)
+   * ========================== */
+  .qz-tabs{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin-top:10px;
+    flex-wrap:wrap;
   }
+  .qz-tab-btn{
+    border:1px solid var(--line-strong);
+    background:var(--surface-2);
+    color:var(--muted-color);
+    border-radius:999px;
+    padding:7px 12px;
+    font-size:var(--fs-13);
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    transition:background .15s ease, border-color .15s ease, transform .15s ease;
+    user-select:none;
+  }
+  .qz-tab-btn:hover{
+    transform:translateY(-1px);
+    border-color:var(--accent-color);
+    background:var(--surface);
+  }
+  .qz-tab-btn.active{
+    background:var(--t-primary);
+    border-color:rgba(20,184,166,.35);
+    color:#0f766e;
+    font-weight:600;
+  }
+  .qz-tab-count{
+    min-width:22px;
+    height:18px;
+    padding:0 6px;
+    border-radius:999px;
+    background:var(--surface);
+    border:1px solid var(--line-strong);
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    font-size:11px;
+    color:var(--muted-color);
+  }
+  .qz-tab-btn.active .qz-tab-count{
+    color:#0f766e;
+    border-color:rgba(20,184,166,.25);
+  }
+
+  .qz-tab-panel{display:none;}
+  .qz-tab-panel.active{display:block;}
+
+  /* =========================
+   * Attempts Modal (shared)
+   * ========================= */
+  body.modal-open{overflow:hidden;}
   .qz-attempt-modal{
     position:fixed;
     inset:0;
@@ -265,9 +319,7 @@
     align-items:center;
     justify-content:center;
   }
-  .qz-attempt-modal.show{
-    display:flex;
-  }
+  .qz-attempt-modal.show{display:flex;}
   .qz-attempt-backdrop{
     position:absolute;
     inset:0;
@@ -287,9 +339,7 @@
     flex-direction:column;
     overflow:hidden;
   }
-  html.theme-dark .qz-attempt-dialog{
-    background:#020b13;
-  }
+  html.theme-dark .qz-attempt-dialog{background:#020b13;}
 
   .qz-attempt-head{
     display:flex;
@@ -407,9 +457,7 @@
     border-color:var(--line-strong);
     padding-block:6px;
   }
-  .qz-attempt-table tbody tr:last-child td{
-    border-bottom:none;
-  }
+  .qz-attempt-table tbody tr:last-child td{border-bottom:none;}
   .qz-attempt-col-idx{width:40px;}
   .qz-attempt-col-score{white-space:nowrap;}
   .qz-attempt-col-action{text-align:right; white-space:nowrap;}
@@ -437,65 +485,104 @@
       <div class="qz-head-icon">
         <i class="fa-solid fa-clipboard-check"></i>
       </div>
-      <div>
-        <h1 class="qz-head-title">My Quizzes</h1>
+
+      <div class="flex-grow-1">
+        <h1 class="qz-head-title">My Quizzes & Games</h1>
         <div class="qz-head-sub">
-          View the quizzes assigned to you and start or continue your attempts.
+          Switch tabs to view your quizzes or bubble games, and start/continue attempts.
+        </div>
+
+        <div class="qz-tabs" role="tablist" aria-label="My exams tabs">
+          <button type="button" class="qz-tab-btn active" data-tab="quizzes" role="tab" aria-selected="true">
+            <i class="fa-solid fa-graduation-cap"></i>
+            Quizzes
+            <span class="qz-tab-count" id="tabCountQuizzes">0</span>
+          </button>
+          <button type="button" class="qz-tab-btn" data-tab="games" role="tab" aria-selected="false">
+            <i class="fa-solid fa-gamepad"></i>
+            Games
+            <span class="qz-tab-count" id="tabCountGames">0</span>
+          </button>
         </div>
       </div>
 
       <div class="qz-head-tools">
         <div class="position-relative qz-search">
           <span class="qz-search-icon"><i class="fa-solid fa-magnifying-glass"></i></span>
-          <input type="text" id="qzSearch" class="form-control"
-                 placeholder="Search quizzes…">
+          <input type="text" id="qzSearch" class="form-control" placeholder="Search…">
         </div>
       </div>
     </div>
 
     <div class="qz-body">
-      <div class="qz-loader-wrap" id="qzLoader">
-        <div class="qz-loader"></div>
+
+      {{-- ============ QUIZZES TAB ============ --}}
+      <div class="qz-tab-panel active" id="panelQuizzes" data-panel="quizzes">
+        <div class="qz-loader-wrap" id="qzLoaderQuizzes">
+          <div class="qz-loader"></div>
+        </div>
+
+        <div id="qzErrorQuizzes" class="qz-error"></div>
+
+        <div id="qzEmptyQuizzes" class="qz-empty d-none">
+          <i class="fa-regular fa-face-smile-beam mb-1"></i><br>
+          No quizzes available for you right now. Your upcoming quizzes will appear here.
+        </div>
+
+        <div id="qzListQuizzes" class="qz-grid"></div>
+
+        <div id="qzPaginationQuizzes" class="qz-pagination d-none">
+          <button type="button" class="btn btn-light btn-sm" id="qzPrevQuizzes">
+            <i class="fa-solid fa-arrow-left-long"></i> Previous
+          </button>
+          <span id="qzPageInfoQuizzes"></span>
+          <button type="button" class="btn btn-light btn-sm" id="qzNextQuizzes">
+            Next <i class="fa-solid fa-arrow-right-long"></i>
+          </button>
+        </div>
       </div>
 
-      <div id="qzError" class="qz-error"></div>
+      {{-- ============ GAMES TAB ============ --}}
+      <div class="qz-tab-panel" id="panelGames" data-panel="games">
+        <div class="qz-loader-wrap" id="qzLoaderGames">
+          <div class="qz-loader"></div>
+        </div>
 
-      <div id="qzEmpty" class="qz-empty d-none">
-        <i class="fa-regular fa-face-smile-beam mb-1"></i><br>
-        No quizzes available for you right now. Your upcoming quizzes will appear here.
+        <div id="qzErrorGames" class="qz-error"></div>
+
+        <div id="qzEmptyGames" class="qz-empty d-none">
+          <i class="fa-regular fa-face-smile-beam mb-1"></i><br>
+          No games available for you right now. Your upcoming games will appear here.
+        </div>
+
+        <div id="qzListGames" class="qz-grid"></div>
+
+        <div id="qzPaginationGames" class="qz-pagination d-none">
+          <button type="button" class="btn btn-light btn-sm" id="qzPrevGames">
+            <i class="fa-solid fa-arrow-left-long"></i> Previous
+          </button>
+          <span id="qzPageInfoGames"></span>
+          <button type="button" class="btn btn-light btn-sm" id="qzNextGames">
+            Next <i class="fa-solid fa-arrow-right-long"></i>
+          </button>
+        </div>
       </div>
 
-      <div id="qzList" class="qz-grid"></div>
-
-      <div id="qzPagination" class="qz-pagination d-none">
-        <button type="button" class="btn btn-light btn-sm" id="qzPrev">
-          <i class="fa-solid fa-arrow-left-long"></i> Previous
-        </button>
-        <span id="qzPageInfo"></span>
-        <button type="button" class="btn btn-light btn-sm" id="qzNext">
-          Next <i class="fa-solid fa-arrow-right-long"></i>
-        </button>
-      </div>
     </div>
   </div>
 </div>
 
-{{-- Attempts Modal --}}
+{{-- Attempts Modal (shared for both) --}}
 <div class="qz-attempt-modal" id="qzAttemptModal" aria-hidden="true">
   <div class="qz-attempt-backdrop" data-close="attempt-modal"></div>
   <div class="qz-attempt-dialog" role="dialog" aria-modal="true" aria-labelledby="qzAttemptTitle">
     <div class="qz-attempt-head">
       <div>
-        <div class="qz-attempt-eyebrow">Quiz Attempts</div>
-        <h2 class="qz-attempt-title" id="qzAttemptTitle">Quiz</h2>
-        <div class="qz-attempt-meta" id="qzAttemptMeta">
-          {{-- Will be filled from API --}}
-        </div>
+        <div class="qz-attempt-eyebrow" id="qzAttemptEyebrow">Attempts</div>
+        <h2 class="qz-attempt-title" id="qzAttemptTitle">Item</h2>
+        <div class="qz-attempt-meta" id="qzAttemptMeta"></div>
       </div>
-      <button type="button"
-              class="qz-attempt-close"
-              data-close="attempt-modal"
-              aria-label="Close">
+      <button type="button" class="qz-attempt-close" data-close="attempt-modal" aria-label="Close">
         <i class="fa-solid fa-xmark"></i>
       </button>
     </div>
@@ -508,7 +595,7 @@
       <div id="qzAttemptError" class="qz-attempt-error"></div>
 
       <div id="qzAttemptEmpty" class="qz-attempt-empty">
-        No attempts yet. Start the quiz to see your attempts here.
+        No attempts yet. Start to see your attempts here.
       </div>
 
       <div class="table-responsive qz-attempt-table-wrap">
@@ -528,11 +615,7 @@
     </div>
 
     <div class="qz-attempt-foot">
-      <button type="button"
-              class="btn btn-light btn-sm"
-              data-close="attempt-modal">
-        Close
-      </button>
+      <button type="button" class="btn btn-light btn-sm" data-close="attempt-modal">Close</button>
     </div>
   </div>
 </div>
@@ -541,47 +624,67 @@
 @push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-  const API_URL      = '/api/quizz/my';
-  const ATTEMPTS_URL = '/api/exam/quizzes'; // /{quizKey}/my-attempts
+  // =======================
+  // APIs (tabs)
+  // =======================
+  const API_QUIZZES = '/api/quizz/my';
+  const API_GAMES   = '/api/bubble-games/my';
 
-  const listEl       = document.getElementById('qzList');
-  const emptyEl      = document.getElementById('qzEmpty');
-  const loaderEl     = document.getElementById('qzLoader');
-  const errorEl      = document.getElementById('qzError');
-  const paginationEl = document.getElementById('qzPagination');
-  const prevBtn      = document.getElementById('qzPrev');
-  const nextBtn      = document.getElementById('qzNext');
-  const pageInfoEl   = document.getElementById('qzPageInfo');
-  const searchInput  = document.getElementById('qzSearch');
+  // Attempts base (keep your existing quiz attempts URL)
+  const ATTEMPTS_QUIZZES = '/api/exam/quizzes';     // /{quizKey}/my-attempts
+  const ATTEMPTS_GAMES   = '/api/bubble-games';     // /{gameKey}/my-attempts  (adjust if your route differs)
 
-  // Attempts modal elements
-  const attemptsModalEl  = document.getElementById('qzAttemptModal');
-  const attemptsTitleEl  = document.getElementById('qzAttemptTitle');
-  const attemptsMetaEl   = document.getElementById('qzAttemptMeta');
-  const attemptsTbodyEl  = document.getElementById('qzAttemptTbody');
-  const attemptsEmptyEl  = document.getElementById('qzAttemptEmpty');
-  const attemptsLoaderEl = document.getElementById('qzAttemptLoader');
-  const attemptsErrorEl  = document.getElementById('qzAttemptError');
-  const attemptsCloseBtns = attemptsModalEl
-    ? attemptsModalEl.querySelectorAll('[data-close="attempt-modal"]')
-    : [];
+  // Exam start routes
+  const START_QUIZ_ROUTE = '/exam/';               // /exam/{quiz_uuid}
+  const START_GAME_ROUTE = '/bubble-game/exam?game='; // change if your game start URL differs
 
-  let currentPage = 1;
-  let lastPage    = 1;
-  let currentQ    = '';
-  let currentAttemptsQuiz = null;
+  // =======================
+  // Tabs
+  // =======================
+  const tabBtns = document.querySelectorAll('.qz-tab-btn');
+  const panels  = document.querySelectorAll('.qz-tab-panel');
+  const searchInput = document.getElementById('qzSearch');
 
+  const tabCountQuizzes = document.getElementById('tabCountQuizzes');
+  const tabCountGames   = document.getElementById('tabCountGames');
+
+  let activeTab = 'quizzes'; // quizzes | games
+
+  function setActiveTab(tab) {
+    activeTab = tab;
+
+    tabBtns.forEach(btn => {
+      const isActive = btn.getAttribute('data-tab') === tab;
+      btn.classList.toggle('active', isActive);
+      btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    });
+
+    panels.forEach(p => {
+      const isActive = p.getAttribute('data-panel') === tab;
+      p.classList.toggle('active', isActive);
+    });
+
+    // trigger fetch for that tab if first time
+    if (tab === 'quizzes' && !state.quizzes.loadedOnce) fetchList('quizzes', 1);
+    if (tab === 'games'   && !state.games.loadedOnce)   fetchList('games', 1);
+  }
+
+  tabBtns.forEach(btn => {
+    btn.addEventListener('click', () => setActiveTab(btn.getAttribute('data-tab')));
+  });
+
+  // =======================
+  // Shared auth helpers
+  // =======================
   function getToken() {
     return sessionStorage.getItem('token') || localStorage.getItem('token') || null;
   }
-
   function clearAuth() {
     try { sessionStorage.removeItem('token'); } catch(e){}
     try { sessionStorage.removeItem('role'); } catch(e){}
     try { localStorage.removeItem('token'); } catch(e){}
     try { localStorage.removeItem('role'); } catch(e){}
   }
-
   function requireAuthToken() {
     const t = getToken();
     if (!t) {
@@ -589,6 +692,16 @@ document.addEventListener('DOMContentLoaded', function () {
       return null;
     }
     return t;
+  }
+
+  // =======================
+  // UI helpers (same)
+  // =======================
+  function sanitize(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
   }
 
   function myStatusBadge(status) {
@@ -601,7 +714,7 @@ document.addEventListener('DOMContentLoaded', function () {
     return '<span class="qz-chip"><i class="fa-regular fa-clock"></i>Upcoming</span>';
   }
 
-  function quizStatusBadge(status) {
+  function statusBadge(status) {
     if (status === 'active') {
       return '<span class="qz-chip qz-chip-primary"><i class="fa-solid fa-signal"></i>Active</span>';
     }
@@ -617,55 +730,93 @@ document.addEventListener('DOMContentLoaded', function () {
       : '<span class="qz-chip"><i class="fa-solid fa-lock"></i>Private</span>';
   }
 
-  function sanitize(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-  }
+  // =======================
+  // State per tab
+  // =======================
+  const state = {
+    quizzes: {
+      loadedOnce: false,
+      currentPage: 1,
+      lastPage: 1,
+      q: '',
+      els: {
+        list: document.getElementById('qzListQuizzes'),
+        empty: document.getElementById('qzEmptyQuizzes'),
+        loader: document.getElementById('qzLoaderQuizzes'),
+        error: document.getElementById('qzErrorQuizzes'),
+        pagination: document.getElementById('qzPaginationQuizzes'),
+        prev: document.getElementById('qzPrevQuizzes'),
+        next: document.getElementById('qzNextQuizzes'),
+        info: document.getElementById('qzPageInfoQuizzes')
+      }
+    },
+    games: {
+      loadedOnce: false,
+      currentPage: 1,
+      lastPage: 1,
+      q: '',
+      els: {
+        list: document.getElementById('qzListGames'),
+        empty: document.getElementById('qzEmptyGames'),
+        loader: document.getElementById('qzLoaderGames'),
+        error: document.getElementById('qzErrorGames'),
+        pagination: document.getElementById('qzPaginationGames'),
+        prev: document.getElementById('qzPrevGames'),
+        next: document.getElementById('qzNextGames'),
+        info: document.getElementById('qzPageInfoGames')
+      }
+    }
+  };
 
-  function renderQuizzes(items) {
+  // =======================
+  // Render cards (shared)
+  // =======================
+  function renderCards(tab, items) {
+    const S = state[tab];
+    const listEl = S.els.list;
+
     listEl.innerHTML = '';
 
     if (!items || !items.length) {
-      emptyEl.classList.remove('d-none');
-      paginationEl.classList.add('d-none');
+      S.els.empty.classList.remove('d-none');
+      S.els.pagination.classList.add('d-none');
       return;
     }
-
-    emptyEl.classList.add('d-none');
+    S.els.empty.classList.add('d-none');
 
     const frag = document.createDocumentFragment();
 
-    items.forEach(q => {
+    items.forEach(item => {
       const card = document.createElement('article');
       card.className = 'qz-card';
 
-      const totalTime = q.total_time ? q.total_time + ' min' : '—';
-      const totalQ    = q.total_questions || 0;
-      const attempts  = q.total_attempts || 1;
+      const totalTime = item.total_time ? item.total_time + ' min' : '—';
+      const totalQ    = item.total_questions || 0;
+      const attempts  = item.total_attempts || 1;
 
-      const myStatus  = q.my_status || 'upcoming';
-      const hasResult = q.result && q.result.id;
+      const myStatus  = item.my_status || 'upcoming';
+      const hasResult = item.result && item.result.id;
 
-      let primaryLabel = 'Start quiz';
+      let primaryLabel = 'Start';
       if (myStatus === 'in_progress') primaryLabel = 'Continue';
-      if (myStatus === 'completed')   primaryLabel = 'Retake quiz';
+      if (myStatus === 'completed')   primaryLabel = 'Retake';
 
-      const disabledStart = (q.status !== 'active') ? 'disabled' : '';
+      const disabledStart = (item.status !== 'active') ? 'disabled' : '';
+
+      const iconHtml = tab === 'games'
+        ? '<i class="fa-solid fa-gamepad"></i>'
+        : '<i class="fa-solid fa-graduation-cap"></i>';
 
       card.innerHTML = `
         <div class="qz-card-top">
-          <div class="qz-avatar">
-            <i class="fa-solid fa-graduation-cap"></i>
-          </div>
+          <div class="qz-avatar">${iconHtml}</div>
           <div class="flex-grow-1">
-            <h3 class="qz-title">${sanitize(q.title || q.quiz_name || 'Quiz')}</h3>
-            <p class="qz-excerpt">${sanitize(q.excerpt || q.quiz_description || '')}</p>
+            <h3 class="qz-title">${sanitize(item.title || 'Item')}</h3>
+            <p class="qz-excerpt">${sanitize(item.excerpt || '')}</p>
             <div class="qz-badges">
               ${myStatusBadge(myStatus)}
-              ${quizStatusBadge(q.status)}
-              ${publicBadge(!!q.is_public)}
+              ${statusBadge(item.status)}
+              ${publicBadge(!!item.is_public)}
             </div>
           </div>
         </div>
@@ -677,24 +828,19 @@ document.addEventListener('DOMContentLoaded', function () {
         </div>
 
         <div class="qz-footer">
-          <button type="button"
-                  class="btn btn-primary btn-sm"
-                  data-action="start"
-                  ${disabledStart}>
+          <button type="button" class="btn btn-primary btn-sm" data-action="start" ${disabledStart}>
             <i class="fa-solid fa-arrow-right"></i>
             <span>${primaryLabel}</span>
           </button>
 
           ${hasResult ? `
-            <button type="button"
-                    class="btn btn-outline-primary btn-sm d-none"
-                    data-action="result">
+            <button type="button" class="btn btn-outline-primary btn-sm d-none" data-action="result">
               <i class="fa-solid fa-chart-line"></i> View result
             </button>
           ` : ''}
 
           <span class="sub">
-            Added ${q.created_at ? new Date(q.created_at).toLocaleDateString() : ''}
+            Added ${item.created_at ? new Date(item.created_at).toLocaleDateString() : ''}
           </span>
         </div>
       `;
@@ -704,14 +850,20 @@ document.addEventListener('DOMContentLoaded', function () {
 
       if (startBtn) {
         startBtn.addEventListener('click', function () {
-          if (!q.uuid) return;
-          window.location.href = '/exam/' + encodeURIComponent(q.uuid);
+          if (!item.uuid) return;
+
+          if (tab === 'quizzes') {
+            window.location.href = START_QUIZ_ROUTE + encodeURIComponent(item.uuid);
+          } else {
+            // bubble game start URL
+            window.location.href = START_GAME_ROUTE + encodeURIComponent(item.uuid);
+          }
         });
       }
 
       if (resultBtn && hasResult) {
         resultBtn.addEventListener('click', function () {
-          openAttemptsForQuiz(q);
+          openAttempts(tab, item);
         });
       }
 
@@ -721,38 +873,48 @@ document.addEventListener('DOMContentLoaded', function () {
     listEl.appendChild(frag);
   }
 
-  function updatePaginationUI(total, perPage, current, last) {
+  function updatePagination(tab, total, perPage, current, last) {
+    const S = state[tab];
+
     if (!total || last <= 1) {
-      paginationEl.classList.add('d-none');
+      S.els.pagination.classList.add('d-none');
       return;
     }
-    paginationEl.classList.remove('d-none');
 
-    currentPage = current;
-    lastPage    = last;
+    S.els.pagination.classList.remove('d-none');
 
-    prevBtn.disabled = currentPage <= 1;
-    nextBtn.disabled = currentPage >= lastPage;
+    S.currentPage = current;
+    S.lastPage    = last;
 
-    pageInfoEl.textContent =
-      `Page ${currentPage} of ${lastPage} • ${total} quiz${total > 1 ? 'zes' : ''}`;
+    S.els.prev.disabled = S.currentPage <= 1;
+    S.els.next.disabled = S.currentPage >= S.lastPage;
+
+    const label = tab === 'games' ? 'game' : 'quiz';
+    S.els.info.textContent =
+      `Page ${S.currentPage} of ${S.lastPage} • ${total} ${label}${total > 1 ? 's' : ''}`;
   }
 
-  async function fetchQuizzes(page = 1) {
+  // =======================
+  // Fetch list per tab
+  // =======================
+  async function fetchList(tab, page) {
     const token = requireAuthToken();
     if (!token) return;
 
-    loaderEl.classList.add('show');
-    errorEl.classList.remove('show');
-    errorEl.textContent = '';
+    const S = state[tab];
+    S.els.loader.classList.add('show');
+    S.els.error.classList.remove('show');
+    S.els.error.textContent = '';
+
+    const api = (tab === 'games') ? API_GAMES : API_QUIZZES;
 
     const params = new URLSearchParams();
     params.set('page', page);
     params.set('per_page', 9);
-    if (currentQ.trim() !== '') params.set('q', currentQ.trim());
+    if ((S.q || '').trim() !== '') params.set('q', (S.q || '').trim());
 
     try {
-      const res = await fetch(API_URL + '?' + params.toString(), {
+      const res = await fetch(api + '?' + params.toString(), {
         method: 'GET',
         headers: {
           'Accept': 'application/json',
@@ -769,67 +931,90 @@ document.addEventListener('DOMContentLoaded', function () {
       }
 
       if (!res.ok) {
-        throw new Error(json.message || json.error || 'Failed to load quizzes.');
+        throw new Error(json.message || json.error || 'Failed to load list.');
       }
 
       const items      = json.data || [];
       const pagination = json.pagination || {};
 
-      renderQuizzes(items);
-      updatePaginationUI(
+      renderCards(tab, items);
+      updatePagination(
+        tab,
         pagination.total || items.length,
         pagination.per_page || 9,
         pagination.current_page || page,
         pagination.last_page || 1
       );
+
+      S.loadedOnce = true;
+
+      // update counts on tabs (nice UX)
+      if (tab === 'quizzes') tabCountQuizzes.textContent = String(pagination.total || items.length || 0);
+      if (tab === 'games')   tabCountGames.textContent   = String(pagination.total || items.length || 0);
+
     } catch (err) {
       console.error(err);
-      errorEl.textContent = err.message || 'Something went wrong while loading quizzes.';
-      errorEl.classList.add('show');
-      renderQuizzes([]);
+      S.els.error.textContent = err.message || 'Something went wrong while loading.';
+      S.els.error.classList.add('show');
+      renderCards(tab, []);
     } finally {
-      loaderEl.classList.remove('show');
+      S.els.loader.classList.remove('show');
     }
   }
 
+  // Pagination events per tab
+  state.quizzes.els.prev.addEventListener('click', () => {
+    if (state.quizzes.currentPage > 1) fetchList('quizzes', state.quizzes.currentPage - 1);
+  });
+  state.quizzes.els.next.addEventListener('click', () => {
+    if (state.quizzes.currentPage < state.quizzes.lastPage) fetchList('quizzes', state.quizzes.currentPage + 1);
+  });
+
+  state.games.els.prev.addEventListener('click', () => {
+    if (state.games.currentPage > 1) fetchList('games', state.games.currentPage - 1);
+  });
+  state.games.els.next.addEventListener('click', () => {
+    if (state.games.currentPage < state.games.lastPage) fetchList('games', state.games.currentPage + 1);
+  });
+
   // ======================
-  // Attempts modal helpers
+  // Attempts modal (shared)
   // ======================
+  const attemptsModalEl   = document.getElementById('qzAttemptModal');
+  const attemptsEyebrowEl = document.getElementById('qzAttemptEyebrow');
+  const attemptsTitleEl   = document.getElementById('qzAttemptTitle');
+  const attemptsMetaEl    = document.getElementById('qzAttemptMeta');
+  const attemptsTbodyEl   = document.getElementById('qzAttemptTbody');
+  const attemptsEmptyEl   = document.getElementById('qzAttemptEmpty');
+  const attemptsLoaderEl  = document.getElementById('qzAttemptLoader');
+  const attemptsErrorEl   = document.getElementById('qzAttemptError');
+  const attemptsCloseBtns = attemptsModalEl
+    ? attemptsModalEl.querySelectorAll('[data-close="attempt-modal"]')
+    : [];
+
   function openAttemptsModal() {
     if (!attemptsModalEl) return;
     attemptsModalEl.classList.add('show');
     document.body.classList.add('modal-open');
   }
-
   function closeAttemptsModal() {
     if (!attemptsModalEl) return;
     attemptsModalEl.classList.remove('show');
     document.body.classList.remove('modal-open');
   }
 
-  attemptsCloseBtns.forEach(function (btn) {
-    btn.addEventListener('click', closeAttemptsModal);
-  });
-
+  attemptsCloseBtns.forEach(btn => btn.addEventListener('click', closeAttemptsModal));
   if (attemptsModalEl) {
     attemptsModalEl.addEventListener('click', function (e) {
-      if (e.target && e.target.getAttribute('data-close') === 'attempt-modal') {
-        closeAttemptsModal();
-      }
+      if (e.target && e.target.getAttribute('data-close') === 'attempt-modal') closeAttemptsModal();
     });
   }
-
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' &&
-        attemptsModalEl &&
-        attemptsModalEl.classList.contains('show')) {
-      closeAttemptsModal();
-    }
+    if (e.key === 'Escape' && attemptsModalEl && attemptsModalEl.classList.contains('show')) closeAttemptsModal();
   });
 
   function formatDateTime(value) {
     if (!value) return '—';
-    // Laravel gives "YYYY-MM-DD HH:MM:SS"
     const safe = typeof value === 'string' ? value.replace(' ', 'T') : value;
     const d = new Date(safe);
     if (isNaN(d.getTime())) return value;
@@ -881,6 +1066,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
       tdStatus.innerHTML = attemptStatusBadge(a.status);
 
+      // Score UI: keep same logic (if your bubble attempts API returns result.total_marks etc.)
       let scoreText = '—';
       if (a.result && a.result.total_marks) {
         const obtained = a.result.marks_obtained || 0;
@@ -893,18 +1079,15 @@ document.addEventListener('DOMContentLoaded', function () {
       }
       tdScore.textContent = scoreText;
 
-      // Action / View result
+      // Action: keep same view result behavior for quizzes.
+      // For games: you can later point to your bubble result view route.
       if (a.result && a.result.result_id && a.result.can_view_detail) {
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'btn btn-outline-primary btn-sm';
         btn.innerHTML = '<i class="fa-solid fa-chart-line"></i> View result';
         btn.addEventListener('click', function () {
-          window.open(
-          '/exam/results/' + encodeURIComponent(a.result.result_id) + '/view',
-          '_blank'
-        );
-
+          window.open('/exam/results/' + encodeURIComponent(a.result.result_id) + '/view', '_blank');
         });
         tdAction.appendChild(btn);
       } else if (a.result && a.result.result_id && !a.result.can_view_detail) {
@@ -934,14 +1117,13 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  async function openAttemptsForQuiz(quiz) {
+  async function openAttempts(tab, item) {
     const token = requireAuthToken();
     if (!token || !attemptsModalEl) return;
 
-    currentAttemptsQuiz = quiz || null;
-
-    attemptsTitleEl.textContent = sanitize(quiz.title || quiz.quiz_name || 'Quiz');
-    attemptsMetaEl.innerHTML = '<span>Loading details…</span>';
+    attemptsEyebrowEl.textContent = tab === 'games' ? 'Game Attempts' : 'Quiz Attempts';
+    attemptsTitleEl.textContent   = sanitize(item.title || (tab === 'games' ? 'Game' : 'Quiz'));
+    attemptsMetaEl.innerHTML      = '<span>Loading details…</span>';
 
     attemptsErrorEl.textContent = '';
     attemptsErrorEl.classList.remove('show');
@@ -951,25 +1133,24 @@ document.addEventListener('DOMContentLoaded', function () {
     attemptsLoaderEl.classList.add('show');
     openAttemptsModal();
 
-    const quizKey = quiz.uuid || quiz.id;
-    if (!quizKey) {
+    const key = item.uuid || item.id;
+    if (!key) {
       attemptsLoaderEl.classList.remove('show');
-      attemptsErrorEl.textContent = 'Quiz identifier missing.';
+      attemptsErrorEl.textContent = 'Identifier missing.';
       attemptsErrorEl.classList.add('show');
       return;
     }
 
+    const base = (tab === 'games') ? ATTEMPTS_GAMES : ATTEMPTS_QUIZZES;
+
     try {
-      const res = await fetch(
-        ATTEMPTS_URL + '/' + encodeURIComponent(quizKey) + '/my-attempts',
-        {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-            'Authorization': 'Bearer ' + token
-          }
+      const res = await fetch(base + '/' + encodeURIComponent(key) + '/my-attempts', {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': 'Bearer ' + token
         }
-      );
+      });
 
       const json = await res.json().catch(() => ({}));
 
@@ -983,22 +1164,20 @@ document.addEventListener('DOMContentLoaded', function () {
         throw new Error(json.message || json.error || 'Failed to load attempts.');
       }
 
-      const quizMeta = json.quiz || {};
+      const meta = json.quiz || json.game || json.meta || {};
       const attempts = json.attempts || [];
 
       const pieces = [];
-      if (quizMeta.total_marks !== undefined && quizMeta.total_marks !== null) {
-        pieces.push('Total marks: ' + quizMeta.total_marks);
-      }
-      if (quizMeta.total_attempts_allowed !== undefined &&
-          quizMeta.total_attempts_allowed !== null) {
-        pieces.push('Attempts allowed: ' + quizMeta.total_attempts_allowed);
-      }
+      if (meta.total_marks !== undefined && meta.total_marks !== null) pieces.push('Total marks: ' + meta.total_marks);
+      if (meta.total_attempts_allowed !== undefined && meta.total_attempts_allowed !== null) pieces.push('Attempts allowed: ' + meta.total_attempts_allowed);
+      if (meta.total_time !== undefined && meta.total_time !== null) pieces.push('Time: ' + meta.total_time + ' min');
+
       attemptsMetaEl.innerHTML = pieces.length
         ? pieces.map(p => '<span>' + sanitize(p) + '</span>').join(' ')
         : '';
 
       renderAttemptsList(attempts);
+
     } catch (err) {
       console.error(err);
       attemptsErrorEl.textContent = err.message || 'Something went wrong while loading attempts.';
@@ -1010,28 +1189,23 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
-  // Pagination events
-  prevBtn.addEventListener('click', function () {
-    if (currentPage > 1) fetchQuizzes(currentPage - 1);
-  });
-  nextBtn.addEventListener('click', function () {
-    if (currentPage < lastPage) fetchQuizzes(currentPage + 1);
-  });
-
-  // Search (debounced)
+  // =======================
+  // Search (debounced, per active tab)
+  // =======================
   let searchTimer = null;
   if (searchInput) {
     searchInput.addEventListener('input', function () {
-      currentQ = this.value || '';
       if (searchTimer) clearTimeout(searchTimer);
       searchTimer = setTimeout(function () {
-        fetchQuizzes(1);
+        const val = searchInput.value || '';
+        state[activeTab].q = val;
+        fetchList(activeTab, 1);
       }, 350);
     });
   }
 
-  // Initial load
-  fetchQuizzes(1);
+  // Initial load (Quizzes tab)
+  setActiveTab('quizzes');
 });
 </script>
 @endpush

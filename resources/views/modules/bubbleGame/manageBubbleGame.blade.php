@@ -1,5 +1,5 @@
 {{-- resources/views/modules/bubbleGame/manageBubbleGames.blade.php --}}
-        @extends('pages.users.layout.structure')
+@extends('pages.users.layout.structure')
 
 @section('title','Manage Bubble Games')
 
@@ -457,9 +457,6 @@ html.theme-dark .page-link:hover{ background-color: rgba(255,255,255,.1); }
           <div id="empty-deleted" class="empty p-4 text-center" style="display:none;">
             <i class="fa fa-trash mb-2" style="font-size:32px; opacity:.6;"></i>
             <div>No items in Bin.</div>
-            <div class="small text-muted mt-2" id="binHint" style="display:none;">
-              Your API currently does not provide a deleted list. (Add support like <code>?only_deleted=1</code> in the controller if needed.)
-            </div>
           </div>
 
           <div class="d-flex flex-wrap align-items-center justify-content-between p-3 gap-2">
@@ -731,10 +728,11 @@ html.theme-dark .page-link:hover{ background-color: rgba(255,255,255,.1); }
       usp.set('status', 'archived');
     }
 
-    // deleted list: your current controller does NOT support this.
-    // we still call with only_deleted=1 so you can add support later.
+    // ✅ Bin list supported by API now
     if (scope === 'deleted'){
       usp.set('only_deleted', '1');
+      usp.set('order_by', 'bubble_game.deleted_at');
+      usp.set('order_dir', 'desc');
     }
 
     return usp.toString();
@@ -782,7 +780,6 @@ html.theme-dark .page-link:hover{ background-color: rgba(255,255,255,.1); }
     const status = String(r.status||'').toLowerCase();
     const isArchived = (status === 'archived');
 
-    
     return `
       <div class="dropdown text-end" data-bs-display="static">
         <button type="button" class="btn btn-light btn-sm dd-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside" title="Actions">
@@ -799,7 +796,6 @@ html.theme-dark .page-link:hover{ background-color: rgba(255,255,255,.1); }
 
           <li><hr class="dropdown-divider"></li>
 
-          <!-- ADD THIS NEW ITEM FOR MANAGING QUESTIONS -->
           <li><a class="dropdown-item" href="/bubble-games/questions/manage?game=${esc(key)}">
             <i class="fa fa-list-check"></i> Manage Questions
           </a></li>
@@ -856,7 +852,7 @@ html.theme-dark .page-link:hover{ background-color: rgba(255,255,255,.1); }
       tr.innerHTML = `
         <td>
           <div class="fw-semibold">
-            <a href="/bubble-games/${encodeURIComponent(r.uuid || r.id)}" class="link-offset-2 link-underline-opacity-0">${title}</a>
+            <a href="${basePanel}/bubble-games/${encodeURIComponent(r.uuid || r.id)}" class="link-offset-2 link-underline-opacity-0">${title}</a>
           </div>
           ${creator}
           ${desc ? `<div class="text-muted small">${desc}</div>` : ``}
@@ -874,7 +870,7 @@ html.theme-dark .page-link:hover{ background-color: rgba(255,255,255,.1); }
     tr.innerHTML = `
       <td>
         <div class="fw-semibold">
-          <a href="/bubble-games/${encodeURIComponent(r.uuid || r.id)}" class="link-offset-2 link-underline-opacity-0">${title}</a>
+          <a href="${basePanel}/bubble-games/${encodeURIComponent(r.uuid || r.id)}" class="link-offset-2 link-underline-opacity-0">${title}</a>
         </div>
         ${creator}
         ${desc ? `<div class="text-muted small">${desc}</div>` : ``}
@@ -899,15 +895,11 @@ html.theme-dark .page-link:hover{ background-color: rgba(255,255,255,.1); }
     const pager = qs(refs.pager);
     const meta  = qs(refs.meta);
 
-    // clear old rows (except loader row)
     rowsEl.querySelectorAll('tr:not([id^="loaderRow"])').forEach(n=>n.remove());
     if (empty) empty.style.display='none';
     if (pager) pager.innerHTML='';
     if (meta) meta.textContent='—';
     showLoader(scope, true);
-
-    const binHint = document.getElementById('binHint');
-    if (binHint) binHint.style.display = 'none';
 
     try{
       const res = await fetch(urlFor(scope), {
@@ -918,26 +910,10 @@ html.theme-dark .page-link:hover{ background-color: rgba(255,255,255,.1); }
       });
 
       const json = await res.json().catch(()=> ({}));
-
-      if (!res.ok){
-        throw new Error(json?.message || 'Load failed');
-      }
+      if (!res.ok) throw new Error(json?.message || 'Load failed');
 
       const items = Array.isArray(json?.data) ? json.data : [];
       const pg    = json?.pagination || {};
-
-      // Detect "Bin not supported": your controller always whereNull(deleted_at)
-      // so deleted list would come back without deleted_at values.
-      if (scope === 'deleted'){
-        const hasAnyDeletedAt = items.some(x => !!x.deleted_at);
-        if (!hasAnyDeletedAt){
-          // treat as unsupported
-          if (empty) empty.style.display='';
-          if (binHint) binHint.style.display = '';
-          if (meta) meta.textContent = 'Bin list not supported by API yet.';
-          return;
-        }
-      }
 
       if (items.length === 0 && empty) empty.style.display='';
 
@@ -945,7 +921,6 @@ html.theme-dark .page-link:hover{ background-color: rgba(255,255,255,.1); }
       items.forEach(r => frag.appendChild(rowHTML(scope, r)));
       rowsEl.appendChild(frag);
 
-      // Pagination (matches your controller output)
       const total      = Number(pg.total ?? items.length ?? 0);
       const perPage    = Number(pg.per_page ?? 20);
       const current    = Number(pg.current_page ?? 1);
@@ -983,7 +958,9 @@ html.theme-dark .page-link:hover{ background-color: rgba(255,255,255,.1); }
       if (meta){
         const from = pg.from ?? ((current-1)*perPage + 1);
         const to   = pg.to ?? Math.min(current*perPage, total);
-        meta.textContent = `Showing ${from}–${to} of ${total} (page ${current} of ${totalPages})`;
+        meta.textContent = total
+          ? `Showing ${from}–${to} of ${total} (page ${current} of ${totalPages})`
+          : `Showing 0–0 of 0`;
       }
 
     }catch(e){
@@ -1002,7 +979,6 @@ html.theme-dark .page-link:hover{ background-color: rgba(255,255,255,.1); }
       const key = th.dataset.col;
       if (!sortMap[key]) return;
 
-      // Toggle logic: same column => flip dir; new column => default desc
       if (sortKey === key) sortDir = (sortDir === 'asc') ? 'desc' : 'asc';
       else { sortKey = key; sortDir = (key === 'title') ? 'asc' : 'desc'; }
 
@@ -1177,8 +1153,6 @@ html.theme-dark .page-link:hover{ background-color: rgba(255,255,255,.1); }
     }
 
     if (act === 'duplicate'){
-      // Your controller has duplicate(), ensure you have a route like:
-      // POST /api/bubble-games/{uuid}/duplicate
       const {isConfirmed} = await Swal.fire({
         icon:'question',
         title:'Duplicate game?',

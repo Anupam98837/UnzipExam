@@ -489,21 +489,21 @@
       </div>
 
       <div class="flex-grow-1">
-        <h1 class="qz-head-title">My Quizzes & Games</h1>
+        <h1 class="qz-head-title">My Quizzes & Graphical Tests</h1>
         <div class="qz-head-sub">
-          Switch tabs to view your quizzes or bubble games, and start/continue attempts.
+          Switch tabs to view your quizzes or graphical tests, and start/continue attempts.
         </div>
 
         <div class="qz-tabs" role="tablist" aria-label="My exams tabs">
           <button type="button" class="qz-tab-btn active" data-tab="quizzes" role="tab" aria-selected="true">
             <i class="fa-solid fa-graduation-cap"></i>
             Quizzes
-            <span class="qz-tab-count" id="tabCountQuizzes">0</span>
+            <span class="qz-tab-count" id="tabCountQuizzes" style="display:none">0</span>
           </button>
           <button type="button" class="qz-tab-btn" data-tab="games" role="tab" aria-selected="false">
             <i class="fa-solid fa-gamepad"></i>
-            Games
-            <span class="qz-tab-count" id="tabCountGames">0</span>
+            Graphical Tests
+            <span class="qz-tab-count" id="tabCountGames" style="display:none">0</span>
           </button>
         </div>
       </div>
@@ -638,7 +638,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // Exam start routes
   const START_QUIZ_ROUTE = '/exam/';               // /exam/{quiz_uuid}
-  const START_GAME_ROUTE = '/bubble-games/play?game='; // change if your game start URL differs
+  const START_GAME_ROUTE = '/tests/play?game='; // change if your game start URL differs
 
   // =======================
   // Tabs

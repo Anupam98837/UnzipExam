@@ -290,6 +290,8 @@
   <div id="sm-admin-bubble-games" class="w3-submenu" role="group" aria-label="Bubble Games submenu">
     <a href="/bubble-games/create" class="w3-link">Create Game</a>
     <a href="/bubble-games/manage" class="w3-link">Manage Games</a>
+    <a href="/graphical-test/results" class="w3-link">Results</a>
+
   </div>
 </div>
 
@@ -331,6 +333,26 @@
               <a href="/quizz/result/manage" class="w3-link">Results</a>
             </div>
           </div>
+          <div class="w3-group">
+  <a href="javascript:void(0)"
+     class="w3-link w3-toggle"
+     data-target="sm-examiner-bubble-games"
+     aria-expanded="false"
+     aria-controls="sm-examiner-bubble-games">
+    <i class="fa-solid fa-gamepad"></i><span>Bubble Games</span>
+    <i class="fa fa-chevron-down w3-chev"></i>
+  </a>
+
+  <div id="sm-examiner-bubble-games"
+       class="w3-submenu"
+       role="group"
+       aria-label="Bubble Games submenu">
+    <a href="/bubble-games/create" class="w3-link">Create Game</a>
+    <a href="/bubble-games/manage" class="w3-link">Manage Games</a>
+    <a href="/test/result/manage" class="w3-link">Results</a>
+  </div>
+</div>
+
         </nav>
       </div>
 

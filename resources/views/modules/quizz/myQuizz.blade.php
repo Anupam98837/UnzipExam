@@ -1,4 +1,6 @@
 {{-- resources/views/exam/my-quizzes-and-games.blade.php --}}
+@extends('pages.users.layout.structure')
+
 @section('title','My Quizzes & Games')
 
 @section('content')
@@ -636,7 +638,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // Exam start routes
   const START_QUIZ_ROUTE = '/exam/';               // /exam/{quiz_uuid}
-  const START_GAME_ROUTE = '/bubble-game/exam?game='; // change if your game start URL differs
+  const START_GAME_ROUTE = '/test/play?game='; // change if your game start URL differs
 
   // =======================
   // Tabs

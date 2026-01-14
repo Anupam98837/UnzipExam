@@ -310,6 +310,35 @@
     .bgx-bubble:hover{ transform: translateY(-2px) scale(1.01); }
     .bgx-bubble:active{ transform: translateY(0px) scale(.99); }
 
+    /* =========================================================
+      ✅ Intro animation: bubbles “drop from sky” on first load
+    ========================================================= */
+    @keyframes bgxBubbleDrop{
+      0%{
+        opacity: 0;
+        transform: translate3d(var(--drop-x, 0px), -170px, 0) rotate(var(--drop-rot, -8deg)) scale(.92);
+        filter: blur(1px);
+      }
+      70%{
+        opacity: 1;
+        filter: blur(0);
+      }
+      85%{
+        transform: translate3d(0px, 12px, 0) rotate(0deg) scale(1.02);
+      }
+      100%{
+        opacity: 1;
+        transform: translate3d(0px, 0px, 0) rotate(0deg) scale(1);
+      }
+    }
+    .bgx-bubble.bgx-drop{
+      animation: bgxBubbleDrop 650ms cubic-bezier(.2,.95,.2,1) both;
+      will-change: transform, opacity;
+    }
+    @media (prefers-reduced-motion: reduce){
+      .bgx-bubble.bgx-drop{ animation: none !important; }
+    }
+
     .bgx-bubble.is-selected{
       border-color: color-mix(in srgb, var(--bgx-brand2) 55%, #111827);
       background:
@@ -466,14 +495,14 @@
       font-weight: 800;
       padding: 2px 0 10px;
     }
-    /* Always disable Previous */
-#bgxPrevBtn{
-  pointer-events: none !important;
-  opacity: .55 !important;
-  filter: grayscale(1) !important;
-  cursor: not-allowed !important;
-}
 
+    /* Always disable Previous */
+    #bgxPrevBtn{
+      pointer-events: none !important;
+      opacity: .55 !important;
+      filter: grayscale(1) !important;
+      cursor: not-allowed !important;
+    }
   </style>
 </head>
 
@@ -706,6 +735,8 @@
     autoSubmitted: false,
     suppressUnloadPrompt: false,
 
+    // ✅ intro drop animation only on first render after page load
+    introDropDone: false,
   };
 
   function clampQIndex(){
@@ -1002,7 +1033,8 @@
     }).join('');
   }
 
-  function renderBubbles() {
+  // ✅ animate=true only on very first render after page load
+  function renderBubbles(animate=false) {
     const q = currentQuestion();
     if (!q) {
       elBubblesWrap.innerHTML = `<div class="bgx-loader">No question found.</div>`;
@@ -1015,13 +1047,21 @@
     const wrap = document.createElement('div');
     wrap.className = 'bgx-bubbles';
 
-    (q.bubbles_display || []).forEach(b => {
+    (q.bubbles_display || []).forEach((b, idx) => {
       const origIdx = Number(b.i);
       const label = String(b.label ?? '');
 
       const div = document.createElement('div');
       div.className = 'bgx-bubble';
       div.setAttribute('data-i', String(origIdx));
+
+      // ✅ intro “drop from sky” animation (only first load)
+      if (animate) {
+        div.classList.add('bgx-drop');
+        div.style.animationDelay = `${Math.min(900, idx * 65)}ms`; // stagger
+        div.style.setProperty('--drop-x', `${(Math.random() * 80 - 40).toFixed(1)}px`);
+        div.style.setProperty('--drop-rot', `${(Math.random() * 18 - 9).toFixed(1)}deg`);
+      }
 
       const ord = selectedOrder.get(origIdx);
       if (ord) {
@@ -1038,7 +1078,7 @@
         const pos = state.currentSelection.indexOf(origIdx);
         if (pos !== -1) {
           state.currentSelection = state.currentSelection.slice(0, pos);
-          renderBubbles();
+          renderBubbles(false);
           renderSelectedChips();
           updateNavButtons();
           saveCache();
@@ -1054,7 +1094,7 @@
           saveCache();
         }
 
-        renderBubbles();
+        renderBubbles(false);
         renderSelectedChips();
         updateNavButtons();
       });
@@ -1212,7 +1252,12 @@
     elInstruction.textContent = q.instruction ? String(q.instruction) : instructionTextFor(q);
 
     restoreSelectionForCurrent();
-    renderBubbles();
+
+    // ✅ intro drop animation only once (when page is first visited/loaded)
+    const doIntroDrop = (state.introDropDone !== true);
+    renderBubbles(doIntroDrop);
+    if (doIntroDrop) state.introDropDone = true;
+
     renderSelectedChips();
     renderRightPanel();
     updateNavButtons();
@@ -1309,7 +1354,7 @@
   elUndoBtn.addEventListener('click', () => {
     if (!state.currentSelection.length) return;
     state.currentSelection.pop();
-    renderBubbles();
+    renderBubbles(false);
     renderSelectedChips();
     updateNavButtons();
     saveCache();
@@ -1317,7 +1362,7 @@
 
   elClearBtn.addEventListener('click', () => {
     state.currentSelection = [];
-    renderBubbles();
+    renderBubbles(false);
     renderSelectedChips();
     updateNavButtons();
     saveCache();
@@ -1356,10 +1401,10 @@
   async function submitExamNow(isAuto=false){
     if (state.isSubmitting) return;
     state.isSubmitting = true;
-        if (isAuto) {
-  state.suppressUnloadPrompt = true;
-  window.removeEventListener('beforeunload', beforeUnloadHandler);
-}
+    if (isAuto) {
+      state.suppressUnloadPrompt = true;
+      window.removeEventListener('beforeunload', beforeUnloadHandler);
+    }
 
     try{
       [elPrevBtn, elNextBtn, elUndoBtn, elClearBtn, elSkipBtn, elSubmitBtn].forEach(b => {
@@ -1436,20 +1481,17 @@
     await submitExamNow(false);
   });
 
-  // ✅ IMPORTANT: the duplicate submit block that caused "await..." error is REMOVED.
-function beforeUnloadHandler(e) {
-  // ✅ do not show browser "Leave site?" dialog during auto-submit redirect only
-  if (state.suppressUnloadPrompt === true) return;
+  function beforeUnloadHandler(e) {
+    // ✅ do not show browser "Leave site?" dialog during auto-submit redirect only
+    if (state.suppressUnloadPrompt === true) return;
 
-  const has = countAnswered() > 0 || state.currentSelection.length > 0;
-  if (!has) return;
+    const has = countAnswered() > 0 || state.currentSelection.length > 0;
+    if (!has) return;
 
-  e.preventDefault();
-  e.returnValue = '';
-}
-
-window.addEventListener('beforeunload', beforeUnloadHandler);
-
+    e.preventDefault();
+    e.returnValue = '';
+  }
+  window.addEventListener('beforeunload', beforeUnloadHandler);
 
   /* ============ init ============ */
   async function init(){

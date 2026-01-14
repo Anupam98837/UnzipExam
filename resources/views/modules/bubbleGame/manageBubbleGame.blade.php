@@ -852,7 +852,7 @@ html.theme-dark .page-link:hover{ background-color: rgba(255,255,255,.1); }
       tr.innerHTML = `
         <td>
           <div class="fw-semibold">
-            <a href="${basePanel}/bubble-games/${encodeURIComponent(r.uuid || r.id)}" class="link-offset-2 link-underline-opacity-0">${title}</a>
+            <a href="//tests/play?game=${encodeURIComponent(r.uuid || r.id)}" class="link-offset-2 link-underline-opacity-0">${title}</a>
           </div>
           ${creator}
           ${desc ? `<div class="text-muted small">${desc}</div>` : ``}
@@ -870,7 +870,7 @@ html.theme-dark .page-link:hover{ background-color: rgba(255,255,255,.1); }
     tr.innerHTML = `
       <td>
         <div class="fw-semibold">
-          <a href="${basePanel}/bubble-games/${encodeURIComponent(r.uuid || r.id)}" class="link-offset-2 link-underline-opacity-0">${title}</a>
+          <a href="/tests/play?game=${encodeURIComponent(r.uuid || r.id)}" class="link-offset-2 link-underline-opacity-0">${title}</a>
         </div>
         ${creator}
         ${desc ? `<div class="text-muted small">${desc}</div>` : ``}

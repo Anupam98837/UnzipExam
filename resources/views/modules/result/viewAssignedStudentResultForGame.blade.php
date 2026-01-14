@@ -1,4 +1,5 @@
-{{-- resources/views/examiner/quiz/viewAssignedStudentResult.blade.php --}}
+{{-- resources/views/examiner/bubble_game/viewAssignedStudentResult.blade.php --}}
+@extends('pages.users.layout.structure')
 
 @section('title','Assigned Students Results')
 
@@ -351,7 +352,7 @@
   html.theme-dark .asr-q-item{background:#04151f;}
 </style>
 
-<div class="sm-wrap" id="asrRoot" data-quiz-key="{{ $quizUuid ?? '' }}">
+<div class="sm-wrap" id="asrRoot" data-game-key="{{ $gameUuid ?? '' }}">
   <div class="card sm">
     <div class="card-header">
       <div class="asr-header-main">
@@ -360,22 +361,22 @@
             <i class="fa-solid fa-user-graduate"></i>
           </div>
           <div>
-            <div class="asr-head-title" id="asrQuizTitle">Assigned students results</div>
-            <div class="asr-head-sub" id="asrQuizSub">
+            <div class="asr-head-title" id="asrGameTitle">Assigned students results</div>
+            <div class="asr-head-sub" id="asrGameSub">
               View student-wise performance and overall analytics.
             </div>
           </div>
         </div>
-        <div class="asr-head-meta" id="asrQuizMeta">
+        <div class="asr-head-meta" id="asrGameMeta">
           <i class="fa-regular fa-circle-question"></i>
-          <span>Select a quiz to view analytics</span>
+          <span>Select a game to view analytics</span>
         </div>
       </div>
 
       <div class="asr-filters">
         <div class="asr-filters-quiz">
-          <select id="asrQuizSelect" class="form-select">
-            <option value="">Loading quizzes…</option>
+          <select id="asrGameSelect" class="form-select">
+            <option value="">Loading games…</option>
           </select>
         </div>
         <div class="flex-grow-1">
@@ -421,7 +422,7 @@
             <i class="fa-regular fa-chart-bar"></i> Average Score
           </div>
           <div class="asr-metric-value" id="asrMetricAvgPercent">—</div>
-          <div class="asr-metric-sub" id="asrMetricAvgMarks">Marks: —</div>
+          <div class="asr-metric-sub" id="asrMetricAvgMarks">Score: —</div>
         </div>
         <div class="asr-metric">
           <div class="asr-metric-label">
@@ -446,7 +447,7 @@
             <div class="asr-table-head">
               <div class="asr-table-title">Students &amp; Attempts</div>
               <div id="asrTableInfo" class="text-muted" style="font-size:var(--fs-12);">
-                Select a quiz to view results
+                Select a game to view results
               </div>
             </div>
             <div class="asr-table-body-wrap table-wrap">
@@ -486,7 +487,7 @@
               <div>
                 <div class="asr-side-title">Overall Analytics</div>
                 <div class="asr-side-small" id="asrSideSmallMeta">
-                  Select a quiz to see distribution.
+                  Select a game to see distribution.
                 </div>
               </div>
             </div>
@@ -537,12 +538,11 @@
             </div>
           </div>
         </div>
-      </div> {{-- /.asr-layout --}}
+      </div>{{-- /.asr-layout --}}
     </div>
   </div>
 </div>
 
-{{-- JS --}}
 <script>
 (function(){
   const rootEl = document.getElementById('asrRoot');
@@ -554,15 +554,15 @@
   const urlParams = new URLSearchParams(window.location.search);
 
   // Hints from controller / URL
-  const datasetQuizKey   = (rootEl.dataset.quizKey || '').trim();   // ideally quiz UUID
-  const urlQuizUuidParam = (urlParams.get('quiz_uuid') || '').trim();
-  const urlQuizParam     = (urlParams.get('quiz') || '').trim();    // may be assignment id
+  const datasetGameKey    = (rootEl.dataset.gameKey || '').trim(); // ideally game UUID
+  const urlGameUuidParam  = (urlParams.get('game_uuid') || '').trim();
+  const urlGameParam      = (urlParams.get('game') || '').trim();  // may be assignment id
 
-  // Final key used for /api/exam/quizzes/{quizKey}/assigned-results
-  let quizKey = datasetQuizKey || urlQuizUuidParam || '';
+  // Final key used for /api/exam/bubble-games/{gameKey}/assigned-results
+  let gameKey = datasetGameKey || urlGameUuidParam || '';
 
   // cache (currently unused, but kept for future)
-  let quizRowsCache = [];
+  let gameRowsCache = [];
 
   const state = {
     raw: null,
@@ -575,11 +575,11 @@
   };
 
   const els = {
-    quizSelect: document.getElementById('asrQuizSelect'),
+    gameSelect: document.getElementById('asrGameSelect'),
 
-    quizTitle: document.getElementById('asrQuizTitle'),
-    quizSub: document.getElementById('asrQuizSub'),
-    quizMeta: document.getElementById('asrQuizMeta'),
+    gameTitle: document.getElementById('asrGameTitle'),
+    gameSub: document.getElementById('asrGameSub'),
+    gameMeta: document.getElementById('asrGameMeta'),
 
     metricStudents: document.getElementById('asrMetricStudents'),
     metricAttempted: document.getElementById('asrMetricAttempted'),
@@ -622,20 +622,18 @@
         || '';
   }
 
-  function updateUrlQuiz(key){
+  function updateUrlGame(key){
     try{
       const url = new URL(window.location.href);
       if (key) {
-        url.searchParams.set('quiz', key);
-        url.searchParams.set('quiz_uuid', key);
+        url.searchParams.set('game', key);
+        url.searchParams.set('game_uuid', key);
       } else {
-        url.searchParams.delete('quiz');
-        url.searchParams.delete('quiz_uuid');
+        url.searchParams.delete('game');
+        url.searchParams.delete('game_uuid');
       }
       window.history.replaceState({}, '', url.toString());
-    } catch(e){
-      // ignore
-    }
+    }catch(e){}
   }
 
   function fmtPercent(val){
@@ -660,7 +658,7 @@
     sec = Number(sec || 0);
     if (sec <= 0) return '—';
     const m = Math.floor(sec / 60);
-    const s = sec % 60;
+    const s = Math.floor(sec % 60);
     if (m === 0) return s + 's';
     if (m < 60) return m + 'm ' + (s>0 ? s+'s' : '');
     const h = Math.floor(m/60);
@@ -670,58 +668,56 @@
 
   /* ---------------- Core normalisation helpers ---------------- */
 
-  // Prefer quiz uuid/id over assignment id for key
-  function extractQuizKey(row){
-    const quiz = (row && row.quiz) ? row.quiz : null;
+  // Prefer game uuid/id over assignment id for key
+  function extractGameKey(row){
+    const game = (row && (row.game || row.bubble_game)) ? (row.game || row.bubble_game) : null;
 
     const key =
-      row.quiz_uuid ||
-      row.quiz_key ||
-      (quiz && (quiz.uuid || quiz.key)) ||
-      row.quiz_id ||
+      row.game_uuid ||
+      row.bubble_game_uuid ||
+      row.game_key ||
+      row.bubble_game_key ||
+      (game && (game.uuid || game.key)) ||
+      row.bubble_game_id ||
+      row.game_id ||
       row.uuid ||
       row.id;
 
     return key ? String(key) : '';
   }
 
-  // Decide which quiz should be pre-selected
-  function decideInitialQuizKey(rows){
+  function decideInitialGameKey(rows){
     if (!rows || !rows.length) return '';
 
-    // 1) If we already have quizKey (from dataset / ?quiz_uuid)
-    if (quizKey){
-      const keyStr = String(quizKey);
+    if (gameKey){
+      const keyStr = String(gameKey);
       const byKey = rows.find(r => {
-        const k   = extractQuizKey(r);
-        const qid = (r.quiz_id != null) ? String(r.quiz_id) : null;
-        return (k && String(k) === keyStr) || (qid && qid === keyStr);
+        const k   = extractGameKey(r);
+        const gid = (r.bubble_game_id != null) ? String(r.bubble_game_id) : ((r.game_id != null) ? String(r.game_id) : null);
+        return (k && String(k) === keyStr) || (gid && gid === keyStr);
       });
       if (byKey){
-        return extractQuizKey(byKey);
+        return extractGameKey(byKey);
       }
     }
 
-    // 2) If URL had ?quiz= (assignment id / quiz id)
-    if (urlQuizParam){
-      const idStr = String(urlQuizParam);
+    if (urlGameParam){
+      const idStr = String(urlGameParam);
       const byAssign = rows.find(r => {
         const rId  = (r.id != null) ? String(r.id) : null;
-        const qid  = (r.quiz_id != null) ? String(r.quiz_id) : null;
-        const quid = (r.quiz_uuid != null) ? String(r.quiz_uuid) : null;
-        return (rId && rId === idStr) || (qid && qid === idStr) || (quid && quid === idStr);
+        const gid  = (r.bubble_game_id != null) ? String(r.bubble_game_id) : ((r.game_id != null) ? String(r.game_id) : null);
+        const gu   = (r.bubble_game_uuid != null) ? String(r.bubble_game_uuid) : ((r.game_uuid != null) ? String(r.game_uuid) : null);
+        return (rId && rId === idStr) || (gid && gid === idStr) || (gu && gu === idStr);
       });
       if (byAssign){
-        return extractQuizKey(byAssign);
+        return extractGameKey(byAssign);
       }
     }
 
-    // 3) Fallback → first row
-    return extractQuizKey(rows[0]);
+    return extractGameKey(rows[0]);
   }
 
-  // Robust way to pull quiz rows from any reasonable JSON shape
-  function extractRowsFromQuizResponse(json){
+  function extractRowsFromGameResponse(json){
     if (!json || typeof json !== 'object') return [];
 
     let rows = [];
@@ -732,15 +728,16 @@
       rows = json.data.data;
     } else if (json.data && Array.isArray(json.data.items)) {
       rows = json.data.items;
-    } else if (Array.isArray(json.quizzes)) {
-      rows = json.quizzes;
+    } else if (Array.isArray(json.games)) {
+      rows = json.games;
+    } else if (Array.isArray(json.bubble_games)) {
+      rows = json.bubble_games;
     } else if (Array.isArray(json.rows)) {
       rows = json.rows;
     } else if (Array.isArray(json)) {
       rows = json;
     }
 
-    // Last resort: first array inside json.data or json
     if (!rows.length){
       const candidates = [json.data, json];
       for (const lvl of candidates){
@@ -760,19 +757,21 @@
 
   function normalizeFromAttempts(){
     if (!state.raw) return;
+
     const attempts = state.raw.attempts || [];
     const stats   = state.raw.stats || {};
-    const quiz    = state.raw.quiz  || {};
+    const game    = state.raw.game || state.raw.bubble_game || {};
 
     const studentMap = new Map();
 
+    // If you have a pass_threshold / pass_percentage for bubble game, it will use it; else defaults 40
     const PASS_THRESHOLD =
-      typeof quiz.pass_percentage === 'number' ? quiz.pass_percentage :
-      typeof quiz.pass_percent === 'number'    ? quiz.pass_percent :
+      typeof game.pass_percentage === 'number' ? game.pass_percentage :
+      typeof game.pass_percent === 'number'    ? game.pass_percent :
       typeof stats.pass_percentage === 'number'? stats.pass_percentage :
       40;
 
-    let sumMarks = 0;
+    let sumScore = 0;
     let sumPct   = 0;
     let countPct = 0;
 
@@ -798,19 +797,24 @@
       const st = studentMap.get(id);
       st.attempts_count++;
 
-      const lastAt = a.result_created_at || a.finished_at || a.completed_at || a.submitted_at || a.started_at;
+      const lastAt = a.result_created_at || a.created_at || a.finished_at || a.completed_at || a.submitted_at || a.started_at;
       if (lastAt && (!st.last_attempt_at || new Date(lastAt) > new Date(st.last_attempt_at))) {
         st.last_attempt_at = lastAt;
       }
 
-      const pct = (a.percentage != null) ? Number(a.percentage) : null;
+      const pct = (a.accuracy != null) ? Number(a.accuracy)
+                : (a.percentage != null) ? Number(a.percentage)
+                : null;
+
+      const score = (a.score != null) ? Number(a.score)
+                  : (a.marks_obtained != null) ? Number(a.marks_obtained)
+                  : null;
 
       st.attempts.push({
-        result_id: a.result_id,
-        attempt_number: a.attempt_number,
+        result_id: a.result_id || a.uuid || a.id,
+        attempt_number: a.attempt_no || a.attempt_number,
         percentage: pct,
-        marks_obtained: a.marks_obtained,
-        total_marks: a.total_marks,
+        score: score,
         result_created_at: lastAt
       });
 
@@ -822,9 +826,8 @@
             : pct >= PASS_THRESHOLD;
 
           st.best_result = {
-            result_id: a.result_id,
-            marks_obtained: a.marks_obtained,
-            total_marks: a.total_marks,
+            result_id: a.result_id || a.uuid || a.id,
+            score: score,
             percentage: pct,
             is_pass: isPass
           };
@@ -839,9 +842,7 @@
         countPct++;
       }
 
-      if (a.marks_obtained != null) {
-        sumMarks += Number(a.marks_obtained);
-      }
+      if (score != null) sumScore += score;
     });
 
     studentMap.forEach(st => {
@@ -857,9 +858,7 @@
       ? stats.avg_percentage
       : (countPct ? (sumPct / countPct) : null);
 
-    const avgMarks = totalAttempts ? (sumMarks / totalAttempts) : null;
-    const maxPct   = stats.max_percentage ?? null;
-    const minPct   = stats.min_percentage ?? null;
+    const avgScore = totalAttempts ? (sumScore / totalAttempts) : null;
 
     let passCount = 0;
     let failCount = 0;
@@ -877,9 +876,7 @@
       uniqueAttempted,
       assignedStudents,
       avgPct,
-      avgMarks,
-      maxPct,
-      minPct,
+      avgScore,
       passCount,
       failCount,
       topStudentName,
@@ -945,26 +942,20 @@
 
   function renderHeader(){
     if (!state.raw) return;
-    const quiz = state.raw.quiz || {};
-    if (els.quizTitle) {
-      els.quizTitle.textContent = quiz.name || quiz.quiz_name || 'Assigned Students Results';
-    }
-    if (els.quizSub) {
-      els.quizSub.textContent = quiz.description
-        ? 'Analytics for: ' + (quiz.name || quiz.quiz_name || '')
-        : 'View student-wise performance and analytics for this quiz.';
-    }
+    const game = state.raw.game || state.raw.bubble_game || {};
+    if (els.gameTitle) els.gameTitle.textContent = game.title || game.game_title || game.name || 'Assigned Students Results';
+    if (els.gameSub) els.gameSub.textContent = 'View student-wise performance and analytics for this bubble game.';
 
     const totalTimeMin =
-      (typeof quiz.total_time_minutes === 'number' && quiz.total_time_minutes > 0) ? quiz.total_time_minutes :
-      (typeof quiz.total_time === 'number'         && quiz.total_time > 0)         ? quiz.total_time :
-      (typeof quiz.total_time_sec === 'number'     && quiz.total_time_sec > 0)     ? Math.round(quiz.total_time_sec / 60) :
+      (typeof game.total_time_minutes === 'number' && game.total_time_minutes > 0) ? game.total_time_minutes :
+      (typeof game.total_time === 'number'         && game.total_time > 0)         ? game.total_time :
+      (typeof game.total_time_sec === 'number'     && game.total_time_sec > 0)     ? Math.round(game.total_time_sec / 60) :
       null;
 
     const totalTime = totalTimeMin != null ? totalTimeMin + ' min' : '—';
 
-    if (els.quizMeta) {
-      els.quizMeta.innerHTML =
+    if (els.gameMeta) {
+      els.gameMeta.innerHTML =
         `<i class="fa-regular fa-circle-question"></i>
          <span>Total time: ${totalTime}</span>`;
     }
@@ -977,7 +968,7 @@
     const uniqueAttempted = s.uniqueAttempted ?? s.uniqueStudents ?? 0;
     const totalStudents   = s.assignedStudents ?? uniqueAttempted;
     const avgPercent      = s.avgPct;
-    const avgMarks        = s.avgMarks;
+    const avgScore        = s.avgScore;
     const bestPercent     = s.topStudentPercent;
     const bestName        = s.topStudentName || '—';
     const passCount       = s.passCount ?? 0;
@@ -990,17 +981,14 @@
     if (els.metricAvgPercent) els.metricAvgPercent.textContent = fmtPercent(avgPercent);
     if (els.metricAvgMarks) {
       els.metricAvgMarks.textContent =
-        avgMarks !== null && avgMarks !== undefined ? `Marks: ${avgMarks.toFixed(1)}` : 'Marks: —';
+        avgScore !== null && avgScore !== undefined ? `Score: ${avgScore.toFixed(1)}` : 'Score: —';
     }
 
     if (els.metricTopPercent) els.metricTopPercent.textContent = fmtPercent(bestPercent);
     if (els.metricTopName)    els.metricTopName.textContent    = bestName;
 
     if (els.metricPassRate) els.metricPassRate.textContent = fmtPercent(passRate);
-    if (els.metricPassNumbers) {
-      els.metricPassNumbers.textContent =
-        `Pass: ${fmtNumber(passCount)} • Fail: ${fmtNumber(failCount)}`;
-    }
+    if (els.metricPassNumbers) els.metricPassNumbers.textContent = `Pass: ${fmtNumber(passCount)} • Fail: ${fmtNumber(failCount)}`;
   }
 
   function renderDistributionAndSnapshot(){
@@ -1052,10 +1040,7 @@
     if (els.snapAvgCorrect) els.snapAvgCorrect.textContent = avgCorrect !== null ? avgCorrect.toFixed(1) : '—';
     if (els.snapAvgWrong)   els.snapAvgWrong.textContent   = avgWrong !== null ? avgWrong.toFixed(1) : '—';
 
-    if (els.sideSmallMeta) {
-      els.sideSmallMeta.textContent =
-        `${fmtNumber(totalStudents)} students • ${fmtNumber(totalAttempts)} attempts`;
-    }
+    if (els.sideSmallMeta) els.sideSmallMeta.textContent = `${fmtNumber(totalStudents)} students • ${fmtNumber(totalAttempts)} attempts`;
   }
 
   function renderTable(){
@@ -1064,28 +1049,15 @@
     tbody.innerHTML = '';
 
     if (!state.raw){
-      const tr = document.createElement('tr');
-      tr.innerHTML = `<td colspan="7">
-        <div class="asr-empty">
-          <div class="asr-loading">
-            <span class="asr-spinner"></span>
-            <span>Loading assigned student results…</span>
-          </div>
-        </div>
-      </td>`;
-      tbody.appendChild(tr);
+      tbody.innerHTML = `<tr><td colspan="7">
+        <div class="asr-empty"><div class="asr-loading"><span class="asr-spinner"></span><span>Loading assigned student results…</span></div></div>
+      </td></tr>`;
       if (els.tableInfo) els.tableInfo.textContent = 'Loading…';
       return;
     }
 
     if (!state.filtered.length){
-      const tr = document.createElement('tr');
-      tr.innerHTML = `<td colspan="7">
-        <div class="asr-empty">
-          No students match the current filters.
-        </div>
-      </td>`;
-      tbody.appendChild(tr);
+      tbody.innerHTML = `<tr><td colspan="7"><div class="asr-empty">No students match the current filters.</div></td></tr>`;
       const total = (state.raw.students || []).length;
       if (els.tableInfo) els.tableInfo.textContent = `${total} students • 0 visible`;
       return;
@@ -1097,9 +1069,8 @@
     state.filtered.forEach((st, idx) => {
       const best = st.best_result || {};
       const pct  = best.percentage ?? null;
-      const marksStr = (best.marks_obtained !== undefined && best.total_marks !== undefined)
-        ? `${best.marks_obtained}/${best.total_marks}`
-        : '—';
+
+      const scoreStr = (best.score !== undefined && best.score !== null) ? String(best.score) : '—';
       const pctStr   = fmtPercent(pct);
 
       let statusLabel = 'Not attempted';
@@ -1116,18 +1087,12 @@
       if (attemptsArr.length){
         attemptsArr.forEach(att => {
           const apct = att.percentage;
-          const pctLabel = (apct !== null && apct !== undefined && !isNaN(apct))
-            ? apct.toFixed(1) + '%'
-            : '—';
+          const pctLabel = (apct !== null && apct !== undefined && !isNaN(apct)) ? apct.toFixed(1) + '%' : '—';
           const label = `Attempt ${att.attempt_number || ''} • ${pctLabel}`;
           const isDefault = !defaultResultId && att.result_id;
-          if (isDefault) {
-            defaultResultId = att.result_id;
-          }
-          attemptOptionsHtml += `
-            <option value="${att.result_id || ''}"${isDefault ? ' selected' : ''}>
-              ${label}
-            </option>`;
+          if (isDefault) defaultResultId = att.result_id;
+
+          attemptOptionsHtml += `<option value="${att.result_id || ''}"${isDefault ? ' selected' : ''}>${label}</option>`;
         });
       }
       const hasAttempts = !!defaultResultId;
@@ -1145,7 +1110,7 @@
         </td>
         <td>
           <div style="display:flex;flex-direction:column;gap:2px;">
-            <span>${marksStr}</span>
+            <span>${scoreStr}</span>
             <span class="text-muted" style="font-size:var(--fs-12);">${pctStr}</span>
           </div>
         </td>
@@ -1204,11 +1169,7 @@
 
   function renderDetailEmpty(msg){
     if (!els.detailContainer) return;
-    els.detailContainer.innerHTML = `
-      <div class="asr-empty" style="padding:12px;">
-        ${msg || 'Select a student row to see question-wise breakdown.'}
-      </div>
-    `;
+    els.detailContainer.innerHTML = `<div class="asr-empty" style="padding:12px;">${msg || 'Select a student row to see question-wise breakdown.'}</div>`;
   }
 
   function renderDetailLoading(name){
@@ -1233,21 +1194,22 @@
     if (!els.detailContainer) return;
 
     const payload = (data && data.data) ? data.data : (data || {});
+    if (!payload) { renderDetailEmpty('No data available.'); return; }
 
-    if (!payload || !payload.questions){
+    const game    = payload.game || payload.bubble_game || {};
+    const result  = payload.result || {};
+    const questions = payload.questions || payload.items || [];
+
+    if (!questions || !questions.length){
       renderDetailEmpty('No question-level data available for this attempt.');
       return;
     }
 
-    const quiz    = payload.quiz || {};
-    const result  = payload.result || {};
-    const questions = payload.questions || [];
-
     const container = document.createElement('div');
     container.className = 'asr-detail-card';
 
-    const totalMarks = result.total_marks ?? 0;
-    const perc = result.percentage ?? 0;
+    const perc = result.accuracy ?? result.percentage ?? null;
+    const score = result.score ?? result.marks_obtained ?? null;
 
     container.innerHTML = `
       <div class="asr-detail-head">
@@ -1256,7 +1218,7 @@
             ${studentName || 'Student'} — ${fmtPercent(perc)}
           </div>
           <div class="asr-detail-sub">
-            ${(quiz.name || quiz.quiz_name || 'Quiz')} • ${result.marks_obtained ?? '—'}/${totalMarks} marks
+            ${(game.title || game.game_title || game.name || 'Bubble Game')} • Score: ${score ?? '—'}
           </div>
         </div>
         <button type="button" class="btn btn-light btn-sm" id="asrClearDetail">
@@ -1278,14 +1240,8 @@
 
       const timePretty = secondsToPretty(q.time_spent_sec || q.time_used_sec || 0);
 
-      const selText = q.selected_text ??
-                      q.user_answer_text ??
-                      q.user_answer ??
-                      '—';
-      const corrText = q.correct_text ??
-                       q.correct_answer_text ??
-                       q.correct_answer ??
-                       '—';
+      const selText = q.selected_text ?? q.user_answer_text ?? q.user_answer ?? '—';
+      const corrText = q.correct_text ?? q.correct_answer_text ?? q.correct_answer ?? '—';
 
       const title = q.title || q.question || q.question_title || '';
       const desc  = q.description || q.question_text || '';
@@ -1300,7 +1256,7 @@
           <div class="${chipClass}">${chipLabel}</div>
         </div>
         <div class="asr-q-meta">
-          Type: ${q.type || '-'} • Marks: ${q.awarded_mark}/${q.mark} • Time: ${timePretty}
+          Marks: ${q.awarded_mark ?? q.awarded_marks ?? '—'}/${q.mark ?? q.marks ?? '—'} • Time: ${timePretty}
         </div>
         <div class="asr-q-body">
           ${desc ? `<div class="mathjax-q-desc">${desc}</div>` : ''}
@@ -1338,7 +1294,8 @@
       return;
     }
 
-    const url = `/api/exam/results/${encodeURIComponent(resultId)}/instructor-detail`;
+    // ✅ Bubble game detail API (change only if your route differs)
+    const url = `/api/bubble-game/results/${encodeURIComponent(resultId)}/instructor-detail`;
 
     fetch(url, {
       headers: {
@@ -1380,57 +1337,43 @@
     if (!token){
       if (els.tableBody){
         els.tableBody.innerHTML = `
-          <tr>
-            <td colspan="7">
-              <div class="asr-empty">
-                Missing auth token. Please log in again.
-              </div>
-            </td>
-          </tr>`;
+          <tr><td colspan="7">
+            <div class="asr-empty">Missing auth token. Please log in again.</div>
+          </td></tr>`;
       }
       if (els.tableInfo) els.tableInfo.textContent = 'Auth error';
       return;
     }
 
-    if (!quizKey){
+    if (!gameKey){
       if (els.tableBody){
         els.tableBody.innerHTML = `
-          <tr>
-            <td colspan="7">
-              <div class="asr-empty">
-                Select a quiz from the dropdown to view assigned student results.
-              </div>
-            </td>
-          </tr>`;
+          <tr><td colspan="7">
+            <div class="asr-empty">Select a game from the dropdown to view assigned student results.</div>
+          </td></tr>`;
       }
-      if (els.tableInfo) els.tableInfo.textContent = 'No quiz selected';
-      if (els.quizMeta){
-        els.quizMeta.innerHTML =
-          `<i class="fa-regular fa-circle-question"></i><span>Select a quiz to view analytics</span>`;
+      if (els.tableInfo) els.tableInfo.textContent = 'No game selected';
+      if (els.gameMeta){
+        els.gameMeta.innerHTML = `<i class="fa-regular fa-circle-question"></i><span>Select a game to view analytics</span>`;
       }
       return;
     }
 
     if (els.tableBody){
       els.tableBody.innerHTML = `
-        <tr>
-          <td colspan="7">
-            <div class="asr-empty">
-              <div class="asr-loading">
-                <span class="asr-spinner"></span>
-                <span>Loading assigned student results…</span>
-              </div>
-            </div>
-          </td>
-        </tr>`;
+        <tr><td colspan="7">
+          <div class="asr-empty">
+            <div class="asr-loading"><span class="asr-spinner"></span><span>Loading assigned student results…</span></div>
+          </div>
+        </td></tr>`;
     }
     if (els.tableInfo) els.tableInfo.textContent = 'Loading…';
-    if (els.quizMeta){
-      els.quizMeta.innerHTML =
-        `<i class="fa-regular fa-circle-question"></i><span>Loading quiz info…</span>`;
+    if (els.gameMeta){
+      els.gameMeta.innerHTML = `<i class="fa-regular fa-circle-question"></i><span>Loading game info…</span>`;
     }
 
-    const url = `/api/exam/quizzes/${encodeURIComponent(quizKey)}/assigned-results`;
+    // ✅ Bubble game assigned-results API (change only if your route differs)
+    const url = `/api/bubble-game-results/assigned/${encodeURIComponent(gameKey)}`;
 
     fetch(url, {
       headers: {
@@ -1444,13 +1387,7 @@
           const msg = (json && (json.message || json.error)) || 'Failed to load results.';
           if (els.tableBody){
             els.tableBody.innerHTML = `
-              <tr>
-                <td colspan="7">
-                  <div class="asr-empty">
-                    ${msg}
-                  </div>
-                </td>
-              </tr>`;
+              <tr><td colspan="7"><div class="asr-empty">${msg}</div></td></tr>`;
           }
           if (els.tableInfo) els.tableInfo.textContent = 'Error';
           return;
@@ -1469,23 +1406,16 @@
         console.error(err);
         if (els.tableBody){
           els.tableBody.innerHTML = `
-            <tr>
-              <td colspan="7">
-                <div class="asr-empty">
-                  Unexpected error while loading results.
-                </div>
-              </td>
-            </tr>`;
+            <tr><td colspan="7"><div class="asr-empty">Unexpected error while loading results.</div></td></tr>`;
         }
         if (els.tableInfo) els.tableInfo.textContent = 'Error';
       });
   }
 
-  // *** FIXED: Robust quiz list loader ***
-  function loadQuizOptions(){
-    const sel = els.quizSelect;
+  function loadGameOptions(){
+    const sel = els.gameSelect;
     if (!sel){
-      if (quizKey) loadOverview();
+      if (gameKey) loadOverview();
       return;
     }
 
@@ -1493,14 +1423,15 @@
     if (!token){
       sel.innerHTML = '<option value="">Missing auth token</option>';
       sel.disabled = true;
-      if (quizKey) loadOverview();
+      if (gameKey) loadOverview();
       return;
     }
 
-    sel.innerHTML = '<option value="">Loading quizzes…</option>';
+    sel.innerHTML = '<option value="">Loading games…</option>';
     sel.disabled  = true;
 
-    const url = '/api/quizz?per_page=100&status=active';
+    // ✅ Games list API (change only if your route differs)
+    const url = '/api/bubble-games?per_page=100&status=active';
 
     fetch(url, {
       headers: {
@@ -1510,87 +1441,68 @@
     })
       .then(res => res.json().catch(() => ({})))
       .then(json => {
-        console.log('Examiner quiz list response:', json);
+        console.log('Examiner bubble games list response:', json);
 
-        const rows = extractRowsFromQuizResponse(json);
-        quizRowsCache = rows || [];
+        const rows = extractRowsFromGameResponse(json);
+        gameRowsCache = rows || [];
 
         sel.innerHTML = '';
         const placeholder = document.createElement('option');
         placeholder.value = '';
-        placeholder.textContent = 'Select quiz…';
+        placeholder.textContent = 'Select game…';
         sel.appendChild(placeholder);
 
         if (!rows || !rows.length){
-          placeholder.textContent = 'No assigned quizzes found';
+          placeholder.textContent = 'No assigned games found';
           sel.disabled = true;
 
           if (els.tableBody){
             els.tableBody.innerHTML = `
-              <tr>
-                <td colspan="7">
-                  <div class="asr-empty">
-                    No assigned quizzes found for your examiner account.
-                  </div>
-                </td>
-              </tr>`;
+              <tr><td colspan="7"><div class="asr-empty">No assigned bubble games found for your examiner account.</div></td></tr>`;
           }
           if (els.tableInfo) els.tableInfo.textContent = 'No data';
           return;
         }
 
         rows.forEach(row => {
-          const key = extractQuizKey(row); // uuid / quiz_id / id
+          const key = extractGameKey(row);
           if (!key) return;
 
           const opt = document.createElement('option');
           opt.value = key;
           opt.textContent =
-            row.quiz_name ||
             row.title ||
+            row.game_title ||
             row.name ||
-            ('Quiz #' + (row.quiz_id || row.id || ''));
+            ('Game #' + (row.bubble_game_id || row.game_id || row.id || ''));
           sel.appendChild(opt);
         });
 
-        const decidedKey = decideInitialQuizKey(rows);
-        quizKey = decidedKey || '';
+        const decidedKey = decideInitialGameKey(rows);
+        gameKey = decidedKey || '';
 
-        if (quizKey){
-          sel.value = quizKey;
-        } else {
-          sel.value = '';
-        }
-
-        updateUrlQuiz(quizKey);
+        sel.value = gameKey || '';
+        updateUrlGame(gameKey);
         sel.disabled = false;
 
-        if (quizKey){
-          loadOverview();
-        } else {
+        if (gameKey) loadOverview();
+        else {
           if (els.tableBody){
             els.tableBody.innerHTML = `
-              <tr>
-                <td colspan="7">
-                  <div class="asr-empty">
-                    Select a quiz to view assigned student results.
-                  </div>
-                </td>
-              </tr>`;
+              <tr><td colspan="7"><div class="asr-empty">Select a game to view assigned student results.</div></td></tr>`;
           }
-          if (els.tableInfo) els.tableInfo.textContent = 'No quiz selected';
+          if (els.tableInfo) els.tableInfo.textContent = 'No game selected';
         }
       })
       .catch(err => {
         console.error(err);
-        sel.innerHTML = '<option value="">Failed to load quizzes</option>';
+        sel.innerHTML = '<option value="">Failed to load games</option>';
         sel.disabled = true;
-        if (quizKey) loadOverview();
+        if (gameKey) loadOverview();
       });
   }
 
   /* ---------------- Events ---------------- */
-
   if (els.search){
     els.search.addEventListener('input', e => {
       state.filters.search = e.target.value || '';
@@ -1613,20 +1525,18 @@
     });
   }
   if (els.refresh){
-    els.refresh.addEventListener('click', () => {
-      loadOverview();
-    });
+    els.refresh.addEventListener('click', () => loadOverview());
   }
-  if (els.quizSelect){
-    els.quizSelect.addEventListener('change', e => {
-      quizKey = e.target.value || '';
-      updateUrlQuiz(quizKey);
+  if (els.gameSelect){
+    els.gameSelect.addEventListener('change', e => {
+      gameKey = e.target.value || '';
+      updateUrlGame(gameKey);
       loadOverview();
     });
   }
 
   // init
-  loadQuizOptions();
+  loadGameOptions();
 })();
 </script>
 @endsection

@@ -2,25 +2,48 @@
 
 use Illuminate\Support\Facades\Route;
 
-// Login Routes 
+/*
+|--------------------------------------------------------------------------
+| 1) Login Routes
+|--------------------------------------------------------------------------
+*/
 
 Route::get('/', function () {
     return view('pages.auth.login');
 });
 
-// Admin Routes 
+/*
+|--------------------------------------------------------------------------
+| 2) Admin Routes (Common)
+|--------------------------------------------------------------------------
+*/
 
 Route::get('/dashboard', function () {
     return view('pages.users.pages.common.dashboard');
 })->name('dashboard');
 
+Route::get('/profile', fn () => view('pages.users.pages.common.profile'))->name('profile');
+
+/*
+|--------------------------------------------------------------------------
+| 3) Admin Routes (Users)
+|--------------------------------------------------------------------------
+*/
+
 Route::get('/users/manage', function () {
     return view('pages.users.pages.users.manageUsers');
 });
 
+/*
+|--------------------------------------------------------------------------
+| 4) Admin Routes (Quizz - Management)
+|--------------------------------------------------------------------------
+*/
+
 Route::get('/quizz/create', function () {
     return view('pages.users.pages.quizz.createQuizz');
 });
+
 Route::get('/quizz/manage', function () {
     return view('pages.users.pages.quizz.manageQuizz');
 });
@@ -33,15 +56,22 @@ Route::get('/quizz/results', function () {
     return view('pages.users.pages.quizz.allResult');
 });
 
-
-// Exam Routes 
+/*
+|--------------------------------------------------------------------------
+| 5) Exam Routes
+|--------------------------------------------------------------------------
+*/
 
 Route::get('/exam/{quiz}', function (\Illuminate\Http\Request $r, $quiz) {
     // Pass the quiz key (uuid or id) to the view
     return view('modules.exam.exam', ['quizKey' => $quiz]);
 })->name('exam.take');
 
-// Student Routes
+/*
+|--------------------------------------------------------------------------
+| 6) Student Routes
+|--------------------------------------------------------------------------
+*/
 
 // Route::get('student/dashboard', function () {
 //     return view('modules.common.studentDashboard');
@@ -55,8 +85,11 @@ Route::get('/exam/results/{resultId}/view', function ($resultId) {
     return view('modules.quizz.viewResult', ['resultId' => $resultId]);
 })->name('exam.results.view');
 
-
-// Examiner Routes 
+/*
+|--------------------------------------------------------------------------
+| 7) Examiner Routes (Commented)
+|--------------------------------------------------------------------------
+*/
 
 // Route::get('examiner/dashboard', function () {
 //     return view('modules.common.examinerDashboard');
@@ -69,6 +102,7 @@ Route::get('/exam/results/{resultId}/view', function ($resultId) {
 // Route::get('/examiner/quizz/create', function () {
 //     return view('pages.users.pages.quizz.createQuizz');
 // });
+
 // Route::get('/examiner/quizz/manage', function () {
 //     return view('pages.users.pages.quizz.manageQuizz');
 // });
@@ -76,11 +110,17 @@ Route::get('/exam/results/{resultId}/view', function ($resultId) {
 // Route::get('/examiner/quizz/questions/manage', function () {
 //     return view('pages.users.pages.questions.manageQuestion');
 // });
+
 Route::get('/quizz/result/manage', function () {
     return view('pages.users.pages.result.viewAssignedStudentResult');
 });
 
-//Dashboard menus & privileges
+/*
+|--------------------------------------------------------------------------
+| 8) Dashboard Menus & Privileges
+|--------------------------------------------------------------------------
+*/
+
 Route::get('/dashboard-menu/manage', fn () => view('modules.dashboardMenu.manageDashboardMenu'));
 Route::get('/dashboard-menu/create', fn () => view('modules.dashboardMenu.createDashboardMenu'));
 
@@ -97,29 +137,43 @@ Route::get('/user-privileges/manage', function () {
     ]);
 })->name('modules.privileges.assign.user');
 
+/*
+|--------------------------------------------------------------------------
+| 9) Bubble Game Routes
+|--------------------------------------------------------------------------
+*/
+
+Route::get('/bubble-games/manage', fn () => view('modules.bubbleGame.manageBubbleGame'));
+Route::get('/bubble-games/create', fn () => view('modules.bubbleGame.createBubbleGame'));
 
 Route::get('/bubble-games/questions/manage', function () {
     $gameUuid = request()->query('game');
-    
+
     if (!$gameUuid) {
         // Redirect or show error
         return view('modules.bubbleGame.manageBubbleGameQuestions', [
             'gameUuid' => null,
-            'error' => 'Please select a bubble game first'
+            'error'    => 'Please select a bubble game first'
         ]);
     }
-    
+
     return view('modules.bubbleGame.manageBubbleGameQuestions', [
         'gameUuid' => $gameUuid
     ]);
-})->name('bubblegame.manage');//profile
+})->name('bubblegame.manage'); 
 
-Route::get('/bubble-games/manage', fn () => view('modules.bubbleGame.manageBubbleGame'));
-
-
-Route::get('/profile', fn () => view('pages.users.pages.common.profile'))->name('profile');
-Route::get('/bubble-games/create', fn () => view('modules.bubbleGame.createBubbleGame'));
-
-Route::get('/bubble-games/play', function () {
+Route::get('/tests/play', function () {
     return view('modules.bubbleGame.playBubbleGame');
 })->name('bubble-games.play');
+
+Route::get('/graphical-test/results', function () {
+    return view('modules.bubbleGame.allResult');
+});
+
+Route::get('/test/results/{resultId}/view', function ($resultId) {
+    return view('modules.bubbleGame.viewResult', ['resultId' => $resultId]);
+});
+
+Route::get('/test/result/manage', function () {
+    return view('modules.result.viewAssignedStudentResultForGame');
+});

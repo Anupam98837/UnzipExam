@@ -15,6 +15,9 @@ use App\Http\Controllers\API\UserPrivilegeController;
 use App\Http\Controllers\API\BubbleGameController;
 use App\Http\Controllers\API\BubbleGameQuestionController;
 use App\Http\Controllers\API\BubbleGameResultController;
+use App\Http\Controllers\API\DoorGameController;
+use App\Http\Controllers\API\DoorGameResultController;
+
 
 Route::get('/user', function (Request $request) {
     return $request->user();
@@ -413,9 +416,6 @@ Route::middleware('checkRole')->prefix('bubble-games')->group(function () {
     });
 
     Route::middleware('checkRole')->group(function () {
-           
-
-
  // List bubble games for a user (assigned/unassigned info)
     Route::get('users/{id}/bubble-games', [UserController::class, 'userBubbleGames'])
         ->name('users.bubble-games.index');
@@ -427,4 +427,52 @@ Route::middleware('checkRole')->prefix('bubble-games')->group(function () {
     Route::post('/users/{id}/bubble-games/unassign', [UserController::class, 'unassignBubbleGame'])
         ->name('users.bubble-games.unassign');
 
+});
+Route::middleware('checkRole')->prefix('bubble-game-results')->group(function () {
+        Route::get('/all', [BubbleGameResultController::class, 'index']);
+
+    Route::get('/detail/{resultKey}', [BubbleGameResultController::class, 'resultDetail']);
+    Route::get('/instructor/{resultId}', [BubbleGameResultController::class, 'resultDetailForInstructor']);
+    Route::get('/assigned/{gameKey}', [BubbleGameResultController::class, 'assignedResultsForGame']);
+    Route::get('/export/{resultId}', [BubbleGameResultController::class, 'export']);
+});
+
+// Public endpoints (no authentication required)
+Route::prefix('door-games')->group(function () {
+    // Get list of active games
+    Route::get('/active', [DoorGameController::class, 'activeGames']);
+    
+    // Get game for playing
+    Route::get('/play/{id}', [DoorGameController::class, 'playGame']);
+});
+
+// Protected endpoints (authentication required)
+Route::middleware('checkRole')->prefix('door-games')->group(function () {
+    // Standard CRUD operations
+    Route::get('/', [DoorGameController::class, 'index']);
+    Route::post('/', [DoorGameController::class, 'store']);
+    Route::get('/{id}', [DoorGameController::class, 'show']);
+    Route::put('/{id}', [DoorGameController::class, 'update']);
+    Route::patch('/{id}', [DoorGameController::class, 'update']);
+    Route::delete('/{id}', [DoorGameController::class, 'destroy']);
+});
+
+// Public endpoints
+Route::prefix('door-game-results')->group(function () {
+    // Get leaderboard for a specific game
+    Route::get('/leaderboard/{gameId}', [DoorGameResultController::class, 'leaderboard']);
+    
+    // Get user's results for a specific game
+    Route::get('/user/{gameId}/{userId}', [DoorGameResultController::class, 'userResults']);
+});
+
+// Protected endpoints (authentication required)
+Route::middleware('checkRole')->prefix('door-game-results')->group(function () {
+    // Standard CRUD operations
+    Route::get('/', [DoorGameResultController::class, 'index']);
+    Route::post('/', [DoorGameResultController::class, 'store']);
+    Route::get('/{id}', [DoorGameResultController::class, 'show']);
+    Route::put('/{id}', [DoorGameResultController::class, 'update']);
+    Route::patch('/{id}', [DoorGameResultController::class, 'update']);
+    Route::delete('/{id}', [DoorGameResultController::class, 'destroy']);
 });

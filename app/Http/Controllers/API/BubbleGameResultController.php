@@ -291,10 +291,9 @@ private function transformBubbleRows($rows)
         ];
     })->values();
 }
-
 public function submit(Request $request)
 {
-    // ✅ use actor() (your middleware fills these)
+    // ✅ actor() is token-safe (CheckRole middleware fills these)
     $actor  = $this->actor($request);
     $userId = (int) ($actor['id'] ?? 0);
 
@@ -305,17 +304,19 @@ public function submit(Request $request)
         ], 403);
     }
 
-    // (Optional) restrict who can submit
+    // ✅ Optional: restrict who can submit
     // if ($resp = $this->requireRole($request, ['student'])) return $resp;
 
-    // ✅ validate: NO time_taken_sec here (not in your table)
+    // ✅ Validate request
     $validator = Validator::make($request->all(), [
         'game_uuid' => ['required', 'uuid'],
+
+        // answers = list of question interactions
         'answers' => ['required', 'array', 'min:1'],
         'answers.*.question_uuid' => ['required', 'uuid'],
         'answers.*.selected' => ['nullable'],
 
-        // Optional fields (stored inside JSON)
+        // Optional scoring/time fields saved into JSON
         'answers.*.is_correct' => ['nullable', Rule::in(['yes','no'])],
         'answers.*.spent_time_sec' => ['nullable', 'integer', 'min:0'],
         'answers.*.is_skipped' => ['nullable', Rule::in(['yes','no'])],
@@ -345,14 +346,14 @@ public function submit(Request $request)
 
     $answers = $request->input('answers', []);
 
-    // ✅ Validate questions belong to this game (prevents null id issues)
+    // ✅ Validate questions belong to THIS game
     $questionUuids = array_values(array_unique(array_filter(array_map(
         fn ($a) => $a['question_uuid'] ?? null,
         $answers
     ))));
 
     $questionMap = DB::table('bubble_game_questions')
-        ->where('bubble_game_id', $game->id)
+        ->where('bubble_game_id', (int) $game->id)
         ->whereIn('uuid', $questionUuids)
         ->pluck('id', 'uuid'); // [uuid => id]
 
@@ -368,19 +369,35 @@ public function submit(Request $request)
     try {
         return DB::transaction(function () use ($request, $userId, $game, $answers, $questionMap) {
 
-            // ✅ attempt_no computed only inside transaction
-            $attemptNo = (int) (DB::table('bubble_game_results')
-                ->where('bubble_game_id', $game->id)
-                ->where('user_id', $userId)
-                ->max('attempt_no') ?? 0) + 1;
+            // ✅ Lock to prevent 2 submits creating same attempt_no
+            $currentMaxAttempt = (int) (DB::table('bubble_game_results')
+                ->where('bubble_game_id', (int) $game->id)
+                ->where('user_id', (int) $userId)
+                ->whereNull('deleted_at')
+                ->lockForUpdate()
+                ->max('attempt_no') ?? 0);
 
-            // ✅ Build JSON to store in user_answer_json (matches your migration)
+            $nextAttempt = $currentMaxAttempt + 1;
+            $maxAttempts = (int) ($game->max_attempts ?? 1);
+
+            // ✅ IMPORTANT RULE:
+            // nextAttempt must be <= game.max_attempts
+            if ($nextAttempt > $maxAttempts) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Maximum attempts reached for this game',
+                    'max_attempts' => $maxAttempts,
+                    'current_attempt' => $currentMaxAttempt,
+                ], 403);
+            }
+
+            // ✅ Build JSON snapshot (stored in bubble_game_results.user_answer_json)
             $normalized = [];
             foreach ($answers as $a) {
-                $qUuid = $a['question_uuid'];
+                $qUuid = (string) ($a['question_uuid'] ?? '');
 
                 $normalized[] = [
-                    'question_id'       => (int) $questionMap->get($qUuid), // stored inside JSON only
+                    'question_id'       => (int) $questionMap->get($qUuid),
                     'question_uuid'     => $qUuid,
                     'selected'          => $a['selected'] ?? null,
                     'is_correct'        => $a['is_correct'] ?? null,
@@ -390,43 +407,42 @@ public function submit(Request $request)
                 ];
             }
 
-            // ✅ Score (only if is_correct present)
-            $score = 0;
-            if (!empty($normalized) && array_key_exists('is_correct', $normalized[0]) && $normalized[0]['is_correct'] !== null) {
-                $score = $this->calculateScore(
-                    $normalized,
-                    (int) ($game->points_correct ?? 1),
-                    (int) ($game->points_wrong ?? 0)
-                );
-            }
+            // ✅ Always calculate score (no "first row null" bug)
+            $score = $this->calculateScore(
+                $normalized,
+                (int) ($game->points_correct ?? 1),
+                (int) ($game->points_wrong ?? 0)
+            );
 
             $resultUuid = (string) Str::uuid();
 
             $resultId = DB::table('bubble_game_results')->insertGetId([
-                'uuid'            => $resultUuid,
-                'bubble_game_id'  => (int) $game->id,
-                'user_id'         => (int) $userId,
-                'attempt_no'      => (int) $attemptNo,
-                'user_answer_json'=> json_encode($normalized, JSON_UNESCAPED_UNICODE),
-                'score'           => (int) $score,
+                'uuid'             => $resultUuid,
+                'bubble_game_id'   => (int) $game->id,
+                'user_id'          => (int) $userId,
+                'attempt_no'       => (int) $nextAttempt,
+                'user_answer_json' => json_encode($normalized, JSON_UNESCAPED_UNICODE),
+                'score'            => (int) $score,
 
-                'created_at'      => now(),
-                'updated_at'      => now(),
-                'created_at_ip'   => $request->ip(),
-                'updated_at_ip'   => $request->ip(),
+                'created_at'       => now(),
+                'updated_at'       => now(),
+                'created_at_ip'    => $request->ip(),
+                'updated_at_ip'    => $request->ip(),
             ]);
 
             return response()->json([
                 'success' => true,
                 'message' => 'Submitted successfully',
                 'data' => [
-                    'id' => $resultId,
-                    'uuid' => $resultUuid,
-                    'attempt_no' => $attemptNo,
-                    'score' => (int) $score
+                    'id'           => (int) $resultId,
+                    'uuid'         => (string) $resultUuid,
+                    'attempt_no'   => (int) $nextAttempt,
+                    'score'        => (int) $score,
+                    'max_attempts' => (int) $maxAttempts,
                 ]
             ], 201);
         });
+
     } catch (\Throwable $e) {
         return response()->json([
             'success' => false,
@@ -435,6 +451,7 @@ public function submit(Request $request)
         ], 500);
     }
 }
+
 
     /**
      * Display results for a specific game.

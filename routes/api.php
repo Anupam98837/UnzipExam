@@ -17,6 +17,7 @@ use App\Http\Controllers\API\BubbleGameQuestionController;
 use App\Http\Controllers\API\BubbleGameResultController;
 use App\Http\Controllers\API\DoorGameController;
 use App\Http\Controllers\API\DoorGameResultController;
+use App\Http\Controllers\API\UserFolderController;
 
 
 Route::get('/user', function (Request $request) {
@@ -451,11 +452,19 @@ Route::middleware('checkRole')->prefix('door-games')->group(function () {
     // Standard CRUD operations
     Route::get('/', [DoorGameController::class, 'index']);
     Route::post('/', [DoorGameController::class, 'store']);
+    Route::get('/my', [DoorGameController::class, 'myDoorGames']);
     Route::get('/{id}', [DoorGameController::class, 'show']);
     Route::put('/{id}', [DoorGameController::class, 'update']);
     Route::patch('/{id}', [DoorGameController::class, 'update']);
     Route::delete('/{id}', [DoorGameController::class, 'destroy']);
 });
+
+    Route::middleware('checkRole')->group(function () {
+    Route::get('/users/{id}/door-games', [UserController::class, 'userDoorGames']);
+Route::post('/users/{id}/door-games/assign', [UserController::class, 'assignDoorGame']);
+Route::post('/users/{id}/door-games/unassign', [UserController::class, 'unassignDoorGame']);
+
+    });
 
 // Public endpoints
 Route::prefix('door-game-results')->group(function () {
@@ -469,10 +478,30 @@ Route::prefix('door-game-results')->group(function () {
 // Protected endpoints (authentication required)
 Route::middleware('checkRole')->prefix('door-game-results')->group(function () {
     // Standard CRUD operations
-    Route::get('/', [DoorGameResultController::class, 'index']);
+    Route::get('/all', [DoorGameResultController::class, 'index']);
     Route::post('/', [DoorGameResultController::class, 'store']);
     Route::get('/{id}', [DoorGameResultController::class, 'show']);
     Route::put('/{id}', [DoorGameResultController::class, 'update']);
     Route::patch('/{id}', [DoorGameResultController::class, 'update']);
     Route::delete('/{id}', [DoorGameResultController::class, 'destroy']);
+});
+Route::prefix('user-folders')->group(function () {
+    Route::get('/', [UserFolderController::class, 'index']);
+    Route::post('/', [UserFolderController::class, 'store']);
+    Route::get('/{id}', [UserFolderController::class, 'show']);
+    Route::put('/{id}', [UserFolderController::class, 'update']);
+    Route::delete('/{id}', [UserFolderController::class, 'destroy']);
+
+    // optional (assign users)
+    Route::post('/{id}/assign-users', [UserFolderController::class, 'assignUsers']);
+});
+
+Route::middleware('checkRole')->group(function () {
+Route::post('/door-games-results/submit/{gameUuid}', [DoorGameResultController::class, 'submit']);
+});
+Route::middleware('checkRole')->group(function () {
+Route::get('/door-game-results/detail/{resultKey}', [DoorGameResultController::class, 'resultDetail']);
+Route::get('/door-game-results/instructor/{resultKey}', [DoorGameResultController::class, 'resultDetailForInstructor']);
+Route::get('/door-game-results/assigned/{gameKey}', [DoorGameResultController::class, 'assignedResultsForGame']);
+Route::get('/door-game-results/export/{resultKey}', [DoorGameResultController::class, 'export']);
 });

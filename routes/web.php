@@ -175,5 +175,43 @@ Route::get('/test/results/{resultId}/view', function ($resultId) {
 });
 
 Route::get('/test/result/manage', function () {
-    return view('modules.result.viewAssignedStudentResultForGame');
+    return view('modules.result.viewAssignedStudentResultForBubbleGame');
 });
+
+
+/*
+|--------------------------------------------------------------------------
+| 10) Door Game Routes
+|--------------------------------------------------------------------------
+*/
+
+Route::get('/door-games/manage', fn () => view('modules.doorGame.manageDoorGame'));
+Route::get('/door-games/create', fn () => view('modules.doorGame.createDoorGame'));
+
+Route::get('/door-tests/play', function () {
+    return view('modules.doorGame.playDoorGame');
+})->name('bubble-games.play');
+
+Route::get('/decision-making-test/results', function () {
+    return view('modules.doorGame.allResult');
+});
+
+Route::get('/decision-making-test/results/{resultId}/view', function ($resultId) {
+    return view('modules.doorGame.viewResult', ['resultId' => $resultId]);
+});
+
+Route::get('/decision-making-test/result/manage', function () {
+    return view('modules.result.viewAssignedStudentResultForDoorGame');
+});
+
+
+/*
+|--------------------------------------------------------------------------
+| 11) User Folder Routes
+|--------------------------------------------------------------------------
+*/
+
+Route::get('/user-folders/manage', fn () => view('pages.users.pages.userFolder.manageUserFolder'));
+Route::get('/user-folders/create', fn () => view('pages.users.pages.userFolder.createUserFolder'));
+
+

@@ -533,21 +533,32 @@ public function myBubbleGames(Request $r)
     $resultSub = DB::table('bubble_game_results')
         ->select('bubble_game_id', DB::raw('MAX(id) as latest_id'))
         ->where('user_id', $userId)
+        ->whereNull('deleted_at')
+        ->groupBy('bubble_game_id');
+
+    // ✅ NEW: attempts stats per game for this user
+    // We keep BOTH COUNT(*) and MAX(attempt_no) to be super safe.
+    $attemptStatSub = DB::table('bubble_game_results')
+        ->select([
+            'bubble_game_id',
+            DB::raw('COUNT(*) as attempts_count'),
+            DB::raw('COALESCE(MAX(attempt_no), 0) as max_attempt_no'),
+        ])
+        ->where('user_id', $userId)
+        ->whereNull('deleted_at')
         ->groupBy('bubble_game_id');
 
     $q = DB::table('bubble_game as bg')
-        // join question counts
         ->leftJoinSub($qCountSub, 'qc', function ($join) {
             $join->on('qc.bubble_game_id', '=', 'bg.id');
         })
-
-        // join latest result
         ->leftJoinSub($resultSub, 'lr', function ($join) {
             $join->on('lr.bubble_game_id', '=', 'bg.id');
         })
         ->leftJoin('bubble_game_results as bgr', 'bgr.id', '=', 'lr.latest_id')
-
-        // base filters
+        ->leftJoinSub($attemptStatSub, 'ats', function ($join) {
+            $join->on('ats.bubble_game_id', '=', 'bg.id');
+        })
         ->whereNull('bg.deleted_at')
         ->where('bg.status', '=', 'active');
 
@@ -563,7 +574,7 @@ public function myBubbleGames(Request $r)
         });
     }
 
-    // Optional text search (your columns are title/description)
+    // Optional text search
     if ($search !== '') {
         $q->where(function ($w) use ($search) {
             $w->where('bg.title', 'like', "%{$search}%")
@@ -584,7 +595,11 @@ public function myBubbleGames(Request $r)
 
         DB::raw('COALESCE(qc.total_questions, 0) as total_questions'),
 
-        // latest result (this user)
+        // ✅ NEW attempt stats
+        DB::raw('COALESCE(ats.attempts_count, 0) as attempts_count'),
+        DB::raw('COALESCE(ats.max_attempt_no, 0) as max_attempt_no'),
+
+        // latest result
         'bgr.id         as result_id',
         'bgr.created_at as result_created_at',
         'bgr.score      as result_score',
@@ -605,7 +620,25 @@ public function myBubbleGames(Request $r)
             $totalMinutes = (int) ceil(($totalQuestions * $perQSec) / 60);
         }
 
-        // my_status: if result exists => completed, else upcoming
+        // ✅ allowed attempts (default 1 if null)
+        $allowed = ($row->max_attempts !== null)
+            ? (int) $row->max_attempts
+            : 1;
+
+        // ✅ used attempts (safe: max(attempt_no, count))
+        $usedByCount = (int) ($row->attempts_count ?? 0);
+        $usedByMaxNo = (int) ($row->max_attempt_no ?? 0);
+        $used = max($usedByCount, $usedByMaxNo);
+
+        // ✅ remaining attempts
+        $remaining = $allowed > 0 ? max($allowed - $used, 0) : 0;
+
+        $maxReached = ($allowed > 0) ? ($used >= $allowed) : false;
+        $canAttempt = !$maxReached;
+
+        // ✅ my_status:
+        // We keep it simple: if any result exists => completed else upcoming
+        // (Continue/in_progress depends on your gameplay logic; if you later add it, UI supports it.)
         $myStatus = $row->result_id ? 'completed' : 'upcoming';
 
         return [
@@ -615,12 +648,22 @@ public function myBubbleGames(Request $r)
             // UI fields
             'title'           => (string) ($row->title ?? 'Bubble Game'),
             'excerpt'         => (string) ($row->description ?? ''),
-            'total_time'      => $totalMinutes,         // minutes
+            'total_time'      => $totalMinutes,              // minutes
             'total_questions' => $totalQuestions,
-            'total_attempts'  => $row->max_attempts !== null ? (int) $row->max_attempts : null,
-            'is_public'       => false,                 // you do not have is_public in schema
 
+            // ✅ old key (keep for backward compatibility)
+            'total_attempts'  => $allowed,
+
+            // ✅ NEW KEYS (frontend max-attempt logic uses these)
+            'max_attempts_allowed' => $allowed,
+            'my_attempts'           => $used,
+            'remaining_attempts'    => $remaining,
+            'max_attempt_reached'   => $maxReached,
+            'can_attempt'           => $canAttempt,
+
+            'is_public'       => false,
             'status'          => (string) ($row->status ?? 'active'),
+
             'created_at'      => $row->created_at
                 ? \Carbon\Carbon::parse($row->created_at)->toDateTimeString()
                 : null,

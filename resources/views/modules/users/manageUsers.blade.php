@@ -328,18 +328,22 @@ html.theme-dark .badge-code{
       <div class="table-responsive">
         <table class="table table-hover table-borderless align-middle mb-0">
           <thead class="sticky-top">
-            <tr>
-              <th style="width:90px;">Status</th>
-              <th style="width:80px;">Avatar</th>
-              <th>Name</th>
-              <th>Email</th>
-              <th style="width:160px;">Role</th>
-              <th style="width:140px;" class="text-center">Quizzes</th>
-              <th style="width:160px;" class="text-center">Bubble Games</th>
+  <tr>
+    <th style="width:90px;">Status</th>
+    <th style="width:80px;">Avatar</th>
+    <th>Name</th>
+    <th>Email</th>
+    <th style="width:160px;">Role</th>
 
-              <th style="width:110px;" class="text-end">Actions</th>
-            </tr>
-          </thead>
+    <!-- ✅ NEW -->
+    <th style="width:180px;">Folder</th>
+
+    <th style="width:140px;" class="text-center">Quizzes</th>
+    <!-- <th style="width:160px;" class="text-center">Bubble Games</th> -->
+    <th style="width:110px;" class="text-end">Actions</th>
+  </tr>
+</thead>
+
           <tbody id="usersTbody">
             <tr>
               <td colspan="8" class="empty-state">
@@ -390,6 +394,13 @@ html.theme-dark .badge-code{
               <option value="student">Student</option>
             </select>
           </div>
+        {{-- Folder --}}
+        <div class="col-12">
+          <label class="form-label">Folder</label>
+          <select id="modal_folder" class="form-select">
+            <option value="">All Folders</option>
+          </select>
+        </div>
 
           {{-- Sort (frontend + future backend) --}}
           <div class="col-12">
@@ -553,7 +564,7 @@ html.theme-dark .badge-code{
             <input class="form-control" id="userPhone" maxlength="32" placeholder="+91 99999 99999">
           </div>
 
-          <div class="col-md-6">
+          <div class="col-md-4">
             <label class="form-label">Role <span class="text-danger">*</span></label>
             <select class="form-select" id="userRole" required>
               <option value="">Select Role</option>
@@ -562,13 +573,21 @@ html.theme-dark .badge-code{
               <option value="student">Student</option>
             </select>
           </div>
-          <div class="col-md-6">
+          <div class="col-md-4">
             <label class="form-label">Status</label>
             <select class="form-select" id="userStatus">
               <option value="active">Active</option>
               <option value="inactive">Inactive</option>
             </select>
           </div>
+        {{-- Folder --}}
+<div class="col-md-4">
+  <label class="form-label">Folder</label>
+  <select class="form-select" id="userFolder">
+    <option value="">No Folder</option>
+  </select>
+  <div class="form-text">Optional: assign user into a folder group.</div>
+</div>
 
           {{-- Password (create only) --}}
           <div class="col-md-6 js-pw-section">
@@ -766,6 +785,63 @@ html.theme-dark .badge-code{
     </div>
   </div>
 </div>
+<!-- ✅ Manage Door Games Modal (same as Bubble Games) -->
+<div class="modal fade" id="userDoorGamesModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title h5 mb-0">Manage Door Games</div>
+          <div class="small text-muted">Assign / Unassign door games for <span id="udg_user_name" class="fw-semibold">—</span></div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Controls -->
+        <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
+          <div class="d-flex gap-2 align-items-center">
+            <div class="input-group">
+              <span class="input-group-text"><i class="fa fa-search"></i></span>
+              <input type="text" id="udg_search" class="form-control" placeholder="Search door games...">
+            </div>
+
+            <select id="udg_filter" class="form-select" style="max-width:220px;">
+              <option value="all">All</option>
+              <option value="assigned">Assigned</option>
+              <option value="unassigned">Unassigned</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Table -->
+        <div class="table-responsive">
+          <table class="table align-middle">
+            <thead class="sticky-top bg-body">
+              <tr>
+                <th>Door Game</th>
+                <th style="width:120px;">Duration</th>
+                <th style="width:120px;">Questions</th>
+                <th style="width:120px;">Status</th>
+                <th style="width:120px;">Public</th>
+                <th style="width:220px;">Code</th>
+                <th style="width:120px;" class="text-center">Assign</th>
+              </tr>
+            </thead>
+            <tbody id="udg_rows">
+              <tr id="udg_loader">
+                <td colspan="7" class="p-3 text-center text-muted">
+                  <i class="fa fa-circle-notch fa-spin me-2"></i>Loading door games...
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+      </div><!-- /modal-body -->
+    </div>
+  </div>
+</div>
 
 {{-- ================= Toasts ================= --}}
 <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index:2100;">
@@ -782,7 +858,6 @@ html.theme-dark .badge-code{
     </div>
   </div>
 </div>
-
 {{-- Dependencies --}}
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
@@ -866,6 +941,8 @@ document.addEventListener('DOMContentLoaded', function(){
   const modalRole       = document.getElementById('modal_role');
   const modalSort       = document.getElementById('modal_sort');
   const btnApplyFilters = document.getElementById('btnApplyFilters');
+  const modalFolder     = document.getElementById('modal_folder');
+  const userFolderInput = document.getElementById('userFolder');
 
   // User modal
   const userModalEl   = document.getElementById('userModal');
@@ -903,7 +980,8 @@ document.addEventListener('DOMContentLoaded', function(){
   const uq_loader          = document.getElementById('uq_loader');
   const uq_search          = document.getElementById('uq_search');
   const uq_filter          = document.getElementById('uq_filter');
-    // Manage bubble games modal
+
+  // Manage bubble games modal
   const userBubbleGamesModalEl = document.getElementById('userBubbleGamesModal');
   const userBubbleGamesModal   = new bootstrap.Modal(userBubbleGamesModalEl);
   const ubg_user_name          = document.getElementById('ubg_user_name');
@@ -911,6 +989,14 @@ document.addEventListener('DOMContentLoaded', function(){
   const ubg_loader             = document.getElementById('ubg_loader');
   const ubg_search             = document.getElementById('ubg_search');
   const ubg_filter             = document.getElementById('ubg_filter');
+  //doorgames
+  const userDoorGamesModalEl = document.getElementById('userDoorGamesModal');
+  const userDoorGamesModal   = new bootstrap.Modal(userDoorGamesModalEl);
+  const udg_user_name        = document.getElementById('udg_user_name');
+  const udg_rows             = document.getElementById('udg_rows');
+  const udg_loader           = document.getElementById('udg_loader');
+  const udg_search           = document.getElementById('udg_search');
+  const udg_filter           = document.getElementById('udg_filter');
 
   // Toasts
   const toastOk  = new bootstrap.Toast(document.getElementById('toastSuccess'));
@@ -971,6 +1057,12 @@ document.addEventListener('DOMContentLoaded', function(){
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   }
 
+  function normId(v){
+    if (v === null || v === undefined) return '';
+    const s = String(v).trim();
+    return (s === 'null' || s === 'undefined') ? '' : s;
+  }
+
   /* =================== STATE =================== */
   let page        = 1;
   let perPage     = parseInt(perPageSel.value,10) || 20;
@@ -987,8 +1079,98 @@ document.addEventListener('DOMContentLoaded', function(){
   let ubg_userId  = null;
   let ubg_data    = [];
 
+    let udg_userId  = null;
+  let udg_data    = [];
+
+  let folderFilter = '';
+  let foldersCache = [];
+
+  function folderNameById(id){
+    const fid = normId(id);
+    if (!fid) return '';
+    const hit = foldersCache.find(f => normId(f.id) === fid);
+    return hit?.name ? String(hit.name) : '';
+  }
+
+  function folderNameFromUserRow(row){
+    const direct =
+      row.user_folder_name ??
+      row.folder_name ??
+      row.folder_title ??
+      row.folderTitle ??
+      row.user_folder ??
+      row.folder ??
+      '';
+
+    if (direct && String(direct).trim()) return String(direct).trim();
+
+    const id =
+      row.user_folder_id ??
+      row.folder_id ??
+      row.userFolderId ??
+      row.user_folder_id ??
+      row.folderId ??
+      row.folder_uuid ??
+      row.user_folder_uuid ??
+      '';
+
+    return folderNameById(id);
+  }
+
+  /* =================== FOLDERS DROPDOWN (NO PAGINATION) =================== */
+  async function loadFoldersDropdown(){
+    try{
+      const url = '/api/user-folders?show=all';
+      const res = await fetch(url, {
+        headers: authHeaders({
+          'Accept':'application/json',
+          'X-dropdown': '1'
+        })
+      });
+
+      const j = await res.json().catch(()=> ({}));
+      if (!res.ok) throw new Error(j.message || 'Failed to load folders');
+
+      const list =
+        Array.isArray(j.data) ? j.data :
+        Array.isArray(j.folders) ? j.folders :
+        Array.isArray(j.items) ? j.items : [];
+
+      foldersCache = list.map(f => {
+        const idRaw = f.id ?? f.folder_id ?? f.user_folder_id ?? f.uuid ?? '';
+        const nmRaw = f.folder_name ?? f.name ?? f.title ?? f.folder_title ?? f.folder ?? ('Folder ' + (f.id ?? ''));
+        return { id: normId(idRaw), name: String(nmRaw || '').trim() };
+      }).filter(x => x.id !== '');
+
+      const keepUserVal   = userFolderInput?.value || '';
+      const keepFilterVal = modalFolder?.value || '';
+
+      const folderOptions = foldersCache.map(f =>
+        `<option value="${esc(String(f.id))}">${esc(String(f.name))}</option>`
+      ).join('');
+
+      if (userFolderInput){
+        userFolderInput.innerHTML = `<option value="">No Folder</option>` + folderOptions;
+        if (keepUserVal) userFolderInput.value = keepUserVal;
+      }
+
+      if (modalFolder){
+        modalFolder.innerHTML = `<option value="">All Folders</option>` + folderOptions;
+        if (keepFilterVal) modalFolder.value = keepFilterVal;
+      }
+
+    }catch(e){
+      console.warn('Folder dropdown load failed:', e);
+      if (userFolderInput && !userFolderInput.innerHTML.trim()){
+        userFolderInput.innerHTML = `<option value="">No Folder</option>`;
+      }
+      if (modalFolder && !modalFolder.innerHTML.trim()){
+        modalFolder.innerHTML = `<option value="">All Folders</option>`;
+      }
+    }
+  }
+
   /* =================== CSV IMPORT FEATURE =================== */
-  // Download CSV template
   downloadTemplateBtn.addEventListener('click', function() {
     const csvContent = "name,email,password,role\n" +
                       "John Doe,john.doe@example.com,Pass@123,student\n" +
@@ -1009,17 +1191,13 @@ document.addEventListener('DOMContentLoaded', function(){
     ok('Template downloaded');
   });
 
-  // File selection
   csvBrowseBtn.addEventListener('click', () => csvFileInput.click());
 
   csvFileInput.addEventListener('change', function(e) {
     const file = e.target.files[0];
-    if (file) {
-      handleFileSelection(file);
-    }
+    if (file) handleFileSelection(file);
   });
 
-  // Drag and drop
   ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
     csvDropZone.addEventListener(eventName, preventDefaults, false);
   });
@@ -1037,18 +1215,13 @@ document.addEventListener('DOMContentLoaded', function(){
     csvDropZone.addEventListener(eventName, unhighlight, false);
   });
 
-  function highlight() {
-    csvDropZone.classList.add('dragover');
-  }
-
-  function unhighlight() {
-    csvDropZone.classList.remove('dragover');
-  }
+  function highlight() { csvDropZone.classList.add('dragover'); }
+  function unhighlight() { csvDropZone.classList.remove('dragover'); }
 
   csvDropZone.addEventListener('drop', function(e) {
     const dt = e.dataTransfer;
     const file = dt.files[0];
-    if (file && file.type === 'text/csv' || file.name.endsWith('.csv')) {
+    if (file && (file.type === 'text/csv' || file.name.endsWith('.csv'))) {
       handleFileSelection(file);
     } else {
       err('Please drop a CSV file');
@@ -1056,20 +1229,15 @@ document.addEventListener('DOMContentLoaded', function(){
   });
 
   function handleFileSelection(file) {
-    // Check file size (10MB max)
     if (file.size > 10 * 1024 * 1024) {
       err('File size must be less than 10MB');
       return;
     }
-
-    // Check file type
     if (!file.type.includes('csv') && !file.name.endsWith('.csv')) {
       err('Please select a CSV file');
       return;
     }
 
-    // Update UI
-    csvFileInput.files = new DataTransfer().files; // Clear first
     const dataTransfer = new DataTransfer();
     dataTransfer.items.add(file);
     csvFileInput.files = dataTransfer.files;
@@ -1088,7 +1256,6 @@ document.addEventListener('DOMContentLoaded', function(){
     importSubmitBtn.disabled = true;
   });
 
-  // Import form submission
   importCsvForm.addEventListener('submit', async function(e) {
     e.preventDefault();
 
@@ -1097,13 +1264,11 @@ document.addEventListener('DOMContentLoaded', function(){
       return;
     }
 
-    // Switch to progress view
     importStep1.classList.add('d-none');
     importStep2.classList.remove('d-none');
     importSubmitBtn.classList.add('d-none');
     importCancelBtn.disabled = true;
 
-    // reset visuals
     importSpinnerWrap.style.display = '';
     importSuccessWrap.classList.add('d-none');
 
@@ -1124,23 +1289,17 @@ document.addEventListener('DOMContentLoaded', function(){
       importStatusText.textContent = 'Creating users...';
 
       const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.message || 'Import failed');
 
-      if (!response.ok) {
-        throw new Error(result.message || 'Import failed');
-      }
-
-      // Success
       importProgressBar.style.width = '100%';
       importStatusText.textContent = 'Import completed!';
 
-      // Hide spinner, show BIG tick ✅
       importSpinnerWrap.style.display = 'none';
       importSuccessWrap.classList.remove('d-none');
 
       importCancelBtn.classList.add('d-none');
       importDoneBtn.classList.remove('d-none');
 
-      // Show results
       if (result.meta) {
         const { imported, skipped, errors } = result.meta;
         importStats.innerHTML = `
@@ -1167,8 +1326,8 @@ document.addEventListener('DOMContentLoaded', function(){
             </div>`;
           }
 
-          errors.forEach((error, index) => {
-            if (index < 20) { // Limit display to 20 errors
+          (errors || []).forEach((error, index) => {
+            if (index < 20) {
               resultsHTML += `<div class="import-result-item error">
                 <i class="fa fa-times-circle me-1"></i>
                 ${esc(error)}
@@ -1176,10 +1335,10 @@ document.addEventListener('DOMContentLoaded', function(){
             }
           });
 
-          if (errors.length > 20) {
+          if ((errors || []).length > 20) {
             resultsHTML += `<div class="import-result-item warning">
               <i class="fa fa-info-circle me-1"></i>
-              ...and ${errors.length - 20} more errors
+              ...and ${(errors || []).length - 20} more errors
             </div>`;
           }
 
@@ -1188,7 +1347,6 @@ document.addEventListener('DOMContentLoaded', function(){
 
         if (imported > 0) {
           ok(`Successfully imported ${imported} users`);
-          // Refresh the users list
           setTimeout(() => {
             loadUsers().catch(ex => err(ex.message || 'Reload failed'));
           }, 1000);
@@ -1202,7 +1360,6 @@ document.addEventListener('DOMContentLoaded', function(){
       importCancelBtn.disabled = false;
       importSubmitBtn.classList.remove('d-none');
 
-      // keep tick hidden; spinner can be hidden to avoid misleading state
       importSpinnerWrap.style.display = 'none';
       importSuccessWrap.classList.add('d-none');
 
@@ -1218,9 +1375,7 @@ document.addEventListener('DOMContentLoaded', function(){
     }
   });
 
-  // Reset import modal when closed
   importCsvModalEl.addEventListener('hidden.bs.modal', function() {
-    // Reset form
     importCsvForm.reset();
     csvFileInput.value = '';
     fileInfo.classList.add('d-none');
@@ -1235,7 +1390,6 @@ document.addEventListener('DOMContentLoaded', function(){
     importCancelBtn.classList.remove('d-none');
     importDoneBtn.classList.add('d-none');
 
-    // reset visuals
     importSpinnerWrap.style.display = '';
     importSuccessWrap.classList.add('d-none');
   });
@@ -1258,8 +1412,11 @@ document.addEventListener('DOMContentLoaded', function(){
       params.set('status', statusFilter);
     }
     if (roleFilter){
-      // backend currently doesn't filter by role; still sent for future use
       params.set('role', roleFilter);
+    }
+    if (folderFilter){
+      params.set('folder_id', folderFilter);
+      params.set('user_folder_id', folderFilter);
     }
 
     let res, json;
@@ -1289,19 +1446,24 @@ document.addEventListener('DOMContentLoaded', function(){
 
     let rows = raw.filter(row => (row.email || '').toLowerCase() !== hiddenEmail);
 
+    if (folderFilter){
+      rows = rows.filter(r => {
+        const fid = normId(r.user_folder_id ?? r.folder_id ?? r.folder ?? '');
+        return fid && fid === normId(folderFilter);
+      });
+    }
+
     totalCount = json.meta?.total ?? raw.length;
     if (systemAdminInPage && totalCount > rows.length){
       totalCount = totalCount - 1;
     }
     totalPages = json.meta?.total_pages ?? Math.max(1, Math.ceil(totalCount / perPage));
 
-    // client-side role filter on visible set
     if (roleFilter){
       const rf = roleFilter.toLowerCase();
       rows = rows.filter(r => (r.role || '').toLowerCase() === rf);
     }
 
-    // client-side sort for name/email (created_at can be implemented in backend later)
     function cmp(a,b){
       return a < b ? -1 : (a > b ? 1 : 0);
     }
@@ -1312,7 +1474,6 @@ document.addEventListener('DOMContentLoaded', function(){
       rows.sort((a,b)=> cmp((a.email||'').toLowerCase(), (b.email||'').toLowerCase()));
       if (sort === '-email') rows.reverse();
     }
-    // other sort keys (created_at) will be handled when backend supports
 
     usersCache = rows;
     renderUsers(rows);
@@ -1368,11 +1529,12 @@ document.addEventListener('DOMContentLoaded', function(){
              <i class="fa fa-question-circle me-1"></i>Manage
            </button>`
         : `<span class="text-muted small">—</span>`;
+
       const bubbleBtn = CAN_WRITE
-  ? `<button type="button" class="btn btn-light btn-sm js-manage-bubble">
-       <i class="fa fa-gamepad me-1"></i>Manage
-     </button>`
-  : `<span class="text-muted small">—</span>`;
+        ? `<button type="button" class="btn btn-light btn-sm js-manage-bubble">
+             <i class="fa fa-gamepad me-1"></i>Manage
+           </button>`
+        : `<span class="text-muted small">—</span>`;
 
       let actions = `
         <div class="dropdown text-end" data-bs-display="static">
@@ -1400,11 +1562,17 @@ document.addEventListener('DOMContentLoaded', function(){
                 <i class="fa fa-question-circle"></i> Manage Quizzes
               </button>
             </li>
-                        <li>
+            <li>
               <button type="button" class="dropdown-item" data-action="bubble">
                 <i class="fa fa-gamepad"></i> Manage Bubble Games
               </button>
-            </li>`;
+            </li>
+            <li>
+  <button type="button" class="dropdown-item" data-action="door">
+    <i class="fa fa-door-open"></i> Manage Door Games
+  </button>
+</li>
+`;
       }
       if (CAN_DELETE){
         actions += `
@@ -1418,22 +1586,28 @@ document.addEventListener('DOMContentLoaded', function(){
       actions += `
           </ul>
         </div>`;
+      const folderNm = folderNameFromUserRow(row);
+const folderHtml = folderNm
+  ? `<span class="small">${esc(folderNm)}</span>`
+  : `<span class="text-muted small">—</span>`;
+return `
+  <tr data-id="${row.id}">
+    <td>${statusBadge}</td>
+    <td>${avatarHtml}</td>
+    <td class="fw-semibold">${esc(row.name || '')}</td>
+    <td>${emailHtml}</td>
+    <td>
+      <span class="badge badge-role">
+        <i class="fa fa-user-shield me-1"></i>${esc(roleLabel(row.role))}
+      </span>
+    </td>
 
-      return `
-        <tr data-id="${row.id}">
-          <td>${statusBadge}</td>
-          <td>${avatarHtml}</td>
-          <td class="fw-semibold">${esc(row.name || '')}</td>
-          <td>${emailHtml}</td>
-          <td>
-            <span class="badge badge-role">
-              <i class="fa fa-user-shield me-1"></i>${esc(roleLabel(row.role))}
-            </span>
-          </td>
-          <td class="text-center">${quizzesBtn}</td>
-          <td class="text-center">${bubbleBtn}</td>
-          <td class="text-end">${actions}</td>
-        </tr>`;
+    <td>${folderHtml}</td>
+
+    <td class="text-center">${quizzesBtn}</td>
+    <td class="text-end">${actions}</td>
+  </tr>`;
+
     }).join('');
   }
 
@@ -1491,12 +1665,14 @@ document.addEventListener('DOMContentLoaded', function(){
     modalStatus.value = statusFilter;
     modalRole.value   = roleFilter;
     modalSort.value   = sort;
+    if (modalFolder) modalFolder.value = folderFilter;
   });
 
   btnApplyFilters.addEventListener('click', function(){
     statusFilter = modalStatus.value;
     roleFilter   = modalRole.value;
     sort         = modalSort.value;
+    folderFilter = modalFolder?.value || '';
     page         = 1;
     filterModal.hide();
     loadUsers().catch(ex => err(ex.message || 'Load failed'));
@@ -1509,12 +1685,14 @@ document.addEventListener('DOMContentLoaded', function(){
     q            = '';
     perPage      = 20;
     page         = 1;
+    folderFilter = '';
 
     searchInput.value  = '';
     perPageSel.value   = '20';
     modalStatus.value  = 'all';
     modalRole.value    = '';
     modalSort.value    = '-created_at';
+    if (modalFolder) modalFolder.value = '';
 
     loadUsers().catch(ex => err(ex.message || 'Load failed'));
   });
@@ -1536,8 +1714,8 @@ document.addEventListener('DOMContentLoaded', function(){
     userImageInput.value    = '';
     imagePreview.style.display = 'none';
     imagePreview.src = '';
-    // show password fields in create mode
     pwSections.forEach(el => el.classList.remove('d-none'));
+    if (userFolderInput) userFolderInput.value = '';
   }
 
   function openCreateUser(){
@@ -1551,7 +1729,6 @@ document.addEventListener('DOMContentLoaded', function(){
     resetUserForm();
     userModalTitle.textContent = 'Edit User';
     userForm.dataset.mode = 'edit';
-    // hide password fields for edit
     pwSections.forEach(el => el.classList.add('d-none'));
 
     try{
@@ -1572,6 +1749,9 @@ document.addEventListener('DOMContentLoaded', function(){
       userAltPhoneInput.value = u.alternative_phone_number || '';
       userWhatsAppInput.value = u.whatsapp_number || '';
       userAddressInput.value  = u.address || '';
+
+      const selectedFolder = u.user_folder_id ?? u.folder_id ?? '';
+      if (userFolderInput) userFolderInput.value = selectedFolder ? String(selectedFolder) : '';
 
       const imgUrl = fixImageUrl(u.image);
       if (imgUrl){
@@ -1596,7 +1776,6 @@ document.addEventListener('DOMContentLoaded', function(){
     imagePreview.style.display = 'block';
   });
 
-  // password eye toggles
   document.querySelectorAll('.js-eye-toggle').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const id = btn.dataset.target;
@@ -1658,6 +1837,11 @@ document.addEventListener('DOMContentLoaded', function(){
     fd.append('role', role);
     fd.append('status', status);
 
+    // ✅ FIX: append folder only ONCE (allows remove when blank)
+    if (userFolderInput){
+      fd.append('user_folder_id', userFolderInput.value || '');
+    }
+
     if (userPhoneInput.value.trim()){
       fd.append('phone_number', userPhoneInput.value.trim());
     }
@@ -1689,7 +1873,6 @@ document.addEventListener('DOMContentLoaded', function(){
         return;
       }
       url = `/api/users/${id}`;
-      // use _method PATCH so file upload works nicely
       fd.append('_method','PATCH');
       method = 'POST';
     }
@@ -1757,7 +1940,6 @@ document.addEventListener('DOMContentLoaded', function(){
     if (!tr) return;
     const id = tr.dataset.id;
 
-    // close any open dropdowns before opening modals
     hideAllDropdowns();
 
     if (e.target.closest('.js-manage-quizzes')){
@@ -1768,7 +1950,8 @@ document.addEventListener('DOMContentLoaded', function(){
       openUserQuizzes(id);
       return;
     }
-          if (e.target.closest('.js-manage-bubble')){
+
+    if (e.target.closest('.js-manage-bubble')){
       if (!CAN_WRITE){
         err('You do not have permission to manage bubble games');
         return;
@@ -1795,13 +1978,19 @@ document.addEventListener('DOMContentLoaded', function(){
         return;
       }
       openUserQuizzes(id);
-          }else if (act === 'bubble'){
+    }else if (act === 'bubble'){
       if (!CAN_WRITE){
         err('You do not have permission to manage bubble games');
         return;
       }
       openUserBubbleGames(id);
     
+    }else if (act === 'door'){
+  if (!CAN_WRITE){
+    err('You do not have permission to manage door games');
+    return;
+  }
+  openUserDoorGames(id);
     }else if (act === 'delete'){
       if (!CAN_DELETE){
         err('Only Super Admin can delete users');
@@ -1995,6 +2184,49 @@ document.addEventListener('DOMContentLoaded', function(){
       });
     });
   }
+
+  async function toggleUserQuiz(quizId, assigned, checkboxEl){
+    if (!uq_userId || !quizId) return;
+    try{
+      const url = assigned
+        ? `/api/users/${uq_userId}/quizzes/assign`
+        : `/api/users/${uq_userId}/quizzes/unassign`;
+
+      const res = await fetch(url, {
+        method:'POST',
+        headers: authHeaders({'Content-Type':'application/json','Accept':'application/json'}),
+        body: JSON.stringify({ quiz_id: quizId })
+      });
+      const j = await res.json().catch(()=> ({}));
+      if (!res.ok) throw new Error(firstError(j) || 'Operation failed');
+
+      const item = uq_data.find(x => Number(x.quiz_id) === Number(quizId));
+      if (assigned){
+        const code = j.data?.assignment_code || item?.assignment_code || '';
+        if (item){
+          item.assigned = true;
+          item.assignment_code = code;
+          item.status = 'active';
+        }
+        ok('Quiz assigned to user');
+      }else{
+        if (item){
+          item.assigned = false;
+          item.assignment_code = null;
+          item.status = 'revoked';
+        }
+        ok('Quiz unassigned from user');
+      }
+      renderUserQuizzes();
+    }catch(e){
+      if (checkboxEl) checkboxEl.checked = !assigned;
+      err(e.message || 'Failed to update assignment');
+    }
+  }
+
+  uq_search.addEventListener('input', debounce(renderUserQuizzes, 250));
+  uq_filter.addEventListener('change', renderUserQuizzes);
+
   /* =================== USER BUBBLE GAMES =================== */
   async function openUserBubbleGames(id){
     ubg_userId = parseInt(id,10);
@@ -2074,10 +2306,10 @@ document.addEventListener('DOMContentLoaded', function(){
            </button>`
         : '<span class="text-muted small">—</span>';
 
-      // These fields are flexible; adjust to your API response if needed:
       const name = gm.bubble_game_name || gm.game_name || gm.title || '';
       const duration = (gm.duration_min ?? gm.total_time ?? gm.duration ?? null);
       const questions = (gm.total_questions ?? gm.questions_count ?? null);
+      const gameId = (gm.bubble_game_id ?? gm.game_id ?? gm.id ?? '');
 
       const tr = document.createElement('tr');
       tr.innerHTML = `
@@ -2089,7 +2321,7 @@ document.addEventListener('DOMContentLoaded', function(){
         <td>${codeHtml}</td>
         <td class="text-center">
           <div class="form-check form-switch d-inline-block m-0">
-            <input class="form-check-input ubg-toggle" type="checkbox" data-gid="${gm.bubble_game_id}" ${assigned?'checked':''}>
+            <input class="form-check-input ubg-toggle" type="checkbox" data-gid="${esc(String(gameId))}" ${assigned?'checked':''}>
           </div>
         </td>
       `;
@@ -2100,12 +2332,170 @@ document.addEventListener('DOMContentLoaded', function(){
 
     ubg_rows.querySelectorAll('.ubg-toggle').forEach(ch => {
       ch.addEventListener('change', async ()=>{
-        const gameId   = parseInt(ch.dataset.gid,10);
+        const gidRaw = ch.dataset.gid;
         const assigned = !!ch.checked;
-        await toggleUserBubbleGame(gameId, assigned, ch);
+        await toggleUserBubbleGame(gidRaw, assigned, ch);
       });
     });
   }
+      /* =================== USER DOOR GAMES =================== */
+  /* =================== USER DOOR GAMES =================== */
+  async function openUserDoorGames(id){
+    udg_userId = parseInt(id,10);
+    const targetUser = usersCache.find(u => String(u.id) === String(id));
+    udg_user_name.textContent = targetUser?.name || ('User #'+id);
+
+    udg_search.value = '';
+    udg_filter.value = 'all';
+    udg_rows.innerHTML = '';
+    udg_loader.style.display = '';
+
+    userDoorGamesModal.show();
+
+    try{
+      const res = await fetch(`/api/users/${id}/door-games`, {
+        headers: authHeaders({'Accept':'application/json'})
+      });
+      const j = await res.json().catch(()=> ({}));
+      if (!res.ok) throw new Error(j.message || 'Failed to load door games');
+
+      udg_data = Array.isArray(j.data) ? j.data : [];
+      renderUserDoorGames();
+    }catch(e){
+      console.error('User door games load error', e);
+      udg_rows.innerHTML =
+        `<tr><td colspan="7" class="p-3 text-danger text-center">${esc(e.message || 'Failed to load door games')}</td></tr>`;
+    }finally{
+      udg_loader.style.display = 'none';
+    }
+  }
+
+  function renderUserDoorGames(){
+    udg_rows.querySelectorAll('tr:not(#udg_loader)').forEach(tr => tr.remove());
+
+    let list = udg_data.slice();
+    const qText = udg_search.value.trim().toLowerCase();
+    const filter = udg_filter.value;
+
+    if (qText){
+      list = list.filter(x => {
+        const nm = (x.door_game_name || x.game_name || x.title || '').toLowerCase();
+        return nm.includes(qText);
+      });
+    }
+
+    if (filter === 'assigned'){
+      list = list.filter(x => !!x.assigned);
+    }else if (filter === 'unassigned'){
+      list = list.filter(x => !x.assigned);
+    }
+
+    if (!list.length){
+      udg_rows.innerHTML =
+        `<tr><td colspan="7" class="p-3 text-center text-muted">No door games.</td></tr>`;
+      return;
+    }
+
+    const frag = document.createDocumentFragment();
+    list.forEach(gm => {
+      const assigned = !!gm.assigned;
+      const status  = (gm.status || '').toLowerCase();
+      const isPublic = (gm.is_public || '').toLowerCase();
+      const code = gm.assignment_code || '';
+
+      const statusBadge = status === 'active'
+        ? `<span class="badge badge-soft-active text-uppercase">${esc(status)}</span>`
+        : `<span class="badge badge-soft-inactive text-uppercase">${esc(status||'-')}</span>`;
+
+      const publicBadge = (isPublic === 'yes' || isPublic === 'public')
+        ? `<span class="badge bg-success-subtle text-success border border-success-subtle">Yes</span>`
+        : `<span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">No</span>`;
+
+      const codeHtml = code
+        ? `<button type="button" class="badge-code js-copy-assignment" data-code="${esc(code)}" title="Click to copy assignment code">
+             <span>${esc(code)}</span>
+             <i class="fa-regular fa-copy"></i>
+           </button>`
+        : '<span class="text-muted small">—</span>';
+
+      const name = gm.door_game_name || gm.game_name || gm.title || '';
+      const duration = (gm.duration_min ?? gm.total_time ?? gm.duration ?? null);
+      const questions = (gm.total_questions ?? gm.questions_count ?? null);
+
+      const gameId = (gm.door_game_id ?? gm.game_id ?? gm.id ?? '');
+
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="fw-semibold">${esc(name)}</td>
+        <td>${duration != null ? esc(String(duration)) : '—'}</td>
+        <td>${questions != null ? esc(String(questions)) : '—'}</td>
+        <td>${statusBadge}</td>
+        <td>${publicBadge}</td>
+        <td>${codeHtml}</td>
+        <td class="text-center">
+          <div class="form-check form-switch d-inline-block m-0">
+            <input class="form-check-input udg-toggle" type="checkbox" data-gid="${esc(String(gameId))}" ${assigned?'checked':''}>
+          </div>
+        </td>
+      `;
+      frag.appendChild(tr);
+    });
+
+    udg_rows.appendChild(frag);
+
+    udg_rows.querySelectorAll('.udg-toggle').forEach(ch => {
+      ch.addEventListener('change', async ()=>{
+        const gid = ch.dataset.gid;
+        const assigned = !!ch.checked;
+        await toggleUserDoorGame(gid, assigned, ch);
+      });
+    });
+  }
+
+  async function toggleUserDoorGame(gameId, assigned, checkboxEl){
+    if (!udg_userId || !gameId) return;
+
+    try{
+      const url = assigned
+        ? `/api/users/${udg_userId}/door-games/assign`
+        : `/api/users/${udg_userId}/door-games/unassign`;
+
+      const res = await fetch(url, {
+        method:'POST',
+        headers: authHeaders({'Content-Type':'application/json','Accept':'application/json'}),
+        body: JSON.stringify({ door_game_id: gameId })
+      });
+
+      const j = await res.json().catch(()=> ({}));
+      if (!res.ok) throw new Error(firstError(j) || 'Operation failed');
+
+      const item = udg_data.find(x => String(x.door_game_id ?? x.game_id ?? x.id) === String(gameId));
+      if (assigned){
+        const code = j.data?.assignment_code || item?.assignment_code || '';
+        if (item){
+          item.assigned = true;
+          item.assignment_code = code;
+          item.status = 'active';
+        }
+        ok('Door game assigned to user');
+      }else{
+        if (item){
+          item.assigned = false;
+          item.assignment_code = null;
+          item.status = 'revoked';
+        }
+        ok('Door game unassigned from user');
+      }
+
+      renderUserDoorGames();
+    }catch(e){
+      if (checkboxEl) checkboxEl.checked = !assigned;
+      err(e.message || 'Failed to update door game assignment');
+    }
+  }
+
+  udg_search.addEventListener('input', debounce(renderUserDoorGames, 250));
+  udg_filter.addEventListener('change', renderUserDoorGames);
 
   async function toggleUserBubbleGame(gameId, assigned, checkboxEl){
     if (!ubg_userId || !gameId) return;
@@ -2124,7 +2514,7 @@ document.addEventListener('DOMContentLoaded', function(){
       const j = await res.json().catch(()=> ({}));
       if (!res.ok) throw new Error(firstError(j) || 'Operation failed');
 
-      const item = ubg_data.find(x => Number(x.bubble_game_id) === Number(gameId));
+      const item = ubg_data.find(x => String(x.bubble_game_id ?? x.game_id ?? x.id) === String(gameId));
       if (assigned){
         const code = j.data?.assignment_code || item?.assignment_code || '';
         if (item){
@@ -2151,49 +2541,6 @@ document.addEventListener('DOMContentLoaded', function(){
 
   ubg_search.addEventListener('input', debounce(renderUserBubbleGames, 250));
   ubg_filter.addEventListener('change', renderUserBubbleGames);
-
-  async function toggleUserQuiz(quizId, assigned, checkboxEl){
-    if (!uq_userId || !quizId) return;
-    try{
-      const url = assigned
-        ? `/api/users/${uq_userId}/quizzes/assign`
-        : `/api/users/${uq_userId}/quizzes/unassign`;
-
-      const res = await fetch(url, {
-        method:'POST',
-        headers: authHeaders({'Content-Type':'application/json','Accept':'application/json'}),
-        body: JSON.stringify({ quiz_id: quizId })
-      });
-      const j = await res.json().catch(()=> ({}));
-      if (!res.ok) throw new Error(firstError(j) || 'Operation failed');
-
-      const item = uq_data.find(x => Number(x.quiz_id) === Number(quizId));
-      if (assigned){
-        const code = j.data?.assignment_code || item?.assignment_code || '';
-        if (item){
-          item.assigned = true;
-          item.assignment_code = code;
-          item.status = 'active';
-        }
-        ok('Quiz assigned to user');
-      }else{
-        if (item){
-          item.assigned = false;
-          // keep code for audit if needed; remove from UI
-          item.assignment_code = null;
-          item.status = 'revoked';
-        }
-        ok('Quiz unassigned from user');
-      }
-      renderUserQuizzes();
-    }catch(e){
-      if (checkboxEl) checkboxEl.checked = !assigned;
-      err(e.message || 'Failed to update assignment');
-    }
-  }
-
-  uq_search.addEventListener('input', debounce(renderUserQuizzes, 250));
-  uq_filter.addEventListener('change', renderUserQuizzes);
 
   /* =================== COPY ASSIGNMENT CODE =================== */
   document.addEventListener('click', function(e){
@@ -2222,7 +2569,9 @@ document.addEventListener('DOMContentLoaded', function(){
   });
 
   /* =================== INITIAL LOAD =================== */
-  loadUsers().catch(ex => err(ex.message || 'Failed to load users'));
+  loadFoldersDropdown().finally(() => {
+    loadUsers().catch(ex => err(ex.message || 'Failed to load users'));
+  });
 
 });
 </script>

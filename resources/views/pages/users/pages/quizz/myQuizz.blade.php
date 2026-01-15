@@ -489,7 +489,7 @@
       </div>
 
       <div class="flex-grow-1">
-        <h1 class="qz-head-title">My Quizzes & Graphical Tests</h1>
+        <h1 class="qz-head-title">My Quizzes & Games</h1>
         <div class="qz-head-sub">
           Switch tabs to view your quizzes or graphical tests, and start/continue attempts.
         </div>
@@ -498,12 +498,20 @@
           <button type="button" class="qz-tab-btn active" data-tab="quizzes" role="tab" aria-selected="true">
             <i class="fa-solid fa-graduation-cap"></i>
             Quizzes
-            <span class="qz-tab-count" id="tabCountQuizzes" style="display:none">0</span>
+            <span class="qz-tab-count d-none" id="tabCountQuizzes">0</span>
           </button>
+
           <button type="button" class="qz-tab-btn" data-tab="games" role="tab" aria-selected="false">
             <i class="fa-solid fa-gamepad"></i>
             Graphical Tests
-            <span class="qz-tab-count" id="tabCountGames" style="display:none">0</span>
+            <span class="qz-tab-count d-none" id="tabCountGames">0</span>
+          </button>
+
+          {{-- ✅ NEW: Door Games Tab --}}
+          <button type="button" class="qz-tab-btn" data-tab="door" role="tab" aria-selected="false">
+            <i class="fa-solid fa-door-open"></i>
+            Decision Making Test 
+            <span class="qz-tab-count d-none" id="tabCountDoor">0</span>
           </button>
         </div>
       </div>
@@ -544,7 +552,7 @@
         </div>
       </div>
 
-      {{-- ============ GAMES TAB ============ --}}
+      {{-- ============ BUBBLE GAMES TAB ============ --}}
       <div class="qz-tab-panel" id="panelGames" data-panel="games">
         <div class="qz-loader-wrap" id="qzLoaderGames">
           <div class="qz-loader"></div>
@@ -565,6 +573,32 @@
           </button>
           <span id="qzPageInfoGames"></span>
           <button type="button" class="btn btn-light btn-sm" id="qzNextGames">
+            Next <i class="fa-solid fa-arrow-right-long"></i>
+          </button>
+        </div>
+      </div>
+
+      {{-- ✅ NEW: DOOR GAMES TAB --}}
+      <div class="qz-tab-panel" id="panelDoor" data-panel="door">
+        <div class="qz-loader-wrap" id="qzLoaderDoor">
+          <div class="qz-loader"></div>
+        </div>
+
+        <div id="qzErrorDoor" class="qz-error"></div>
+
+        <div id="qzEmptyDoor" class="qz-empty d-none">
+          <i class="fa-regular fa-face-smile-beam mb-1"></i><br>
+          No door games available for you right now. Your assigned door games will appear here.
+        </div>
+
+        <div id="qzListDoor" class="qz-grid"></div>
+
+        <div id="qzPaginationDoor" class="qz-pagination d-none">
+          <button type="button" class="btn btn-light btn-sm" id="qzPrevDoor">
+            <i class="fa-solid fa-arrow-left-long"></i> Previous
+          </button>
+          <span id="qzPageInfoDoor"></span>
+          <button type="button" class="btn btn-light btn-sm" id="qzNextDoor">
             Next <i class="fa-solid fa-arrow-right-long"></i>
           </button>
         </div>
@@ -631,14 +665,17 @@ document.addEventListener('DOMContentLoaded', function () {
   // =======================
   const API_QUIZZES = '/api/quizz/my';
   const API_GAMES   = '/api/bubble-games/my';
+  const API_DOOR    = '/api/door-games/my'; // ✅ NEW
 
   // Attempts base (keep your existing quiz attempts URL)
   const ATTEMPTS_QUIZZES = '/api/exam/quizzes';     // /{quizKey}/my-attempts
-  const ATTEMPTS_GAMES   = '/api/bubble-games';     // /{gameKey}/my-attempts  (adjust if your route differs)
+  const ATTEMPTS_GAMES   = '/api/bubble-games';     // /{gameKey}/my-attempts
+  const ATTEMPTS_DOOR    = '/api/door-games';       // /{gameKey}/my-attempts (add backend if needed later)
 
   // Exam start routes
-  const START_QUIZ_ROUTE = '/exam/';               // /exam/{quiz_uuid}
-  const START_GAME_ROUTE = '/tests/play?game='; // change if your game start URL differs
+  const START_QUIZ_ROUTE = '/exam/';                 // /exam/{quiz_uuid}
+  const START_GAME_ROUTE = '/tests/play?game=';      // bubble game start URL
+  const START_DOOR_ROUTE = '/door-tests/play?game='; // ✅ NEW (change if your play url differs)
 
   // =======================
   // Tabs
@@ -649,8 +686,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
   const tabCountQuizzes = document.getElementById('tabCountQuizzes');
   const tabCountGames   = document.getElementById('tabCountGames');
+  const tabCountDoor    = document.getElementById('tabCountDoor'); // ✅ NEW
 
-  let activeTab = 'quizzes'; // quizzes | games
+  let activeTab = 'quizzes'; // quizzes | games | door
 
   function setActiveTab(tab) {
     activeTab = tab;
@@ -669,6 +707,7 @@ document.addEventListener('DOMContentLoaded', function () {
     // trigger fetch for that tab if first time
     if (tab === 'quizzes' && !state.quizzes.loadedOnce) fetchList('quizzes', 1);
     if (tab === 'games'   && !state.games.loadedOnce)   fetchList('games', 1);
+    if (tab === 'door'    && !state.door.loadedOnce)    fetchList('door', 1); // ✅ NEW
   }
 
   tabBtns.forEach(btn => {
@@ -767,6 +806,23 @@ document.addEventListener('DOMContentLoaded', function () {
         next: document.getElementById('qzNextGames'),
         info: document.getElementById('qzPageInfoGames')
       }
+    },
+    // ✅ NEW
+    door: {
+      loadedOnce: false,
+      currentPage: 1,
+      lastPage: 1,
+      q: '',
+      els: {
+        list: document.getElementById('qzListDoor'),
+        empty: document.getElementById('qzEmptyDoor'),
+        loader: document.getElementById('qzLoaderDoor'),
+        error: document.getElementById('qzErrorDoor'),
+        pagination: document.getElementById('qzPaginationDoor'),
+        prev: document.getElementById('qzPrevDoor'),
+        next: document.getElementById('qzNextDoor'),
+        info: document.getElementById('qzPageInfoDoor')
+      }
     }
   };
 
@@ -786,28 +842,119 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     S.els.empty.classList.add('d-none');
 
+    // ✅ robust boolean parser (handles "1"/"0"/true/false/1/0)
+    function toBool(v) {
+      if (v === true || v === 1) return true;
+      if (v === false || v === 0) return false;
+      if (typeof v === 'string') {
+        const s = v.trim().toLowerCase();
+        if (s === '1' || s === 'true' || s === 'yes') return true;
+        if (s === '0' || s === 'false' || s === 'no') return false;
+      }
+      return null;
+    }
+
     const frag = document.createDocumentFragment();
 
     items.forEach(item => {
       const card = document.createElement('article');
       card.className = 'qz-card';
 
-      const totalTime = item.total_time ? item.total_time + ' min' : '—';
-      const totalQ    = item.total_questions || 0;
-      const attempts  = item.total_attempts || 1;
+      const totalTime = item.total_time
+        ? item.total_time + ' min'
+        : (item.total_time_minutes ? (item.total_time_minutes + ' min') : '—');
 
-      const myStatus  = item.my_status || 'upcoming';
-      const hasResult = item.result && item.result.id;
+      const totalQ = item.total_questions || 0;
 
+      // ✅ Status
+      const myStatus = item.my_status || 'upcoming';
+
+      // ✅ attempts allowed (try all keys)
+      const attemptsAllowed = parseInt(
+        item.max_attempts_allowed ??
+        item.max_attempts ??
+        item.max_attempt ??
+        item.total_attempts_allowed ??
+        item.attempts_allowed ??
+        item.allowed_attempts ??
+        item.total_attempts ??
+        1,
+        10
+      ) || 1;
+
+      // ✅ attempts used (fallback to result.attempt_no)
+      const attemptsUsed = parseInt(
+        item.my_attempts ??
+        item.attempts_used ??
+        item.attempts_taken ??
+        item.attempt_count ??
+        item.latest_attempt_no ??
+        (item.result && item.result.attempt_no ? item.result.attempt_no : null) ??
+        item.used_attempts ??
+        0,
+        10
+      ) || 0;
+
+      // ✅ remaining attempts (prefer backend)
+      const remainingAttempts = (item.remaining_attempts !== undefined && item.remaining_attempts !== null)
+        ? (parseInt(item.remaining_attempts, 10) || 0)
+        : Math.max(attemptsAllowed - attemptsUsed, 0);
+
+      const isGameLike = (tab === 'games' || tab === 'door'); // ✅ NEW
+
+      // ✅ Allow continue even if max reached (only in_progress)
+      const allowContinueEvenIfMax = (isGameLike && myStatus === 'in_progress');
+
+      // ✅ API flags are KING
+      const apiMaxReached = toBool(item.max_attempt_reached);
+      const apiCanAttempt = toBool(item.can_attempt);
+
+      // ✅ max attempt reached
+      const maxAttemptReached = isGameLike && !allowContinueEvenIfMax && (
+        apiMaxReached === true ||
+        apiCanAttempt === false ||
+        remainingAttempts <= 0 ||
+        (attemptsAllowed > 0 && attemptsUsed >= attemptsAllowed)
+      );
+
+      // ✅ FINAL LABEL RULES
       let primaryLabel = 'Start';
-      if (myStatus === 'in_progress') primaryLabel = 'Continue';
-      if (myStatus === 'completed')   primaryLabel = 'Retake';
 
-      const disabledStart = (item.status !== 'active') ? 'disabled' : '';
+      if (myStatus === 'in_progress') {
+        primaryLabel = 'Continue';
+      } else if (isGameLike) {
+        if (maxAttemptReached) {
+          primaryLabel = 'No Attempts left';
+        } else if (myStatus === 'completed') {
+          primaryLabel = 'Retake';
+        } else {
+          primaryLabel = 'Start';
+        }
+      } else {
+        // ✅ quizzes
+        if (myStatus === 'completed') {
+          primaryLabel = 'Retake';
+        } else {
+          primaryLabel = 'Start';
+        }
+      }
 
-      const iconHtml = tab === 'games'
-        ? '<i class="fa-solid fa-gamepad"></i>'
-        : '<i class="fa-solid fa-graduation-cap"></i>';
+      // ✅ Disable button only for game-like tabs max reached OR inactive
+      const isDisabled = (item.status !== 'active') || (isGameLike && maxAttemptReached);
+      const disabledAttr = isDisabled ? 'disabled' : '';
+
+      // ✅ Tooltip
+      let startTitle = '';
+      if (item.status !== 'active') startTitle = 'This item is not active';
+      if (isGameLike && maxAttemptReached) {
+        startTitle = `Maximum attempts reached (${attemptsUsed}/${attemptsAllowed})`;
+      }
+
+      const iconHtml = (tab === 'door')
+        ? '<i class="fa-solid fa-door-open"></i>'
+        : (tab === 'games'
+          ? '<i class="fa-solid fa-gamepad"></i>'
+          : '<i class="fa-solid fa-graduation-cap"></i>');
 
       card.innerHTML = `
         <div class="qz-card-top">
@@ -824,22 +971,20 @@ document.addEventListener('DOMContentLoaded', function () {
         </div>
 
         <div class="qz-meta">
-          <span><i class="fa-regular fa-circle-question"></i>${totalQ} questions</span>
+          <span><i class="fa-regular fa-circle-question "></i>${totalQ} questions</span>
           <span><i class="fa-regular fa-clock"></i>${totalTime}</span>
-          <span><i class="fa-solid fa-rotate-right"></i>${attempts} attempt${attempts > 1 ? 's' : ''} allowed</span>
+          <span><i class="fa-solid fa-rotate-right"></i>${attemptsAllowed} attempt${attemptsAllowed > 1 ? 's' : ''} allowed</span>
         </div>
 
         <div class="qz-footer">
-          <button type="button" class="btn btn-primary btn-sm" data-action="start" ${disabledStart}>
+          <button type="button"
+            class="btn btn-primary btn-sm"
+            data-action="start"
+            ${disabledAttr}
+            ${startTitle ? `title="${sanitize(startTitle)}"` : ''}>
             <i class="fa-solid fa-arrow-right"></i>
             <span>${primaryLabel}</span>
           </button>
-
-          ${hasResult ? `
-            <button type="button" class="btn btn-outline-primary btn-sm d-none" data-action="result">
-              <i class="fa-solid fa-chart-line"></i> View result
-            </button>
-          ` : ''}
 
           <span class="sub">
             Added ${item.created_at ? new Date(item.created_at).toLocaleDateString() : ''}
@@ -847,25 +992,20 @@ document.addEventListener('DOMContentLoaded', function () {
         </div>
       `;
 
-      const startBtn  = card.querySelector('[data-action="start"]');
-      const resultBtn = card.querySelector('[data-action="result"]');
-
+      const startBtn = card.querySelector('[data-action="start"]');
       if (startBtn) {
         startBtn.addEventListener('click', function () {
           if (!item.uuid) return;
+          if (isDisabled) return;
 
           if (tab === 'quizzes') {
             window.location.href = START_QUIZ_ROUTE + encodeURIComponent(item.uuid);
-          } else {
-            // bubble game start URL
+          } else if (tab === 'games') {
             window.location.href = START_GAME_ROUTE + encodeURIComponent(item.uuid);
+          } else {
+            // ✅ door games
+            window.location.href = START_DOOR_ROUTE + encodeURIComponent(item.uuid);
           }
-        });
-      }
-
-      if (resultBtn && hasResult) {
-        resultBtn.addEventListener('click', function () {
-          openAttempts(tab, item);
         });
       }
 
@@ -891,7 +1031,7 @@ document.addEventListener('DOMContentLoaded', function () {
     S.els.prev.disabled = S.currentPage <= 1;
     S.els.next.disabled = S.currentPage >= S.lastPage;
 
-    const label = tab === 'games' ? 'game' : 'quiz';
+    const label = (tab === 'door') ? 'door game' : (tab === 'games' ? 'game' : 'quiz');
     S.els.info.textContent =
       `Page ${S.currentPage} of ${S.lastPage} • ${total} ${label}${total > 1 ? 's' : ''}`;
   }
@@ -908,7 +1048,10 @@ document.addEventListener('DOMContentLoaded', function () {
     S.els.error.classList.remove('show');
     S.els.error.textContent = '';
 
-    const api = (tab === 'games') ? API_GAMES : API_QUIZZES;
+    const api =
+      (tab === 'games') ? API_GAMES :
+      (tab === 'door')  ? API_DOOR  :
+      API_QUIZZES;
 
     const params = new URLSearchParams();
     params.set('page', page);
@@ -951,8 +1094,10 @@ document.addEventListener('DOMContentLoaded', function () {
       S.loadedOnce = true;
 
       // update counts on tabs (nice UX)
-      if (tab === 'quizzes') tabCountQuizzes.textContent = String(pagination.total || items.length || 0);
-      if (tab === 'games')   tabCountGames.textContent   = String(pagination.total || items.length || 0);
+      const totalCount = String(pagination.total || items.length || 0);
+      if (tab === 'quizzes') tabCountQuizzes.textContent = totalCount;
+      if (tab === 'games')   tabCountGames.textContent   = totalCount;
+      if (tab === 'door')    tabCountDoor.textContent    = totalCount;
 
     } catch (err) {
       console.error(err);
@@ -979,217 +1124,13 @@ document.addEventListener('DOMContentLoaded', function () {
     if (state.games.currentPage < state.games.lastPage) fetchList('games', state.games.currentPage + 1);
   });
 
-  // ======================
-  // Attempts modal (shared)
-  // ======================
-  const attemptsModalEl   = document.getElementById('qzAttemptModal');
-  const attemptsEyebrowEl = document.getElementById('qzAttemptEyebrow');
-  const attemptsTitleEl   = document.getElementById('qzAttemptTitle');
-  const attemptsMetaEl    = document.getElementById('qzAttemptMeta');
-  const attemptsTbodyEl   = document.getElementById('qzAttemptTbody');
-  const attemptsEmptyEl   = document.getElementById('qzAttemptEmpty');
-  const attemptsLoaderEl  = document.getElementById('qzAttemptLoader');
-  const attemptsErrorEl   = document.getElementById('qzAttemptError');
-  const attemptsCloseBtns = attemptsModalEl
-    ? attemptsModalEl.querySelectorAll('[data-close="attempt-modal"]')
-    : [];
-
-  function openAttemptsModal() {
-    if (!attemptsModalEl) return;
-    attemptsModalEl.classList.add('show');
-    document.body.classList.add('modal-open');
-  }
-  function closeAttemptsModal() {
-    if (!attemptsModalEl) return;
-    attemptsModalEl.classList.remove('show');
-    document.body.classList.remove('modal-open');
-  }
-
-  attemptsCloseBtns.forEach(btn => btn.addEventListener('click', closeAttemptsModal));
-  if (attemptsModalEl) {
-    attemptsModalEl.addEventListener('click', function (e) {
-      if (e.target && e.target.getAttribute('data-close') === 'attempt-modal') closeAttemptsModal();
-    });
-  }
-  document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && attemptsModalEl && attemptsModalEl.classList.contains('show')) closeAttemptsModal();
+  // ✅ NEW: door pagination
+  state.door.els.prev.addEventListener('click', () => {
+    if (state.door.currentPage > 1) fetchList('door', state.door.currentPage - 1);
   });
-
-  function formatDateTime(value) {
-    if (!value) return '—';
-    const safe = typeof value === 'string' ? value.replace(' ', 'T') : value;
-    const d = new Date(safe);
-    if (isNaN(d.getTime())) return value;
-    return d.toLocaleString();
-  }
-
-  function attemptStatusBadge(status) {
-    const s = (status || '').toLowerCase();
-    if (s === 'in_progress' || s === 'started') {
-      return '<span class="qz-chip qz-chip-primary"><i class="fa-solid fa-play"></i>In progress</span>';
-    }
-    if (s === 'submitted' || s === 'finished' || s === 'completed' || s === 'graded') {
-      return '<span class="qz-chip qz-chip-success"><i class="fa-solid fa-circle-check"></i>Submitted</span>';
-    }
-    if (s === 'auto_submitted') {
-      return '<span class="qz-chip qz-chip-warn"><i class="fa-solid fa-bolt"></i>Auto submitted</span>';
-    }
-    if (s === 'abandoned') {
-      return '<span class="qz-chip"><i class="fa-regular fa-circle-xmark"></i>Abandoned</span>';
-    }
-    return '<span class="qz-chip"><i class="fa-regular fa-circle-question"></i>' + sanitize(status || 'Unknown') + '</span>';
-  }
-
-  function renderAttemptsList(attempts) {
-    attemptsTbodyEl.innerHTML = '';
-
-    if (!attempts || !attempts.length) {
-      attemptsEmptyEl.style.display = 'block';
-      return;
-    }
-
-    attemptsEmptyEl.style.display = 'none';
-
-    attempts.forEach(function (a, index) {
-      const tr = document.createElement('tr');
-
-      const tdIdx     = document.createElement('td');
-      const tdDate    = document.createElement('td');
-      const tdStatus  = document.createElement('td');
-      const tdScore   = document.createElement('td');
-      const tdAction  = document.createElement('td');
-
-      tdIdx.className    = 'qz-attempt-col-idx';
-      tdScore.className  = 'qz-attempt-col-score';
-      tdAction.className = 'qz-attempt-col-action';
-
-      tdIdx.textContent  = index + 1;
-      tdDate.textContent = formatDateTime(a.started_at || a.created_at);
-
-      tdStatus.innerHTML = attemptStatusBadge(a.status);
-
-      // Score UI: keep same logic (if your bubble attempts API returns result.total_marks etc.)
-      let scoreText = '—';
-      if (a.result && a.result.total_marks) {
-        const obtained = a.result.marks_obtained || 0;
-        const total    = a.result.total_marks || 0;
-        let pct        = a.result.percentage;
-        if (pct === null || pct === undefined) {
-          pct = total ? (obtained * 100 / total) : 0;
-        }
-        scoreText = obtained + '/' + total + ' (' + pct.toFixed(2) + '%)';
-      }
-      tdScore.textContent = scoreText;
-
-      // Action: keep same view result behavior for quizzes.
-      // For games: you can later point to your bubble result view route.
-      if (a.result && a.result.result_id && a.result.can_view_detail) {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'btn btn-outline-primary btn-sm';
-        btn.innerHTML = '<i class="fa-solid fa-chart-line"></i> View result';
-        btn.addEventListener('click', function () {
-          window.open('/exam/results/' + encodeURIComponent(a.result.result_id) + '/view', '_blank');
-        });
-        tdAction.appendChild(btn);
-      } else if (a.result && a.result.result_id && !a.result.can_view_detail) {
-        const span = document.createElement('span');
-        span.className = 'qz-attempt-note';
-        span.textContent = 'Not published yet';
-        tdAction.appendChild(span);
-      } else if ((a.status || '').toLowerCase() === 'in_progress') {
-        const span = document.createElement('span');
-        span.className = 'qz-attempt-note';
-        span.textContent = 'Ongoing';
-        tdAction.appendChild(span);
-      } else {
-        const span = document.createElement('span');
-        span.className = 'qz-attempt-note';
-        span.textContent = 'No result';
-        tdAction.appendChild(span);
-      }
-
-      tr.appendChild(tdIdx);
-      tr.appendChild(tdDate);
-      tr.appendChild(tdStatus);
-      tr.appendChild(tdScore);
-      tr.appendChild(tdAction);
-
-      attemptsTbodyEl.appendChild(tr);
-    });
-  }
-
-  async function openAttempts(tab, item) {
-    const token = requireAuthToken();
-    if (!token || !attemptsModalEl) return;
-
-    attemptsEyebrowEl.textContent = tab === 'games' ? 'Game Attempts' : 'Quiz Attempts';
-    attemptsTitleEl.textContent   = sanitize(item.title || (tab === 'games' ? 'Game' : 'Quiz'));
-    attemptsMetaEl.innerHTML      = '<span>Loading details…</span>';
-
-    attemptsErrorEl.textContent = '';
-    attemptsErrorEl.classList.remove('show');
-    attemptsTbodyEl.innerHTML = '';
-    attemptsEmptyEl.style.display = 'none';
-
-    attemptsLoaderEl.classList.add('show');
-    openAttemptsModal();
-
-    const key = item.uuid || item.id;
-    if (!key) {
-      attemptsLoaderEl.classList.remove('show');
-      attemptsErrorEl.textContent = 'Identifier missing.';
-      attemptsErrorEl.classList.add('show');
-      return;
-    }
-
-    const base = (tab === 'games') ? ATTEMPTS_GAMES : ATTEMPTS_QUIZZES;
-
-    try {
-      const res = await fetch(base + '/' + encodeURIComponent(key) + '/my-attempts', {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-          'Authorization': 'Bearer ' + token
-        }
-      });
-
-      const json = await res.json().catch(() => ({}));
-
-      if (res.status === 401 || res.status === 403) {
-        clearAuth();
-        window.location.replace('/login');
-        return;
-      }
-
-      if (!res.ok || json.success === false) {
-        throw new Error(json.message || json.error || 'Failed to load attempts.');
-      }
-
-      const meta = json.quiz || json.game || json.meta || {};
-      const attempts = json.attempts || [];
-
-      const pieces = [];
-      if (meta.total_marks !== undefined && meta.total_marks !== null) pieces.push('Total marks: ' + meta.total_marks);
-      if (meta.total_attempts_allowed !== undefined && meta.total_attempts_allowed !== null) pieces.push('Attempts allowed: ' + meta.total_attempts_allowed);
-      if (meta.total_time !== undefined && meta.total_time !== null) pieces.push('Time: ' + meta.total_time + ' min');
-
-      attemptsMetaEl.innerHTML = pieces.length
-        ? pieces.map(p => '<span>' + sanitize(p) + '</span>').join(' ')
-        : '';
-
-      renderAttemptsList(attempts);
-
-    } catch (err) {
-      console.error(err);
-      attemptsErrorEl.textContent = err.message || 'Something went wrong while loading attempts.';
-      attemptsErrorEl.classList.add('show');
-      attemptsTbodyEl.innerHTML = '';
-      attemptsEmptyEl.style.display = 'none';
-    } finally {
-      attemptsLoaderEl.classList.remove('show');
-    }
-  }
+  state.door.els.next.addEventListener('click', () => {
+    if (state.door.currentPage < state.door.lastPage) fetchList('door', state.door.currentPage + 1);
+  });
 
   // =======================
   // Search (debounced, per active tab)

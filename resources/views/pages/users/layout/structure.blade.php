@@ -255,7 +255,7 @@
       <div class="w3-section-rule"></div>
     </div>
 
-    {{-- 1) ALL MENU (default population; shown only if API returns "all") --}}
+    {{-- 1 ALL MENU (default population; shown only if API returns "all") --}}
     <div id="allMenuWrap" style="display:none">
       {{-- ADMIN --}}
       <div id="allMenuAdmin" style="display:none">
@@ -269,6 +269,16 @@
               <a href="/users/manage" class="w3-link">Manage Users</a>
             </div>
           </div>
+          <div class="w3-group">
+  <a href="#" class="w3-link w3-toggle" data-target="sm-admin-user-folders" aria-expanded="false">
+    <i class="fa-solid fa-folder"></i><span>User Folders</span>
+    <i class="fa fa-chevron-down w3-chev"></i>
+  </a>
+  <div id="sm-admin-user-folders" class="w3-submenu" role="group" aria-label="User Folders submenu">
+    <a href="/user-folders/create" class="w3-link">Create Folder</a>
+    <a href="/user-folders/manage" class="w3-link">Manage Folders</a>
+  </div>
+</div>
 
           <div class="w3-group">
             <a href="#" class="w3-link w3-toggle" data-target="sm-admin-quizzes" aria-expanded="false">

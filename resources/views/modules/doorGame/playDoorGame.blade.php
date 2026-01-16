@@ -15,12 +15,15 @@
 
   <style>
     /* =========================================================
-      Door Game Exam UI (Scoped)
-      - Professional layout (like your screenshot)
-      - Barriers are RED
-      - Moves tracked in ms (sessionStorage cache)
-      - Submit sends cached move-log + summary
-      - No global body/:root edits
+      Door Game Exam UI (Scoped) — UPDATED (Professional Game Feel)
+      ✅ Changes applied:
+        - Arrows are around the USER (not board edges)
+        - Barriers are NOT shown (logic still blocks)
+        - Arrow turns RED + disabled if barrier/boundary OR target cell already visited
+        - Visited cells highlighted
+        - Player after key: PURPLE (not multicolor)
+        - Door icon color: BLACK (with visibility outline)
+        - More game-like effects: glow/pulse, shake on blocked, sparkle on key, win confetti burst, smooth camera follow, subtle click sfx
     ========================================================= */
 
     .dgx-exam{
@@ -35,6 +38,10 @@
 
       --dgx-danger: #ef4444;
       --dgx-success: #22c55e;
+      --dgx-warn: #f59e0b;
+
+      --dgx-purple: #a855f7; /* ✅ player powered purple */
+      --dgx-black: #0b0f18;  /* ✅ door black */
 
       --dgx-radius: 18px;
       --dgx-radius2: 26px;
@@ -50,6 +57,7 @@
         radial-gradient(1000px 600px at 88% 12%, rgba(91,91,214,.14), transparent 55%),
         linear-gradient(180deg, rgba(2,6,23,.02), rgba(2,6,23,.03));
       color: var(--dgx-ink);
+      overflow-x:hidden;
     }
 
     html.theme-dark .dgx-exam{
@@ -64,13 +72,7 @@
         linear-gradient(180deg, rgba(2,6,23,.65), rgba(2,6,23,.86));
     }
 
-    .dgx-shell{
-      width: 100%;
-      max-width: 1560px;
-      display:flex;
-      flex-direction: column;
-      gap: 14px;
-    }
+    .dgx-shell{ width:100%; max-width:1560px; display:flex; flex-direction:column; gap:14px; }
 
     .dgx-topbar{
       background: linear-gradient(135deg,
@@ -94,67 +96,40 @@
         color-mix(in srgb, var(--dgx-brand2) 60%, #0b1220) 100%);
     }
 
-    .dgx-title{ display:flex; flex-direction: column; gap: 4px; min-width: 0; }
+    .dgx-title{ display:flex; flex-direction:column; gap:4px; min-width:0; }
     .dgx-title h1{
       font-size: clamp(16px, 1.25vw, 20px);
-      line-height: 1.15;
-      margin: 0;
-      font-weight: 950;
-      letter-spacing: .2px;
-      white-space: nowrap;
-      overflow:hidden;
-      text-overflow: ellipsis;
-      max-width: 62vw;
+      line-height: 1.15; margin:0; font-weight:950; letter-spacing:.2px;
+      white-space: nowrap; overflow:hidden; text-overflow: ellipsis; max-width: 62vw;
     }
-    .dgx-title .sub{
-      font-size: 12px;
-      opacity: .95;
-      display:flex;
-      align-items:center;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
+    .dgx-title .sub{ font-size:12px; opacity:.95; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
 
     .dgx-pill{
-      display:inline-flex;
-      align-items:center;
-      gap: 7px;
-      padding: 7px 10px;
-      border-radius: 999px;
+      display:inline-flex; align-items:center; gap:7px;
+      padding:7px 10px; border-radius:999px;
       background: rgba(255,255,255,.16);
       border: 1px solid rgba(255,255,255,.22);
       backdrop-filter: blur(10px);
-      font-weight: 850;
-      font-size: 12px;
-      white-space: nowrap;
+      font-weight: 850; font-size:12px; white-space:nowrap;
     }
 
-    .dgx-actions{ display:flex; align-items:center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+    .dgx-actions{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; justify-content:flex-end; }
     .dgx-btn{
       border: 1px solid rgba(255,255,255,.22);
       background: rgba(255,255,255,.14);
-      color: #fff;
+      color:#fff;
       border-radius: 14px;
       padding: 10px 14px;
-      display:inline-flex;
-      align-items:center;
-      gap: 9px;
-      font-weight: 900;
-      font-size: 13px;
+      display:inline-flex; align-items:center; gap:9px;
+      font-weight: 900; font-size:13px;
       transition: .15s ease;
-      text-decoration:none;
-      user-select:none;
+      text-decoration:none; user-select:none;
     }
     .dgx-btn:hover{ transform: translateY(-1px); background: rgba(255,255,255,.20); }
     .dgx-btn:active{ transform: translateY(0px); }
     .dgx-btn.danger{ background: rgba(239,68,68,.18); border-color: rgba(239,68,68,.28); }
 
-    .dgx-grid{
-      display:grid;
-      grid-template-columns: 1fr 440px;
-      gap: 14px;
-      align-items: start;
-    }
+    .dgx-grid{ display:grid; grid-template-columns: 1fr 440px; gap:14px; align-items:start; }
     @media (max-width: 1080px){
       .dgx-grid{ grid-template-columns: 1fr; }
       .dgx-title h1{ max-width: 92vw; }
@@ -171,73 +146,46 @@
 
     .dgx-card-hd{
       padding: 14px 16px;
-      display:flex;
-      align-items:flex-start;
-      justify-content: space-between;
-      gap: 14px;
+      display:flex; align-items:flex-start; justify-content:space-between; gap:14px;
       border-bottom: 1px solid var(--dgx-line);
       background: linear-gradient(180deg, rgba(2,6,23,.03), transparent);
     }
 
-    .dgx-instr{ display:flex; flex-direction: column; gap: 6px; }
+    .dgx-instr{ display:flex; flex-direction:column; gap:6px; }
     .dgx-instr .kicker{
-      font-size: 12px;
-      font-weight: 950;
-      letter-spacing: .55px;
+      font-size:12px; font-weight:950; letter-spacing:.55px;
       color: color-mix(in srgb, var(--dgx-brand) 70%, var(--dgx-ink));
       text-transform: uppercase;
     }
-    .dgx-instr .text{
-      font-size: 14px;
-      color: var(--dgx-muted);
-      font-weight: 800;
-    }
+    .dgx-instr .text{ font-size:14px; color: var(--dgx-muted); font-weight:800; }
 
-    .dgx-timer{
-      min-width: 230px;
-      display:flex;
-      flex-direction: column;
-      gap: 8px;
-      align-items: flex-end;
-    }
-    .dgx-timer .row1{
-      display:flex;
-      align-items:center;
-      gap: 10px;
-      font-weight: 950;
-    }
-    .dgx-timer .row1 .label{ font-size: 12px; color: var(--dgx-muted); font-weight: 950; }
+    .dgx-timer{ min-width:230px; display:flex; flex-direction:column; gap:8px; align-items:flex-end; }
+    .dgx-timer .row1{ display:flex; align-items:center; gap:10px; font-weight:950; }
+    .dgx-timer .row1 .label{ font-size:12px; color: var(--dgx-muted); font-weight:950; }
     .dgx-timer .row1 .time{
-      font-size: 14px;
-      padding: 6px 11px;
-      border-radius: 999px;
+      font-size:14px; padding:6px 11px; border-radius:999px;
       border: 1px solid var(--dgx-line);
       background: rgba(2,6,23,.03);
-      font-weight: 950;
+      font-weight:950;
     }
     html.theme-dark .dgx-timer .row1 .time{ background: rgba(148,163,184,.08); }
 
     .dgx-progress{
-      width: 230px;
-      height: 10px;
-      border-radius: 999px;
+      width:230px; height:10px; border-radius:999px;
       background: rgba(2,6,23,.08);
       overflow:hidden;
       border: 1px solid var(--dgx-line);
     }
     html.theme-dark .dgx-progress{ background: rgba(148,163,184,.10); }
     .dgx-progress > i{
-      display:block;
-      height: 100%;
-      width: 100%;
+      display:block; height:100%; width:100%;
       background: linear-gradient(90deg, #22c55e, #16a34a);
       border-radius: 999px;
       transition: width .35s ease;
     }
 
-    .dgx-card-bd{ padding: 16px; }
+    .dgx-card-bd{ padding:16px; }
 
-    /* ===== Mission banner (like screenshot) ===== */
     .dgx-mission{
       border-radius: 20px;
       padding: 14px 16px;
@@ -248,48 +196,42 @@
         color-mix(in srgb, var(--dgx-brand2) 76%, white) 0%,
         color-mix(in srgb, var(--dgx-brand) 76%, white) 100%);
       box-shadow: 0 14px 30px rgba(2,6,23,.10);
-      display:flex;
-      align-items:center;
-      justify-content: space-between;
-      gap: 10px;
-      flex-wrap: wrap;
+      display:flex; align-items:center; justify-content:space-between;
+      gap: 10px; flex-wrap: wrap;
       margin-bottom: 12px;
+      position:relative;
+      overflow:hidden;
     }
-    .dgx-mission .left{ display:flex; align-items:center; gap: 10px; }
+    .dgx-mission:after{
+      content:"";
+      position:absolute; inset:-40px;
+      background: radial-gradient(closest-side, rgba(255,255,255,.14), transparent 65%);
+      animation: dgxGlow 3.2s ease-in-out infinite;
+      pointer-events:none;
+    }
+    @keyframes dgxGlow{
+      0%{ transform: translate(-8%, -6%) scale(1); opacity:.75; }
+      50%{ transform: translate(8%, 6%) scale(1.05); opacity:1; }
+      100%{ transform: translate(-8%, -6%) scale(1); opacity:.75; }
+    }
+    .dgx-mission .left{ display:flex; align-items:center; gap:10px; position:relative; z-index:1; }
     .dgx-mission .left i{ opacity:.95 }
-    .dgx-mission .right{
-      display:flex;
-      gap: 10px;
-      flex-wrap: wrap;
-      align-items:center;
-      opacity:.95;
-      font-size: 12px;
-      font-weight: 900;
-    }
+    .dgx-mission .right{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; opacity:.95; font-size:12px; font-weight:900; position:relative; z-index:1; }
     .dgx-tag{
       padding: 6px 10px;
       border-radius: 999px;
       background: rgba(255,255,255,.16);
       border: 1px solid rgba(255,255,255,.22);
       backdrop-filter: blur(10px);
-      display:inline-flex;
-      align-items:center;
-      gap: 8px;
-      white-space: nowrap;
+      display:inline-flex; align-items:center; gap:8px; white-space:nowrap;
     }
 
     /* ===== Board ===== */
-    .dgx-boardWrap{
-      display:grid;
-      grid-template-columns: 1fr 260px;
-      gap: 14px;
-      align-items: stretch;
-    }
-    @media (max-width: 900px){
-      .dgx-boardWrap{ grid-template-columns: 1fr; }
-    }
+    .dgx-boardWrap{ display:grid; grid-template-columns: 1fr 260px; gap:14px; align-items:stretch; }
+    @media (max-width: 900px){ .dgx-boardWrap{ grid-template-columns: 1fr; } }
 
     .dgx-board{
+      position: relative;
       border-radius: 22px;
       background:
         radial-gradient(600px 260px at 20% 20%, rgba(155,77,255,.12), transparent 58%),
@@ -298,7 +240,8 @@
       padding: 14px;
       border: 1px solid rgba(255,255,255,.18);
       overflow:auto;
-      min-height: 320px;
+      min-height: 360px;
+      scroll-behavior:smooth;
     }
     html.theme-dark .dgx-board{
       background:
@@ -311,16 +254,18 @@
     .dgx-gridBoard{
       --cell: 84px;
       display:grid;
+      z-index: 1;
       grid-template-columns: repeat(var(--n), var(--cell));
       grid-auto-rows: var(--cell);
       gap: 10px;
       justify-content: center;
       align-content: center;
-      padding: 10px;
+      padding: 30px 30px; /* tighter because arrows are around user tile now */
       background: rgba(255,255,255,.18);
       border: 1px solid rgba(255,255,255,.22);
       border-radius: 18px;
       backdrop-filter: blur(10px);
+      position: relative;
     }
     html.theme-dark .dgx-gridBoard{
       background: rgba(148,163,184,.08);
@@ -329,6 +274,7 @@
 
     .dgx-cell{
       position:relative;
+      z-index:1;
       border-radius: 16px;
       background: #fff;
       border: 1px solid rgba(2,6,23,.12);
@@ -338,8 +284,8 @@
       display:flex;
       align-items:center;
       justify-content:center;
-      transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
-      overflow: hidden;
+      transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease, background .12s ease;
+      overflow: visible; /* allow arrows to sit around user tile */
     }
     html.theme-dark .dgx-cell{
       background: #0f172a;
@@ -354,54 +300,239 @@
     .dgx-cell:active{ transform: translateY(-1px) scale(.99); }
 
     .dgx-idx{
-      position:absolute;
-      top: 8px; left: 10px;
-      font-size: 11px;
-      font-weight: 950;
-      color: #8b97a8;
-      opacity: .9;
+      position:absolute; top:8px; left:10px;
+      font-size: 11px; font-weight:950; color:#8b97a8; opacity:.9;
       pointer-events:none;
     }
     html.theme-dark .dgx-idx{ color:#94a3b8; }
 
     .dgx-ico{
       font-size: 26px;
-      color: color-mix(in srgb, var(--dgx-brand2) 80%, #0f172a);
       filter: drop-shadow(0 10px 16px rgba(2,6,23,.16));
       pointer-events:none;
+      z-index: 2;
     }
-    .dgx-ico.key{ color: #f59e0b; }
-    .dgx-ico.door{ color: #10b981; }
-    .dgx-ico.user{ color: color-mix(in srgb, var(--dgx-brand2) 75%, #0f172a); }
 
-    /* current position highlight */
+    /* ✅ Player default */
+    .dgx-ico.user{
+      color: color-mix(in srgb, var(--dgx-ink) 78%, #000);
+      opacity: .92;
+    }
+    html.theme-dark .dgx-ico.user{ color: #cbd5e1; opacity:.95; }
+
+    /* ✅ Player after key: PURPLE (professional glow) */
+    .dgx-playerPowered .dgx-ico.user{
+      /* color: var(--dgx-purple); */
+      opacity: 1;
+      /* filter:
+        drop-shadow(0 16px 22px color-mix(in srgb, var(--dgx-purple) 35%, transparent))
+        drop-shadow(0 10px 16px rgba(2,6,23,.18)); */
+    }
+
+    .dgx-ico.key{ color: #f59e0b; filter: drop-shadow(0 14px 18px rgba(245,158,11,.22)); }
+
+    /* ✅ Door color BLACK (with outline for visibility) */
+    .dgx-ico.doorClosed,
+    .dgx-ico.doorOpen{
+color: #8B5A2B !important; /* brown */      text-shadow:
+        0 0 0 rgba(0,0,0,0),
+        0 1px 0 rgba(255,255,255,.45),
+        0 0 12px rgba(255,255,255,.20);
+      filter: drop-shadow(0 14px 18px rgba(2,6,23,.22));
+    }
+    html.theme-dark .dgx-ico.doorClosed,
+    html.theme-dark .dgx-ico.doorOpen{
+      color: #000;
+      text-shadow:
+        0 0 0 rgba(0,0,0,0),
+        0 1px 0 rgba(255,255,255,.65),
+        0 0 14px rgba(255,255,255,.22);
+    }
+
+    /* ✅ current position pulse */
     .dgx-cell.is-current{
-      outline: 3px solid color-mix(in srgb, var(--dgx-brand2) 38%, transparent);
-      border-color: color-mix(in srgb, var(--dgx-brand2) 50%, rgba(2,6,23,.12));
-    }
+  outline: 3px solid color-mix(in srgb, var(--dgx-brand2) 38%, transparent);
+  border-color: color-mix(in srgb, var(--dgx-brand2) 50%, rgba(2,6,23,.12));
+  box-shadow: 0 16px 34px rgba(2,6,23,.16);
+  animation: dgxPulse 1.35s ease-in-out infinite;
 
-    /* reachable neighbor hint */
+  /* ✅ CRITICAL: keep current tile above all others (so arrows don't hide) */
+  z-index: 999 !important;
+
+  /* ✅ CRITICAL: allow arrows to overflow without clipping */
+  overflow: visible !important;
+
+  /* ✅ stabilize stacking / */
+  transform: translateZ(0);
+}
+
+    @keyframes dgxPulse{
+      0%{ transform: translateY(0); }
+      50%{ transform: translateY(-1px); }
+      100%{ transform: translateY(0); }
+    }
+/* ✅ Do NOT move the current cell on hover/active
+   because arrows are positioned relative to it */
+.dgx-cell.is-current:hover,
+.dgx-cell.is-current:active{
+  transform: none !important;
+}
+
+    /* ✅ reachable neighbor */
     .dgx-cell.is-next{
       outline: 2px dashed color-mix(in srgb, #22c55e 40%, transparent);
       border-color: color-mix(in srgb, #22c55e 45%, rgba(2,6,23,.12));
     }
 
-    /* ===== Barriers (RED) — drawn via pseudo elements inside each cell =====
-       We render canonical edges to avoid duplicates:
-       - always render TOP and LEFT when true
-       - render BOTTOM only for last row
-       - render RIGHT only for last col
-    */
-    .dgx-bar{ position:absolute; background: var(--dgx-danger); border-radius:999px; opacity:.95; pointer-events:none; display:none; }
-    .dgx-bar.top{ height: 5px; left: 14px; right: 14px; top: 9px; }
-    .dgx-bar.bottom{ height: 5px; left: 14px; right: 14px; bottom: 9px; }
-    .dgx-bar.left{ width: 5px; top: 14px; bottom: 14px; left: 9px; }
-    .dgx-bar.right{ width: 5px; top: 14px; bottom: 14px; right: 9px; }
+    /* ✅ visited path highlighting */
+    /* ✅ visited path highlighting (WHITE tint) */
+/* ✅ visited cells: white card + dashed inset border (like sample) */
+.dgx-cell.is-visited{
+  background: #ffffff !important;
+  border: 2px solid rgba(255,255,255,.98) !important;
 
-    .dgx-cell.b-top .dgx-bar.top{display:block}
-    .dgx-cell.b-bottom .dgx-bar.bottom{display:block}
-    .dgx-cell.b-left .dgx-bar.left{display:block}
-    .dgx-cell.b-right .dgx-bar.right{display:block}
+  /* dashed inset ring */
+  outline: 2px dashed rgba(45, 212, 191, .95) !important; /* teal */
+  outline-offset: -8px !important;
+
+  box-shadow: 0 10px 22px rgba(2,6,23,.10) !important;
+}
+
+html.theme-dark .dgx-cell.is-visited{
+  background: rgba(255,255,255,.10) !important;
+  border: 2px solid rgba(255,255,255,.20) !important;
+  outline: 2px dashed rgba(45, 212, 191, .85) !important;
+  outline-offset: -8px !important;
+}
+
+
+
+    /* ===== Barriers (HIDDEN visuals, logic still works) ===== */
+    .dgx-bar{ display:none !important; }
+
+    /* ===== User-surrounding arrows (inside user cell) ===== */
+    .dgx-uArrows{
+      position:absolute;
+      inset:0;
+      z-index: 1025;
+      pointer-events:none;
+        transform: translateZ(0);
+
+    }
+    .dgx-uArrow{
+  pointer-events:auto;
+  position:absolute;
+  width: 24px;
+  height: 24px;
+  border-radius: 14px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+
+  border: 1px solid rgba(255,255,255,.22);
+  background: rgba(15,23,42,.55);
+  color: #fff;
+
+  z-index:1160;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 12px 26px rgba(2,6,23,.18);
+  transition: background .12s ease, opacity .12s ease, filter .12s ease, transform .12s ease;
+  user-select:none;
+
+  /* ✅ direction transform base (never overwritten) */
+  --tx: 0px;
+  --ty: 0px;
+  transform: translate3d(var(--tx), var(--ty), 0);
+}
+html.theme-dark .dgx-uArrow{
+  background: rgba(148,163,184,.14);
+  border-color: rgba(148,163,184,.22);
+  color:#e5e7eb;
+  box-shadow: 0 16px 34px rgba(0,0,0,.55);
+}
+
+/* ✅ Direction anchors (use vars so disabled never breaks alignment) */
+.dgx-uArrow.up{    top:-18px; left:50%;   --tx:-50%; --ty:0px; }
+.dgx-uArrow.down{  bottom:-18px; left:50%;--tx:-50%; --ty:0px; }
+.dgx-uArrow.left{  left:-18px; top:50%;   --tx:0px;  --ty:-50%; }
+.dgx-uArrow.right{ right:-18px; top:50%;  --tx:0px;  --ty:-50%; }
+    /* ✅ Hover/active KEEP direction transform */
+.dgx-uArrow:hover{
+  transform: translate3d(var(--tx), calc(var(--ty) - 1px), 0);
+}
+.dgx-uArrow:active{
+  transform: translate3d(var(--tx), var(--ty), 0) scale(.98);
+}
+    /* blocked or visited => RED */
+    .dgx-uArrow.blocked{
+      background: rgba(239,68,68,.70);
+      border-color: rgba(239,68,68,.35);
+      color:#fff;
+    }
+    /* disabled */
+   .dgx-uArrow.disabled{
+  opacity: .48;
+  cursor:not-allowed;
+  box-shadow:none;
+  filter: saturate(.95);
+}
+.dgx-uArrow.disabled:hover,
+.dgx-uArrow.disabled:active{
+  transform: translate3d(var(--tx), var(--ty), 0);
+}
+
+    /* ===== FX: shake + sparkle + win confetti ===== */
+    .dgx-cell.fx-shake{ animation: dgxShake .35s ease; }
+    @keyframes dgxShake{
+      0%{ transform: translateX(0); }
+      20%{ transform: translateX(-3px); }
+      40%{ transform: translateX(3px); }
+      60%{ transform: translateX(-2px); }
+      80%{ transform: translateX(2px); }
+      100%{ transform: translateX(0); }
+    }
+
+    .dgx-floatTxt{
+      position:absolute;
+      left:50%; top:50%;
+      transform: translate(-50%,-50%);
+      font-size:12px;
+      font-weight:950;
+      padding:6px 10px;
+      border-radius: 999px;
+      background: rgba(2,6,23,.76);
+      color:#fff;
+      border: 1px solid rgba(255,255,255,.18);
+      pointer-events:none;
+      z-index: 80;
+      animation: dgxFloat .8s ease forwards;
+      white-space:nowrap;
+    }
+    @keyframes dgxFloat{
+      0%{ opacity:0; transform: translate(-50%,-40%) scale(.98); }
+      20%{ opacity:1; transform: translate(-50%,-55%) scale(1); }
+      100%{ opacity:0; transform: translate(-50%,-88%) scale(1.02); }
+    }
+
+    .dgx-spark{
+      position:absolute;
+      left:50%; top:50%;
+      width:8px; height:8px;
+      border-radius:999px;
+      background: #fff;
+      transform: translate(-50%,-50%);
+      opacity: 0;
+      pointer-events:none;
+      z-index: 70;
+    }
+
+    .dgx-confettiLayer{
+      position:absolute;
+      inset:0;
+      pointer-events:none;
+      z-index: 90;
+      overflow: visible;
+    }
 
     /* ===== Sidebar ===== */
     .dgx-side{
@@ -411,55 +542,25 @@
       flex-direction: column;
       gap: 14px;
     }
-    @media (max-width: 1080px){
-      .dgx-side{ position: static; }
-    }
+    @media (max-width: 1080px){ .dgx-side{ position: static; } }
 
-    .dgx-panel{
-      padding: 14px 16px;
-      display:flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-    .dgx-panel .hd{
-      display:flex;
-      align-items:center;
-      justify-content: space-between;
-      gap: 10px;
-    }
-    .dgx-panel .hd .t{
-      font-weight: 950;
-      font-size: 14px;
-      display:flex;
-      align-items:center;
-      gap: 10px;
-    }
+    .dgx-panel{ padding:14px 16px; display:flex; flex-direction:column; gap:10px; }
+    .dgx-panel .hd{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .dgx-panel .hd .t{ font-weight:950; font-size:14px; display:flex; align-items:center; gap:10px; }
 
-    .dgx-mini{
-      display:grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-    }
+    .dgx-mini{ display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
     .dgx-stat{
       border: 1px solid var(--dgx-line);
       background: rgba(2,6,23,.03);
       border-radius: 16px;
       padding: 10px 12px;
-      display:flex;
-      flex-direction: column;
-      gap: 4px;
+      display:flex; flex-direction:column; gap:4px;
     }
     html.theme-dark .dgx-stat{ background: rgba(148,163,184,.08); }
     .dgx-stat .k{ color: var(--dgx-muted); font-size: 12px; font-weight: 900; }
     .dgx-stat .v{ font-weight: 950; font-size: 16px; }
 
-    .dgx-actions2{
-      display:flex;
-      gap: 10px;
-      flex-wrap: wrap;
-      align-items:center;
-      justify-content: space-between;
-    }
+    .dgx-actions2{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:space-between; }
     .dgx-btn2{
       border-radius: 14px;
       border: 1px solid var(--dgx-line);
@@ -467,9 +568,7 @@
       padding: 10px 14px;
       font-weight: 950;
       font-size: 13px;
-      display:inline-flex;
-      align-items:center;
-      gap: 9px;
+      display:inline-flex; align-items:center; gap:9px;
       transition: .15s ease;
       user-select:none;
     }
@@ -481,35 +580,14 @@
       color:#fff;
       border-color: rgba(255,255,255,.08);
     }
-    .dgx-btn2.danger{
-      background: rgba(239,68,68,.10);
-      border-color: rgba(239,68,68,.20);
-      color: #ef4444;
-    }
-    .dgx-btn2:disabled{ opacity: .55; cursor: not-allowed; transform: none !important; }
+    .dgx-btn2.danger{ background: rgba(239,68,68,.10); border-color: rgba(239,68,68,.20); color:#ef4444; }
+    .dgx-btn2:disabled{ opacity:.55; cursor:not-allowed; transform:none !important; }
 
-    .dgx-note{
-      color: var(--dgx-muted);
-      font-size: 12px;
-      font-weight: 850;
-      line-height: 1.45;
-    }
+    .dgx-note{ color: var(--dgx-muted); font-size: 12px; font-weight: 850; line-height: 1.45; }
+    .dgx-loader{ padding: 26px; display:flex; align-items:center; justify-content:center; gap:10px; color: var(--dgx-muted); font-weight: 950; }
 
-    .dgx-loader{
-      padding: 26px;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      gap: 10px;
-      color: var(--dgx-muted);
-      font-weight: 950;
-    }
-
-    /* subtle key collected badge */
     .dgx-keypill{
-      display:inline-flex;
-      align-items:center;
-      gap: 8px;
+      display:inline-flex; align-items:center; gap:8px;
       padding: 7px 10px;
       border-radius: 999px;
       border: 1px solid var(--dgx-line);
@@ -520,13 +598,7 @@
     }
     html.theme-dark .dgx-keypill{ background: rgba(148,163,184,.08); }
 
-    .dgx-footnote{
-      text-align:center;
-      color: var(--dgx-muted);
-      font-size: 12px;
-      font-weight: 850;
-      padding: 2px 0 10px;
-    }
+    .dgx-footnote{ text-align:center; color: var(--dgx-muted); font-size: 12px; font-weight: 850; padding: 2px 0 10px; }
   </style>
 </head>
 
@@ -582,13 +654,13 @@
               <span id="dgxMissionText">Collect KEY → Reach DOOR</span>
             </div>
             <div class="right">
-              <span class="dgx-tag"><i class="fa-solid fa-person-walking"></i> Click adjacent cell to move</span>
-              <span class="dgx-tag"><i class="fa-solid fa-bars-staggered"></i> Red lines are barriers</span>
+              <span class="dgx-tag"><i class="fa-solid fa-hand-pointer"></i> Tap cell or arrows</span>
+              <span class="dgx-tag"><i class="fa-solid fa-keyboard"></i> Use ↑ ↓ ← →</span>
             </div>
           </div>
 
           <div class="dgx-boardWrap">
-            <div class="dgx-board">
+            <div class="dgx-board" id="dgxBoardWrap">
               <div id="dgxBoard" class="dgx-gridBoard" style="--n:3">
                 <div class="dgx-loader">
                   <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
@@ -634,7 +706,6 @@
 
                 <div class="dgx-note">
                   Moves are cached in sessionStorage with millisecond timing. On submit, the full move-log + summary is saved.
-                  Use arrow keys too (optional): ↑ ↓ ← →.
                 </div>
               </div>
             </div>
@@ -652,14 +723,15 @@
           <div class="dgx-panel">
             <div class="hd">
               <div class="t"><i class="fa-solid fa-map-location-dot"></i> Legend</div>
-              <span class="dgx-keypill"><i class="fa-solid fa-shield-halved"></i> Barriers</span>
+              <span class="dgx-keypill"><i class="fa-solid fa-gamepad"></i> Controls</span>
             </div>
 
             <div class="dgx-note" style="display:flex; flex-direction:column; gap:10px">
-              <div><i class="fa-solid fa-user me-2" style="color:color-mix(in srgb, var(--dgx-brand2) 75%, #0f172a)"></i> Player</div>
+              <div><i class="fa-solid fa-user me-2"></i> Player</div>
               <div><i class="fa-solid fa-key me-2" style="color:#f59e0b"></i> Key (collect all)</div>
-              <div><i class="fa-solid fa-door-open me-2" style="color:#10b981"></i> Door (finish)</div>
-              <div><span class="badge" style="background:#ef4444">—</span> Red lines block movement</div>
+              <div><i class="fa-solid fa-door-closed me-2" style="color:#000"></i> Door (black)</div>
+              <div><span class="badge" style="background:#ef4444">!</span> Red arrow = blocked / visited</div>
+              <div><span class="badge" style="background:#a855f7">•</span> Visited path highlight</div>
             </div>
           </div>
         </div>
@@ -671,7 +743,7 @@
               <span class="dgx-keypill" id="dgxAttemptNo"><i class="fa-solid fa-hashtag"></i> 1</span>
             </div>
             <div class="dgx-note" id="dgxAttemptNote">
-              Collect all keys, then reach the door before time runs out.
+              Collect all keys, then reach the door before time runs out. Barriers are hidden but still block movement.
             </div>
           </div>
         </div>
@@ -700,20 +772,21 @@
     </div>
   </div>
 </div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 <script>
 (() => {
   /* =========================================================
-    Door Game Play Script (UPDATED)
-    ✅ Aligns with submit API validation:
-      user_answer_json = {
-        grid_dim, start_index, path, moves, events, timing{time_taken_ms}
-      }
-    ✅ Fixes timing: move.t_ms is RELATIVE (ms since start)
-    ✅ Tracks one-time key + door events
-    ✅ Keeps your UI/logic intact (no breaking changes)
+    Door Game Play Script — UPDATED
+      - User-surround arrows
+      - Hidden barriers (logic blocks)
+      - Arrow red+disabled for barrier/boundary OR visited target
+      - No moving into visited cells (arrows + click)
+      - Purple powered player
+      - Door always black
+      - Game FX: shake, sparkles, confetti, camera follow, subtle sfx
   ========================================================= */
 
   function getGameUuidFromUrl() {
@@ -731,7 +804,6 @@
 
   const CACHE_KEY = `dg_exam_${GAME_UUID}`;
 
-  // Swal toast
   const Toast = Swal.mixin({
     toast: true,
     position: 'bottom-end',
@@ -751,6 +823,7 @@
   const elTimeBar     = document.getElementById('dgxTimeBar');
 
   const elBoard       = document.getElementById('dgxBoard');
+  const elBoardWrap   = document.getElementById('dgxBoardWrap');
 
   const elRunState    = document.getElementById('dgxRunState');
   const elMoves       = document.getElementById('dgxMoves');
@@ -770,20 +843,23 @@
   let state = {
     game: null,
     N: 3,
-    cells: [], // normalized cells {id,row,col,is_user,is_key,is_door,barriers:{t,b,l,r}}
-    userId: null,      // cell id
-    doorId: null,      // cell id
-    keys: new Set(),   // all key cell ids
+    cells: [],
+    userId: null,
+    doorId: null,
+    keys: new Set(),
     keysCollected: new Set(),
 
-    // ✅ one-time events
-    keyEvent: null,    // { picked_at_index, t_ms }
-    doorEvent: null,   // { opened_at_index, t_ms }
+    visited: new Set(),
+
+    keyEvent: null,
+    doorEvent: null,
+
+    doorUnlocked: false,
 
     status: 'in_progress', // in_progress | win | fail | timeout
-    moves: [],         // move events
-    startedAtMs: 0,    // absolute perf ms
-    lastMoveAtMs: 0,   // absolute perf ms
+    moves: [],
+    startedAtMs: 0,
+    lastMoveAtMs: 0,
     timeLimitSec: 30,
     tick: null,
     timeLeft: 30,
@@ -801,8 +877,26 @@
     }[m]));
   }
 
-  function nowMs(){
-    return Math.round(performance.now());
+  function nowMs(){ return Math.round(performance.now()); }
+
+  // ===== Tiny SFX (no files, just WebAudio) =====
+  let audioCtx = null;
+  function sfx(freq=440, dur=0.06, type='sine', gain=0.035){
+    try{
+      if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const o = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      o.type = type;
+      o.frequency.value = freq;
+      g.gain.value = gain;
+      o.connect(g); g.connect(audioCtx.destination);
+      o.start();
+      o.stop(audioCtx.currentTime + dur);
+    }catch(e){}
+  }
+
+  function vibrate(ms=20){
+    try{ if(navigator.vibrate) navigator.vibrate(ms); }catch(e){}
   }
 
   function pad2(n){ return String(n).padStart(2,'0'); }
@@ -819,9 +913,11 @@
       doorId: state.doorId,
       keys: Array.from(state.keys),
       keysCollected: Array.from(state.keysCollected),
+      visited: Array.from(state.visited),
 
       keyEvent: state.keyEvent,
       doorEvent: state.doorEvent,
+      doorUnlocked: !!state.doorUnlocked,
 
       status: state.status,
       moves: state.moves,
@@ -848,9 +944,11 @@
       state.doorId = p.doorId || null;
       state.keys = new Set(Array.isArray(p.keys) ? p.keys : []);
       state.keysCollected = new Set(Array.isArray(p.keysCollected) ? p.keysCollected : []);
+      state.visited = new Set(Array.isArray(p.visited) ? p.visited : []);
 
       state.keyEvent = p.keyEvent || null;
       state.doorEvent = p.doorEvent || null;
+      state.doorUnlocked = !!p.doorUnlocked;
 
       state.status = p.status || 'in_progress';
       state.moves = Array.isArray(p.moves) ? p.moves : [];
@@ -869,9 +967,7 @@
     }
   }
 
-  function clearCache(){
-    sessionStorage.removeItem(CACHE_KEY);
-  }
+  function clearCache(){ sessionStorage.removeItem(CACHE_KEY); }
 
   async function fetchJson(url){
     const token = getToken();
@@ -904,30 +1000,29 @@
   }
 
   function startTimer(){
-  stopTick();
-  renderTimer();
-
-  state.tick = setInterval(() => {
-    if(state.status !== 'in_progress') return;
-
-    state.timeLeft = Math.max(0, Number(state.timeLeft || 0) - 1);
+    stopTick();
     renderTimer();
-    saveCache();
 
-    if(state.timeLeft <= 0){
-      state.status = 'timeout';
-      setRunState('Timeout', 'danger');
-      elResult.textContent = 'Timeout';
-      stopTick();
+    state.tick = setInterval(() => {
+      if(state.status !== 'in_progress') return;
 
-      // ✅ Auto-submit once, then redirect (submitAttempt already redirects)
-      if(!state.isSubmitting){
-        notify('warning','Time up!', 'Auto-submitting…');
-        submitAttempt(true);   // ✅ no await needed
+      state.timeLeft = Math.max(0, Number(state.timeLeft || 0) - 1);
+      renderTimer();
+      saveCache();
+
+      if(state.timeLeft <= 0){
+        state.status = 'timeout';
+        setRunState('Timeout', 'danger');
+        elResult.textContent = 'Timeout';
+        stopTick();
+
+        if(!state.isSubmitting){
+          notify('warning','Time up!', 'Auto-submitting…');
+          submitAttempt(true);
+        }
       }
-    }
-  }, 1000);
-}
+    }, 1000);
+  }
 
   function setRunState(text, tone){
     const icon = tone === 'success'
@@ -976,6 +1071,22 @@
     return false;
   }
 
+  // ✅ direction helpers (for arrow logic)
+  function nextIdByDir(fromId, dir){
+    const { r, c } = idToRC(fromId);
+    if(dir==='up')    return (r>0) ? rcToId(r-1,c) : null;
+    if(dir==='down')  return (r<state.N-1) ? rcToId(r+1,c) : null;
+    if(dir==='left')  return (c>0) ? rcToId(r,c-1) : null;
+    if(dir==='right') return (c<state.N-1) ? rcToId(r,c+1) : null;
+    return null;
+  }
+
+  function dirBlocked(fromId, dir){
+    const toId = nextIdByDir(fromId, dir);
+    if(!toId) return true; // boundary
+    return !canMove(fromId, toId); // barrier or boundary
+  }
+
   function updateSidebar(){
     elMoves.textContent = String(state.moves.length);
     elKeysGot.textContent = String(state.keysCollected.size);
@@ -983,14 +1094,6 @@
     const elapsed = state.startedAtMs ? Math.max(0, nowMs() - state.startedAtMs) : 0;
     elTimeMs.textContent = String(elapsed);
     elKeysNeed.textContent = String(state.keys.size);
-  }
-
-  function shouldRenderBarrier(cell, edge){
-    if(edge === 'top') return !!cell.barriers?.top;
-    if(edge === 'left') return !!cell.barriers?.left;
-    if(edge === 'bottom') return (cell.row === state.N-1) && !!cell.barriers?.bottom;
-    if(edge === 'right')  return (cell.col === state.N-1) && !!cell.barriers?.right;
-    return false;
   }
 
   function markReachableHints(){
@@ -1001,77 +1104,103 @@
       el.classList.remove('is-next');
       if(state.status !== 'in_progress') return;
       if(Number(c.id) === Number(userId)) return;
+
+      // ✅ also don't hint already visited targets
+      // if(state.visited.has(Number(c.id))) return;
+
       if(isAdjacent(userId, c.id) && canMove(userId, c.id)){
         el.classList.add('is-next');
       }
     });
   }
 
-  function renderBoard(){
-    elBoard.style.setProperty('--n', String(state.N));
-    elBoard.innerHTML = '';
-
-    state.cells.forEach(cell => {
-      const div = document.createElement('div');
-      div.className = 'dgx-cell';
-      div.dataset.id = String(cell.id);
-      div.setAttribute('role','button');
-      div.setAttribute('tabindex','0');
-
-      if(Number(cell.id) === Number(state.userId)) div.classList.add('is-current');
-
-      if(shouldRenderBarrier(cell,'top')) div.classList.add('b-top');
-      if(shouldRenderBarrier(cell,'bottom')) div.classList.add('b-bottom');
-      if(shouldRenderBarrier(cell,'left')) div.classList.add('b-left');
-      if(shouldRenderBarrier(cell,'right')) div.classList.add('b-right');
-
-      const idx = document.createElement('div');
-      idx.className = 'dgx-idx';
-      idx.textContent = String(cell.id);
-
-      const ico = document.createElement('div');
-      ico.className = 'dgx-ico';
-
-      if(Number(cell.id) === Number(state.userId)){
-        ico.classList.add('user');
-        ico.innerHTML = '<i class="fa-solid fa-user"></i>';
-      }else if(Number(cell.id) === Number(state.doorId)){
-        ico.classList.add('door');
-        ico.innerHTML = '<i class="fa-solid fa-door-open"></i>';
-      }else if(state.keys.has(cell.id) && !state.keysCollected.has(cell.id)){
-        ico.classList.add('key');
-        ico.innerHTML = '<i class="fa-solid fa-key"></i>';
-      }else{
-        ico.innerHTML = '';
-      }
-
-      const bTop = document.createElement('span'); bTop.className = 'dgx-bar top';
-      const bBottom = document.createElement('span'); bBottom.className = 'dgx-bar bottom';
-      const bLeft = document.createElement('span'); bLeft.className = 'dgx-bar left';
-      const bRight = document.createElement('span'); bRight.className = 'dgx-bar right';
-
-      div.appendChild(idx);
-      div.appendChild(ico);
-      div.appendChild(bTop);
-      div.appendChild(bBottom);
-      div.appendChild(bLeft);
-      div.appendChild(bRight);
-
-      div.addEventListener('click', () => onCellClick(cell.id));
-      div.addEventListener('keydown', (e) => {
-        if(e.key === 'Enter' || e.key === ' '){
-          e.preventDefault();
-          onCellClick(cell.id);
-        }
-      });
-
-      elBoard.appendChild(div);
-    });
-
-    markReachableHints();
+  // ===== FX helpers =====
+  function floatText(cellEl, text){
+    if(!cellEl) return;
+    const t = document.createElement('div');
+    t.className = 'dgx-floatTxt';
+    t.textContent = String(text || '');
+    cellEl.appendChild(t);
+    setTimeout(()=> t.remove(), 900);
   }
 
-  // ✅ UPDATED: t_ms is RELATIVE since start (submit API friendly)
+  function shakeCell(cellEl){
+    if(!cellEl) return;
+    cellEl.classList.remove('fx-shake');
+    void cellEl.offsetWidth;
+    cellEl.classList.add('fx-shake');
+    setTimeout(()=> cellEl.classList.remove('fx-shake'), 420);
+  }
+
+  function sparkle(cellEl, color='#fff'){
+    if(!cellEl) return;
+    const count = 12;
+    for(let i=0;i<count;i++){
+      const p = document.createElement('span');
+      p.className = 'dgx-spark';
+      p.style.background = color;
+      cellEl.appendChild(p);
+
+      const ang = Math.random() * Math.PI * 2;
+      const dist = 18 + Math.random() * 22;
+      const dx = Math.cos(ang) * dist;
+      const dy = Math.sin(ang) * dist;
+
+      const dur = 420 + Math.random() * 800;
+      p.animate([
+        { transform:'translate(-50%,-50%) scale(.7)', opacity:0 },
+        { transform:'translate(-50%,-50%) scale(1)', opacity:1, offset:0.15 },
+        { transform:`translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(.9)`, opacity:0 }
+      ], { duration: dur, easing:'cubic-bezier(.2,.8,.2,1)', fill:'forwards' });
+
+      setTimeout(()=> p.remove(), dur + 120);
+    }
+  }
+
+  function confettiBurst(anchorEl){
+    const layer = document.createElement('div');
+    layer.className = 'dgx-confettiLayer';
+    (anchorEl || elBoardWrap).appendChild(layer);
+
+    const colors = ['#a855f7','#60a5fa','#22c55e','#f59e0b','#ef4444'];
+    const count = 42;
+
+    for(let i=0;i<count;i++){
+      const d = document.createElement('span');
+      d.style.position='absolute';
+      d.style.left='50%';
+      d.style.top='50%';
+      d.style.width = (6 + Math.random()*8) + 'px';
+      d.style.height = (6 + Math.random()*10) + 'px';
+      d.style.borderRadius = (Math.random()>.5 ? '999px' : '6px');
+      d.style.background = colors[i % colors.length];
+      d.style.opacity = '1';
+      d.style.transform='translate(-50%,-50%)';
+      layer.appendChild(d);
+
+      const ang = Math.random()*Math.PI*2;
+      const dist = 90 + Math.random()*140;
+      const dx = Math.cos(ang)*dist;
+      const dy = Math.sin(ang)*dist;
+      const rot = (Math.random()*720 - 360);
+      const dur = 700 + Math.random()*900;
+
+      d.animate([
+        { transform:'translate(-50%,-50%) rotate(0deg)', opacity:1 },
+        { transform:`translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) rotate(${rot}deg)`, opacity:0 }
+      ], { duration: dur, easing:'cubic-bezier(.15,.8,.2,1)', fill:'forwards' });
+
+      setTimeout(()=> d.remove(), dur + 80);
+    }
+
+    setTimeout(()=> layer.remove(), 3600);
+  }
+
+  function centerOnCurrent(){
+    const cur = document.querySelector('.dgx-cell.is-current');
+    if(cur) cur.scrollIntoView({ behavior:'smooth', block:'center', inline:'center' });
+  }
+
   function recordMove(fromId, toId, meta = {}){
     const tAbs = nowMs();
 
@@ -1087,12 +1216,30 @@
     state.moves.push({
       from: Number(fromId),
       to: Number(toId),
-      t_ms: Number(tRel), // ✅ required format
-      dt_ms: Number(dt),  // extra (ok)
+      t_ms: Number(tRel),
+      dt_ms: Number(dt),
       ...meta
     });
 
     saveCache();
+  }
+
+  function lockAfterWin(){
+    stopTick();
+    state.status = 'win';
+    setRunState('Completed', 'success');
+    elResult.textContent = 'Win';
+    elSubmitBtn.disabled = false;
+    markReachableHints();
+    saveCache();
+  }
+
+  function onBlocked(reason='Blocked'){
+    const cellEl = document.querySelector(`.dgx-cell[data-id="${state.userId}"]`);
+    shakeCell(cellEl);
+    floatText(cellEl, reason);
+    sfx(160, 0.06, 'square', 0.03);
+    vibrate(18);
   }
 
   function onCellClick(targetId){
@@ -1105,14 +1252,24 @@
     if(fromId === toId) return;
 
     if(!isAdjacent(fromId,toId)){
-      notify('info','Move', 'Click an adjacent cell.');
+      onBlocked('Adjacent only');
       return;
     }
 
+    // ✅ do not allow moving into visited tiles
+    // if(state.visited.has(toId)){
+    //   onBlocked('Visited');
+    //   return;
+    // }
+
     if(!canMove(fromId,toId)){
-      notify('error','Blocked', 'A barrier blocks this move.');
+      onBlocked('Blocked');
       return;
     }
+
+    // mark visited
+    // state.visited.add(Number(fromId));
+    state.visited.add(Number(toId));
 
     state.userId = toId;
 
@@ -1122,13 +1279,18 @@
       state.keysCollected.add(toId);
       pickedKey = true;
 
-      // ✅ one-time key event (your rule: only one key allowed)
       if(!state.keyEvent){
         const tRel = state.startedAtMs ? Math.max(0, nowMs() - state.startedAtMs) : 0;
         state.keyEvent = { picked_at_index: Number(toId), t_ms: Number(tRel) };
       }
 
+      const keyEl = document.querySelector(`.dgx-cell[data-id="${toId}"]`);
+      sparkle(keyEl, '#f59e0b');
+      floatText(keyEl, '+KEY');
+      sfx(740, 0.07, 'triangle', 0.03);
       notify('success','Key collected', `${state.keysCollected.size}/${state.keys.size}`);
+    }else{
+      sfx(520, 0.04, 'sine', 0.02);
     }
 
     recordMove(fromId, toId, {
@@ -1137,41 +1299,55 @@
       keys_collected: state.keysCollected.size
     });
 
-    // win check
-    if(state.keysCollected.size === state.keys.size && Number(toId) === Number(state.doorId)){
-      state.status = 'win';
+    setRunState('Playing', 'primary');
+    elResult.textContent = '—';
 
-      // ✅ one-time door event
+    updateSidebar();
+    renderBoard();
+    centerOnCurrent();
+
+    // ✅ WIN check: keys collected AND reached door
+    if(state.keysCollected.size === state.keys.size && Number(toId) === Number(state.doorId)){
       if(!state.doorEvent){
         const tRel = state.startedAtMs ? Math.max(0, nowMs() - state.startedAtMs) : 0;
         state.doorEvent = { opened_at_index: Number(toId), t_ms: Number(tRel) };
       }
 
-      setRunState('Completed', 'success');
-      elResult.textContent = 'Win';
-      elSubmitBtn.disabled = false;
-      stopTick();
-      notify('success','You win!', 'All keys collected and door reached.');
-    }else{
-      setRunState('Playing', 'primary');
-      elResult.textContent = '—';
-    }
+      state.doorUnlocked = true;
 
-    updateSidebar();
-    renderBoard();
+      // render first then effects
+      updateSidebar();
+      renderBoard();
+
+      const doorEl = document.querySelector(`.dgx-cell[data-id="${state.doorId}"]`);
+      sparkle(doorEl, '#a855f7');
+      confettiBurst(doorEl);
+      sfx(980, 0.08, 'sine', 0.03);
+      sfx(620, 0.08, 'triangle', 0.02);
+      vibrate(35);
+
+      notify('success','Door unlocked ✅', 'You finished the game!');
+setTimeout(lockAfterWin, 1800); // match the CSS duration (ms)
+      return;
+    }
   }
 
   function moveByArrow(dir){
     if(state.status !== 'in_progress') return;
-    const { r, c } = idToRC(state.userId);
-    let nr=r, nc=c;
-    if(dir==='up') nr = r-1;
-    if(dir==='down') nr = r+1;
-    if(dir==='left') nc = c-1;
-    if(dir==='right') nc = c+1;
-    if(nr<0 || nc<0 || nr>=state.N || nc>=state.N) return;
-    onCellClick(rcToId(nr,nc));
+    if(!state.userId) return;
+
+    const toId = nextIdByDir(state.userId, dir);
+    if(!toId){ onBlocked('Edge'); return; }
+
+    // blocked by barrier or visited => same behavior
+    if(dirBlocked(state.userId, dir)){ onBlocked('Blocked'); return; }
+    // if(state.visited.has(Number(toId))){ onBlocked('Visited'); return; }
+
+    onCellClick(toId);
   }
+function userHasAnyKey(){
+  return state.keysCollected && state.keysCollected.size > 0;
+}
 
   function findShortestPath(startId, goalId){
     const q = [];
@@ -1193,6 +1369,10 @@
       for(const nb of neighbors){
         if(prev.has(nb)) continue;
         if(!canMove(cur, nb)) continue;
+
+        // ✅ hint should not suggest stepping into visited tiles
+        // if(state.visited.has(Number(nb))) continue;
+
         prev.set(nb, cur);
         q.push(nb);
       }
@@ -1217,8 +1397,8 @@
     const els = path.map(id => document.querySelector(`.dgx-cell[data-id="${id}"]`)).filter(Boolean);
     els.forEach(el => {
       el.style.transition = 'outline-color .15s ease, box-shadow .15s ease';
-      el.style.outline = '3px solid rgba(34,197,94,.55)';
-      el.style.boxShadow = '0 0 0 6px rgba(34,197,94,.16)';
+      el.style.outline = '3px solid rgba(168,85,247,.55)';
+      el.style.boxShadow = '0 0 0 6px rgba(168,85,247,.16)';
     });
     setTimeout(() => {
       els.forEach(el => {
@@ -1249,7 +1429,6 @@
     return json;
   }
 
-  // ✅ UPDATED submit: builds API-aligned user_answer_json
   async function submitAttempt(isAuto=false){
     if(state.isSubmitting) return;
     state.isSubmitting = true;
@@ -1261,12 +1440,10 @@
       const startedAbs = state.startedAtMs || endAbsMs;
       const timeTakenMs = Math.max(0, endAbsMs - startedAbs);
 
-      // start_index: first move "from" else current user
       const startIndex = Number(
         (state.moves.length ? state.moves[0]?.from : state.userId) || state.userId || 1
       );
 
-      // path: [start, ...to...]
       const path = [startIndex];
       state.moves.forEach(m => path.push(Number(m.to)));
 
@@ -1279,7 +1456,7 @@
       const timing = {
         started_at: toSqlDatetime(new Date(Date.now() - timeTakenMs)),
         finished_at: toSqlDatetime(new Date()),
-        time_taken_ms: Number(timeTakenMs) // ✅ required
+        time_taken_ms: Number(timeTakenMs)
       };
 
       const events = {};
@@ -1302,7 +1479,8 @@
         path: path,
         moves: moves,
         events: events,
-        timing: timing
+        timing: timing,
+        visited: Array.from(state.visited)
       };
 
       const score = (state.status === 'win') ? 100 : 0;
@@ -1378,6 +1556,128 @@
     return out;
   }
 
+  function renderBoard(){
+    elBoard.style.setProperty('--n', String(state.N));
+    elBoard.innerHTML = '';
+
+    // power state styling
+    const powered = (state.keysCollected.size > 0);
+    elBoard.classList.toggle('dgx-playerPowered', powered);
+
+    state.cells.forEach(cell => {
+      const div = document.createElement('div');
+      div.className = 'dgx-cell';
+      div.dataset.id = String(cell.id);
+      div.setAttribute('role','button');
+      div.setAttribute('tabindex','0');
+
+      if(Number(cell.id) === Number(state.userId)) div.classList.add('is-current');
+      if(state.visited.has(Number(cell.id))) div.classList.add('is-visited');
+
+      const idx = document.createElement('div');
+      idx.className = 'dgx-idx';
+      idx.textContent = String(cell.id);
+
+      const ico = document.createElement('div');
+      ico.className = 'dgx-ico';
+
+      if(Number(cell.id) === Number(state.userId)){
+  ico.classList.add('user');
+
+  // ✅ after first key pickup: user stays purple AND shows key with user
+  if(userHasAnyKey()){
+    ico.innerHTML = `
+      <span style="position:relative; display:inline-block; line-height:1;">
+        <i class="fa-solid fa-user"></i>
+        <i class="fa-solid fa-key" style="
+          position:absolute;
+          right:-10px;
+          bottom:-8px;
+          font-size:14px;
+          color:#f59e0b;
+          filter: drop-shadow(0 10px 16px rgba(2,6,23,.18));
+        "></i>
+      </span>
+    `;
+  }else{
+    ico.innerHTML = '<i class="fa-solid fa-user"></i>';
+  }
+}
+else if(Number(cell.id) === Number(state.doorId)){
+        // ✅ door color stays black (closed/open icon changes only)
+        if(state.doorUnlocked){
+          ico.classList.add('doorOpen');
+          ico.innerHTML = '<i class="fa-solid fa-door-open"></i>';
+        }else{
+          ico.classList.add('doorClosed');
+          ico.innerHTML = '<i class="fa-solid fa-door-closed"></i>';
+        }
+      }else if(state.keys.has(cell.id) && !state.keysCollected.has(cell.id)){
+        ico.classList.add('key');
+        ico.innerHTML = '<i class="fa-solid fa-key"></i>';
+      }else{
+        ico.innerHTML = '';
+      }
+
+      div.appendChild(idx);
+      div.appendChild(ico);
+
+      // ✅ arrows around USER (not board)
+      if(Number(cell.id) === Number(state.userId)){
+        const wrap = document.createElement('div');
+        wrap.className = 'dgx-uArrows';
+
+        const ended = (state.status !== 'in_progress');
+
+        const mk = (dir, icon) => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = `dgx-uArrow ${dir}`;
+          btn.innerHTML = `<i class="fa-solid ${icon}"></i>`;
+
+          const toId = nextIdByDir(state.userId, dir);
+          const blockedByBarrier = dirBlocked(state.userId, dir);
+const shouldDisable = ended || blockedByBarrier;
+
+if(blockedByBarrier) btn.classList.add('blocked');
+if(shouldDisable) btn.classList.add('disabled');
+
+
+          btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if(shouldDisable){
+              onBlocked('Blocked');
+              return;
+            }
+            moveByArrow(dir);
+          });
+
+          return btn;
+        };
+
+        wrap.appendChild(mk('up','fa-chevron-up'));
+        wrap.appendChild(mk('down','fa-chevron-down'));
+        wrap.appendChild(mk('left','fa-chevron-left'));
+        wrap.appendChild(mk('right','fa-chevron-right'));
+
+        div.appendChild(wrap);
+      }
+
+      div.addEventListener('click', () => onCellClick(cell.id));
+      div.addEventListener('keydown', (e) => {
+        if(e.key === 'Enter' || e.key === ' '){
+          e.preventDefault();
+          onCellClick(cell.id);
+        }
+      });
+
+      elBoard.appendChild(div);
+    });
+
+    markReachableHints();
+  }
+
   function hydrateFromGame(game){
     state.game = game || {};
     state.N = Number(game?.grid_dim || 3);
@@ -1388,14 +1688,10 @@
     elDim.textContent = `${state.N}×${state.N}`;
 
     const instr = (game?.instructions_html || game?.description || '').toString().trim();
-    elInstruction.textContent = instr ? instr.replace(/<[^>]*>?/gm, '').slice(0, 220) : 'Collect all keys, then reach the door. Barriers block movement.';
+    elInstruction.textContent = instr ? instr.replace(/<[^>]*>?/gm, '').slice(0, 220) : 'Collect all keys, then reach the door. (Barriers are hidden but still block movement.)';
 
     let grid = game?.grid_json || null;
-    try{
-      if(typeof grid === 'string') grid = JSON.parse(grid);
-    }catch(e){
-      grid = null;
-    }
+    try{ if(typeof grid === 'string') grid = JSON.parse(grid); }catch(e){ grid = null; }
     if(!Array.isArray(grid) || grid.length !== state.N*state.N){
       throw new Error('Invalid grid_json in game.');
     }
@@ -1406,9 +1702,11 @@
     state.doorId = null;
     state.keys = new Set();
     state.keysCollected = new Set();
+    state.visited = new Set();
 
     state.keyEvent = null;
     state.doorEvent = null;
+    state.doorUnlocked = false;
 
     state.moves = [];
     state.startedAtMs = 0;
@@ -1424,6 +1722,8 @@
     if(!state.userId) throw new Error('User start cell missing in grid.');
     if(!state.doorId) throw new Error('Door cell missing in grid.');
 
+    state.visited.add(Number(state.userId));
+
     elKeysNeed.textContent = String(state.keys.size);
     elKeysTotal.textContent = String(state.keys.size);
     elKeysGot.textContent = '0';
@@ -1437,6 +1737,9 @@
     renderBoard();
     updateSidebar();
     saveCache();
+
+    // center initially
+    setTimeout(()=> centerOnCurrent(), 150);
   }
 
   async function init(){
@@ -1479,6 +1782,7 @@
       updateSidebar();
       if(state.status === 'in_progress') startTimer();
       notify('success','Attempt restored','Loaded from sessionStorage.');
+      setTimeout(()=> centerOnCurrent(), 180);
       return;
     }
 
@@ -1507,6 +1811,7 @@
 
   /* ================= Events ================= */
 
+  // keyboard arrows
   document.addEventListener('keydown', (e) => {
     if(state.status !== 'in_progress') return;
     if(['INPUT','TEXTAREA'].includes((e.target?.tagName || '').toUpperCase())) return;
@@ -1530,7 +1835,7 @@
       }
       if(best.length){
         flashHint(best);
-        notify('info','Hint','Highlighted a shortest route to a key.');
+        notify('info','Hint','Highlighted a route to a key (avoiding visited tiles).');
         return;
       }
       notify('warning','Hint','No route to any key found.');
@@ -1539,10 +1844,10 @@
 
     const p = findShortestPath(state.userId, target);
     flashHint(p);
-    notify('info','Hint','Highlighted a shortest route to the door.');
+    notify('info','Hint','Highlighted a route to the door.');
   });
 
-  elGiveUpBtn.addEventListener('click', async () => {
+  elGiveUpBtn?.addEventListener('click', async () => {
     if(state.status !== 'in_progress') return;
 
     const r = await Swal.fire({
@@ -1562,17 +1867,14 @@
     elResult.textContent = 'Fail';
     elSubmitBtn.disabled = false;
 
-    // record final event
-    state.moves.push({ t_ms: 0, dt_ms: 0, action: 'give_up' }); // harmless extra
+    state.moves.push({ t_ms: 0, dt_ms: 0, action: 'give_up' });
     saveCache();
     updateSidebar();
+    renderBoard();
     notify('warning','Attempt ended','Marked as fail. You can submit now.');
   });
 
-  elCenterBtn.addEventListener('click', () => {
-    const cur = document.querySelector(`.dgx-cell.is-current`);
-    if(cur) cur.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
-  });
+  elCenterBtn?.addEventListener('click', () => centerOnCurrent());
 
   elResetBtn.addEventListener('click', async () => {
     const r = await Swal.fire({
@@ -1634,9 +1936,7 @@
     await submitAttempt(false);
   });
 
-  /* ============ init ============ */
   init();
-
 })();
 </script>
 

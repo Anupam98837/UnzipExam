@@ -32,7 +32,7 @@
       background:var(--surface-2);padding:12px 12px 10px;
       box-shadow:var(--shadow-1);
     }
-    .er-card-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;}
+    .er-card-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;}
     .er-card-title{font-family:var(--font-head);font-weight:600;color:var(--ink);font-size:.95rem;margin:0;}
 
     .er-chip{
@@ -131,6 +131,7 @@
     .er-q-left{display:flex;align-items:center;gap:8px;}
     .er-q-badge{
       min-width:44px;height:22px;border-radius:999px;border:1px solid var(--line-strong);
+      padding: 5px;
       background:var(--surface-3);display:flex;align-items:center;justify-content:center;
       font-size:11px;color:var(--muted-color);
     }
@@ -156,6 +157,202 @@
     }
     .er-q-answer-text{font-size:var(--fs-12);color:var(--text-color);word-break:break-word;}
 
+    /* ===========================================
+        ✅ Graphical Analysis (GRID + Replay + Charts)
+    ============================================ */
+    .er-viz-row{margin-top:12px;}
+    .er-replay-controls{
+      display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+      width:100%;
+    }
+    .er-replay-controls .btn{
+      border-radius:999px;
+      padding:4px 10px;
+      font-size:12px;
+    }
+    .er-replay-controls .btn i{margin-right:6px;}
+    .er-replay-controls .form-select{
+      border-radius:999px;
+      border:1px solid var(--line-strong);
+      background:var(--surface);
+      font-size:12px;
+      padding-block:2px;
+    }
+    .er-replay-controls input[type="range"]{
+      flex:1;
+      min-width:160px;
+      accent-color: var(--accent-color);
+    }
+
+    .er-grid-stage{
+      margin-top:8px;
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+    }
+    .er-grid{
+      --dim: 5;
+      display:grid;
+      grid-template-columns:repeat(var(--dim), minmax(0,1fr));
+      gap:6px;
+      padding:10px;
+      border-radius:14px;
+      border:1px dashed var(--line-strong);
+      background:var(--surface);
+    }
+    .er-cell{
+      position:relative;
+      aspect-ratio: 1/1;
+      border-radius:12px;
+      border:1px solid var(--line-strong);
+      background:var(--surface-2);
+      overflow:hidden;
+
+      /* barrier shadow vars */
+      --sh-top: inset 0 0 0 transparent;
+      --sh-bottom: inset 0 0 0 transparent;
+      --sh-left: inset 0 0 0 transparent;
+      --sh-right: inset 0 0 0 transparent;
+      box-shadow: var(--shadow-1), var(--sh-top), var(--sh-bottom), var(--sh-left), var(--sh-right);
+      transition: transform .12s ease, background .12s ease, outline .12s ease;
+    }
+    .er-cell:hover{transform:translateY(-1px);}
+    .er-cell.bar-top{--sh-top: inset 0 4px 0 rgba(220,38,38,.70);}
+    .er-cell.bar-bottom{--sh-bottom: inset 0 -4px 0 rgba(220,38,38,.70);}
+    .er-cell.bar-left{--sh-left: inset 4px 0 0 rgba(220,38,38,.70);}
+    .er-cell.bar-right{--sh-right: inset -4px 0 0 rgba(220,38,38,.70);}
+
+    .er-cell-inner{
+      position:absolute; inset:0;
+      display:flex; align-items:center; justify-content:center;
+      padding:6px;
+    }
+    .er-cell-num{
+      position:absolute; top:6px; left:6px;
+      font-size:10px; color:var(--muted-color);
+      padding:2px 6px;
+      border-radius:999px;
+      border:1px solid var(--line-strong);
+      background:rgba(255,255,255,.65);
+      backdrop-filter: blur(6px);
+    }
+    html.theme-dark .er-cell-num{background:rgba(0,0,0,.25);}
+
+    .er-cell-step{
+      position:absolute; bottom:6px; right:6px;
+      font-size:10px; color:var(--muted-color);
+      padding:2px 6px;
+      border-radius:999px;
+      border:1px dashed var(--line-strong);
+      background:var(--surface);
+      display:none;
+    }
+    .er-cell.show-step .er-cell-step{display:inline-flex;}
+
+    .er-cell-icons{
+      display:flex; align-items:center; justify-content:center;
+      gap:10px;
+      font-size:20px;
+      color:var(--ink);
+    }
+    .er-ico-user{display:none; color: var(--primary-color, #9E363A);}
+    .er-ico-key{display:none; color: var(--warning-color, #d97706);}
+    .er-ico-door{display:none; color: var(--accent-color);}
+
+    .er-cell.is-current .er-ico-user{display:inline-block;}
+    .er-cell.is-key .er-ico-key{display:inline-block;}
+    .er-cell.is-door .er-ico-door{display:inline-block;}
+    .er-cell.key-picked .er-ico-key{display:none;}
+    .er-cell.door-open .er-ico-door{color: var(--success-color, #16a34a);}
+
+    .er-cell.is-visited{
+      background: color-mix(in oklab, var(--accent-color) 10%, var(--surface-2));
+    }
+    .er-cell.is-current{
+      outline: 2px solid color-mix(in oklab, var(--primary-color, #9E363A) 55%, transparent);
+      outline-offset:-3px;
+    }
+    .er-cell.is-optimal{
+      outline: 2px dashed color-mix(in oklab, var(--primary-color, #9E363A) 65%, transparent);
+      outline-offset:-5px;
+    }
+
+    .er-legend{
+      display:flex; flex-wrap:wrap;
+      gap:10px;
+      font-size:12px;
+      color:var(--muted-color);
+      align-items:center;
+    }
+    .er-legend span{
+      display:inline-flex;align-items:center;gap:6px;
+      padding:4px 8px;border-radius:999px;
+      border:1px solid var(--line-strong);
+      background:var(--surface);
+    }
+    .er-legend i{font-size:13px;}
+
+    /* Pace chart */
+    .er-pace{
+      height:115px;
+      border-radius:14px;
+      border:1px dashed var(--line-strong);
+      background:var(--surface);
+      padding:10px;
+      display:flex;
+      align-items:flex-end;
+      gap:6px;
+      overflow:visible;
+    }
+    .er-pace-bar{
+      flex:1;
+      min-width:8px;
+      border-radius:10px;
+      border:1px solid var(--line-strong);
+      background: color-mix(in oklab, var(--accent-color) 30%, var(--surface));
+      position:relative;
+      transition: filter .15s ease;
+    }
+    .er-pace-bar:hover{filter:brightness(1.05);}
+    .er-pace-bar::after{
+      content: attr(data-ms);
+      position:absolute;
+      left:50%;
+      transform:translateX(-50%);
+      bottom:calc(100% + 6px);
+      font-size:10px;
+      color:var(--muted-color);
+      background:var(--surface);
+      border:1px solid var(--line-strong);
+      padding:2px 6px;
+      border-radius:999px;
+      white-space:nowrap;
+      opacity:0;
+      pointer-events:none;
+      transition: opacity .12s ease;
+    }
+    .er-pace-bar:hover::after{opacity:1;}
+
+    .er-mini-metrics{
+      margin-top:10px;
+      display:grid;
+      grid-template-columns:repeat(2,minmax(0,1fr));
+      gap:8px;
+    }
+    .er-mini{
+      border-radius:12px;
+      border:1px solid var(--line-strong);
+      background:var(--surface);
+      padding:8px;
+      font-size:12px;
+    }
+    .er-mini .k{color:var(--muted-color);font-size:11px;margin-bottom:2px;}
+    .er-mini .v{color:var(--ink);font-weight:700;}
+
+    @media (max-width: 992px){
+      .er-replay-controls input[type="range"]{min-width:140px;}
+    }
+
     @media print{
       #sidebar,.w3-sidebar,.w3-appbar,#sidebarOverlay{display:none!important;}
       body{background:#fff!important;}
@@ -163,6 +360,7 @@
       .panel{border:none!important;box-shadow:none!important;padding:0!important;}
       .er-wrap{margin:0!important;max-width:100%!important;}
       .er-actions{display:none!important;}
+      .er-replay-controls{display:none!important;}
     }
 
     html.theme-dark .er-shell,
@@ -170,6 +368,7 @@
     html.theme-dark .er-table-card{background:#04151f;}
     html.theme-dark .er-empty{background:#020b13;}
     html.theme-dark .er-qcard{background:#020b13;}
+    html.theme-dark .er-grid{background:#020b13;}
   </style>
 </head>
 
@@ -278,6 +477,90 @@
         </div>
       </div>
 
+      {{-- ✅ Graphical analysis row --}}
+      <div class="row g-3 er-viz-row">
+        <div class="col-lg-7">
+          <div class="er-card">
+            <div class="er-card-head">
+              <h2 class="er-card-title">Grid replay & path analysis</h2>
+              <span class="er-chip" id="erStepMeta">
+                <i class="fa-solid fa-route"></i> Step: -
+              </span>
+            </div>
+
+            <div class="er-replay-controls">
+              <button class="btn btn-outline-secondary btn-sm" id="erReplayPrev" type="button" title="Previous step">
+                <i class="fa-solid fa-backward-step"></i> Prev
+              </button>
+
+              <button class="btn btn-outline-secondary btn-sm" id="erReplayPlay" type="button" title="Play / Pause">
+                <i class="fa-solid fa-play"></i> Play
+              </button>
+
+              <button class="btn btn-outline-secondary btn-sm" id="erReplayNext" type="button" title="Next step">
+                <i class="fa-solid fa-forward-step"></i> Next
+              </button>
+
+              <input type="range" min="0" max="0" value="0" id="erReplaySeek" />
+
+              <select id="erReplaySpeed" class="form-select form-select-sm" style="width:auto">
+                <option value="1">1×</option>
+                <option value="2">2×</option>
+                <option value="4">4×</option>
+              </select>
+
+              <div class="form-check form-switch ms-auto">
+                <input class="form-check-input" type="checkbox" id="erShowOptimal" checked>
+                <label class="form-check-label small text-muted" for="erShowOptimal">Optimal path</label>
+              </div>
+
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="erShowStepNos" checked>
+                <label class="form-check-label small text-muted" for="erShowStepNos">Step nos</label>
+              </div>
+            </div>
+
+            <div class="er-grid-stage">
+              <div id="erGrid" class="er-grid" style="--dim:5">
+                {{-- grid filled by JS --}}
+              </div>
+
+              <div class="er-legend">
+                <span><i class="fa-solid fa-person-walking" style="color:var(--primary-color,#9E363A)"></i> User</span>
+                <span><i class="fa-solid fa-key" style="color:var(--warning-color,#d97706)"></i> Key</span>
+                <span><i class="fa-solid fa-door-open" style="color:var(--accent-color)"></i> Door</span>
+                <span><i class="fa-solid fa-ban" style="color:rgba(220,38,38,.8)"></i> Red wall = barrier</span>
+              </div>
+
+              <div id="erGridHint" class="small text-muted">
+                Replay will load after attempt snapshot is fetched.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-lg-5">
+          <div class="er-card">
+            <div class="er-card-head">
+              <h2 class="er-card-title">Move pace (ms per move)</h2>
+              <span class="er-chip" id="erPaceMeta">
+                <i class="fa-regular fa-clock"></i> -
+              </span>
+            </div>
+
+            <div id="erPaceChart" class="er-pace">
+              {{-- bars filled by JS --}}
+            </div>
+
+            <div class="er-mini-metrics" id="erPathStats">
+              {{-- stats filled by JS --}}
+            </div>
+
+            <div id="erMoveWarnings" class="mt-2 small text-muted" style="display:none"></div>
+          </div>
+        </div>
+      </div>
+
       <div class="er-table-card mt-3">
         <div class="er-table-head">
           <div>
@@ -349,6 +632,44 @@
 
       var pdfBtn  = document.getElementById("erPdfExport");
 
+      /* ====== Graphical analysis refs ====== */
+      var gridEl = document.getElementById("erGrid");
+      var gridHintEl = document.getElementById("erGridHint");
+      var stepMetaEl = document.getElementById("erStepMeta");
+
+      var btnPrev = document.getElementById("erReplayPrev");
+      var btnPlay = document.getElementById("erReplayPlay");
+      var btnNext = document.getElementById("erReplayNext");
+      var seekEl  = document.getElementById("erReplaySeek");
+      var speedEl = document.getElementById("erReplaySpeed");
+      var showOptimalEl = document.getElementById("erShowOptimal");
+      var showStepNosEl = document.getElementById("erShowStepNos");
+
+      var paceChartEl = document.getElementById("erPaceChart");
+      var paceMetaEl  = document.getElementById("erPaceMeta");
+      var pathStatsEl = document.getElementById("erPathStats");
+      var moveWarnEl  = document.getElementById("erMoveWarnings");
+
+      var replay = {
+        ready: false,
+        dim: 0,
+        grid: [],
+        cellMap: {},
+        startId: null,
+        keyId: null,
+        doorId: null,
+        frames: [],
+        currentStep: 0,
+        playing: false,
+        timer: null,
+        optimalPath: [],
+        actualPath: [],
+        events: {},
+        timeLimitMs: 0,
+        timeTakenMs: 0,
+        moves: []
+      };
+
       function getToken() {
         try { return sessionStorage.getItem("token") || localStorage.getItem("token") || null; }
         catch (e) { return null; }
@@ -375,7 +696,9 @@
 
       function formatDateTime(str) {
         if (!str) return "-";
-        var d = new Date(str);
+        // Support "YYYY-MM-DD HH:mm:ss"
+        var normalized = String(str).replace(" ", "T");
+        var d = new Date(normalized);
         if (isNaN(d.getTime())) return str;
         return d.toLocaleString();
       }
@@ -411,6 +734,591 @@
         if (s === "auto_submitted") return { label: "AUTO", icon: "bolt", pct: 0 };
         return { label: (status || "ATTEMPT"), icon: "circle-check", pct: null };
       }
+
+      /* =============================
+          ✅ GRAPHICAL ANALYSIS HELPERS
+      ============================== */
+      function toRC(id, dim) {
+        var idx = Number(id || 1) - 1;
+        return [Math.floor(idx / dim), idx % dim];
+      }
+      function fromRC(r, c, dim) {
+        return (r * dim) + c + 1;
+      }
+      function dirBetween(aId, bId, dim) {
+        var a = toRC(aId, dim), b = toRC(bId, dim);
+        var dr = b[0] - a[0];
+        var dc = b[1] - a[1];
+        if (dr === -1 && dc === 0) return "top";
+        if (dr === 1 && dc === 0) return "bottom";
+        if (dr === 0 && dc === -1) return "left";
+        if (dr === 0 && dc === 1) return "right";
+        return null;
+      }
+      function oppositeDir(dir) {
+        if (dir === "top") return "bottom";
+        if (dir === "bottom") return "top";
+        if (dir === "left") return "right";
+        if (dir === "right") return "left";
+        return null;
+      }
+      function barrierOf(cell, dir) {
+        if (!cell || !cell.barriers) return false;
+        return !!cell.barriers[dir];
+      }
+      function isBlockedMove(aId, bId) {
+        var dim = replay.dim;
+        var dir = dirBetween(aId, bId, dim);
+        if (!dir) return true; // non-adjacent considered invalid/blocked for analysis
+        var a = replay.cellMap[aId];
+        var b = replay.cellMap[bId];
+        var opp = oppositeDir(dir);
+        return barrierOf(a, dir) || barrierOf(b, opp);
+      }
+      function neighbors(id) {
+        var dim = replay.dim;
+        var rc = toRC(id, dim);
+        var r = rc[0], c = rc[1];
+        var list = [];
+        if (r > 0) list.push(fromRC(r - 1, c, dim));
+        if (r < dim - 1) list.push(fromRC(r + 1, c, dim));
+        if (c > 0) list.push(fromRC(r, c - 1, dim));
+        if (c < dim - 1) list.push(fromRC(r, c + 1, dim));
+        // filter barriers
+        return list.filter(function (nid) {
+          return !isBlockedMove(id, nid);
+        });
+      }
+      function bfsPath(startId, goalId) {
+        startId = Number(startId);
+        goalId  = Number(goalId);
+        if (!startId || !goalId) return [];
+
+        var q = [startId];
+        var prev = {};
+        var seen = {};
+        seen[startId] = true;
+
+        while (q.length) {
+          var cur = q.shift();
+          if (cur === goalId) break;
+
+          var nbs = neighbors(cur);
+          for (var i = 0; i < nbs.length; i++) {
+            var nx = nbs[i];
+            if (seen[nx]) continue;
+            seen[nx] = true;
+            prev[nx] = cur;
+            q.push(nx);
+          }
+        }
+
+        if (!seen[goalId]) return [];
+
+        var path = [];
+        var p = goalId;
+        while (p != null) {
+          path.push(p);
+          if (p === startId) break;
+          p = prev[p];
+        }
+        path.reverse();
+        return path;
+      }
+
+      function buildFramesFromSnapshot(snap) {
+        var frames = [];
+        var moves = Array.isArray(snap.moves) ? snap.moves : [];
+        var path  = Array.isArray(snap.path) ? snap.path : [];
+
+        // frame 0 from start (t=0)
+        if (path.length) {
+          frames.push({ cellId: Number(path[0]), t_ms: 0 });
+        }
+
+        // subsequent frames from moves
+        moves.forEach(function (m) {
+          if (!m) return;
+          var to = (m.to != null) ? Number(m.to) : null;
+          var t  = (m.t_ms != null) ? Number(m.t_ms) : null;
+          if (to != null) frames.push({ cellId: to, t_ms: (t != null ? t : 0) });
+        });
+
+        // fallback if no frames but have path
+        if (!frames.length && path.length) {
+          frames = path.map(function (cid, i) {
+            return { cellId: Number(cid), t_ms: i * 500 };
+          });
+        }
+
+        return frames;
+      }
+
+      function buildGrid(game, snap) {
+        var dim = Number(game.grid_dim || snap.grid_dim || 0);
+        if (!dim || dim < 2) dim = 5;
+
+        var grid = safeJsonParse(game.grid_json, []);
+        if (!Array.isArray(grid) || !grid.length) {
+          // build empty grid if missing
+          grid = [];
+          for (var i = 1; i <= dim*dim; i++) {
+            grid.push({
+              id: i,
+              label: "Cell " + i,
+              barriers: {top:false,bottom:false,left:false,right:false},
+              is_user: false,
+              is_key: false,
+              is_door: false
+            });
+          }
+        }
+
+        replay.dim = dim;
+        replay.grid = grid;
+        replay.cellMap = {};
+        replay.startId = null;
+        replay.keyId = null;
+        replay.doorId = null;
+
+        grid.forEach(function (cell) {
+          if (!cell || cell.id == null) return;
+          replay.cellMap[Number(cell.id)] = cell;
+
+          if (cell.is_user) replay.startId = Number(cell.id);
+          if (cell.is_key)  replay.keyId = Number(cell.id);
+          if (cell.is_door) replay.doorId = Number(cell.id);
+        });
+
+        // fallback start from snapshot
+        if (!replay.startId) replay.startId = Number(snap.start_index || 1);
+        // fallback key/door if not in grid flags
+        if (!replay.keyId) {
+          for (var k = 1; k <= dim*dim; k++){
+            if (replay.cellMap[k] && replay.cellMap[k].is_key) { replay.keyId = k; break; }
+          }
+        }
+        if (!replay.doorId) {
+          for (var d = 1; d <= dim*dim; d++){
+            if (replay.cellMap[d] && replay.cellMap[d].is_door) { replay.doorId = d; break; }
+          }
+        }
+
+        // actual path & moves
+        replay.actualPath = Array.isArray(snap.path) ? snap.path.map(Number) : [];
+        replay.moves = Array.isArray(snap.moves) ? snap.moves : [];
+        replay.events = snap.events || {};
+        replay.frames = buildFramesFromSnapshot(snap);
+        replay.currentStep = 0;
+
+        // optimal path (BFS: start->key + key->door)
+        var best = [];
+        var p1 = (replay.keyId ? bfsPath(replay.startId, replay.keyId) : []);
+        var p2 = (replay.keyId && replay.doorId ? bfsPath(replay.keyId, replay.doorId) : []);
+        if (p1.length && p2.length) {
+          best = p1.concat(p2.slice(1));
+        } else if (p1.length) {
+          best = p1;
+        } else if (replay.doorId) {
+          best = bfsPath(replay.startId, replay.doorId);
+        }
+        replay.optimalPath = best;
+
+        // build DOM grid
+        if (gridEl) {
+          gridEl.style.setProperty("--dim", String(dim));
+          gridEl.innerHTML = "";
+
+          var frag = document.createDocumentFragment();
+          for (var id = 1; id <= dim*dim; id++) {
+            var cellData = replay.cellMap[id] || { barriers:{top:false,bottom:false,left:false,right:false} };
+
+            var cell = document.createElement("div");
+            cell.className = "er-cell";
+            cell.dataset.cellId = String(id);
+
+            if (cellData.barriers && cellData.barriers.top) cell.classList.add("bar-top");
+            if (cellData.barriers && cellData.barriers.bottom) cell.classList.add("bar-bottom");
+            if (cellData.barriers && cellData.barriers.left) cell.classList.add("bar-left");
+            if (cellData.barriers && cellData.barriers.right) cell.classList.add("bar-right");
+
+            // mark static key/door
+            if (id === replay.keyId) cell.classList.add("is-key");
+            if (id === replay.doorId) cell.classList.add("is-door");
+
+            cell.innerHTML = `
+              <div class="er-cell-inner">
+                <span class="er-cell-num">${id}</span>
+                <div class="er-cell-icons">
+                  <i class="fa-solid fa-person-walking er-ico-user"></i>
+                  <i class="fa-solid fa-key er-ico-key"></i>
+                  <i class="fa-solid fa-door-open er-ico-door"></i>
+                </div>
+                <span class="er-cell-step"></span>
+              </div>
+            `;
+            frag.appendChild(cell);
+          }
+          gridEl.appendChild(frag);
+        }
+
+        replay.ready = true;
+        if (gridHintEl) gridHintEl.textContent = "Use the replay controls to inspect the attempt visually.";
+
+        // seek range
+        if (seekEl) {
+          seekEl.min = "0";
+          seekEl.max = String(Math.max(0, replay.frames.length - 1));
+          seekEl.value = "0";
+        }
+
+        applyStep(0);
+        renderPaceChart(replay.moves);
+        renderPathStats();
+        detectMoveAnomalies();
+      }
+
+      function setPlayButton(statePlaying) {
+        if (!btnPlay) return;
+        btnPlay.innerHTML = statePlaying
+          ? '<i class="fa-solid fa-pause"></i> Pause'
+          : '<i class="fa-solid fa-play"></i> Play';
+      }
+
+      function stopReplay() {
+        replay.playing = false;
+        setPlayButton(false);
+        if (replay.timer) {
+          clearTimeout(replay.timer);
+          replay.timer = null;
+        }
+      }
+
+      function playReplay() {
+        if (!replay.ready) return;
+        stopReplay();
+        replay.playing = true;
+        setPlayButton(true);
+
+        function tick() {
+          if (!replay.playing) return;
+
+          var step = replay.currentStep;
+          if (step >= replay.frames.length - 1) {
+            stopReplay();
+            return;
+          }
+
+          var speed = Number(speedEl && speedEl.value ? speedEl.value : 1);
+          var cur = replay.frames[step];
+          var next = replay.frames[step + 1];
+
+          var delta = Math.max(0, (next.t_ms || 0) - (cur.t_ms || 0));
+          var delay = Math.max(120, Math.min(1200, Math.round(delta / speed)));
+
+          applyStep(step + 1);
+          replay.timer = setTimeout(tick, delay);
+        }
+
+        replay.timer = setTimeout(tick, 120);
+      }
+
+      function applyStep(stepIndex) {
+        if (!replay.ready) return;
+
+        stepIndex = Math.max(0, Math.min(stepIndex, replay.frames.length - 1));
+        replay.currentStep = stepIndex;
+
+        if (seekEl) seekEl.value = String(stepIndex);
+
+        var now = replay.frames[stepIndex] || { cellId: replay.startId, t_ms: 0 };
+        var nowCellId = Number(now.cellId);
+        var nowT = Number(now.t_ms || 0);
+
+        // events
+        var ev = replay.events || {};
+        var keyEv = ev.key || null;
+        var doorEv = ev.door || null;
+
+        var keyPicked = !!(keyEv && keyEv.t_ms != null && nowT >= Number(keyEv.t_ms));
+        var doorOpened = !!(doorEv && doorEv.t_ms != null && nowT >= Number(doorEv.t_ms));
+
+        // visited / step numbers (first visit)
+        var firstVisit = {};
+        var counts = {};
+        replay.actualPath.forEach(function (cid, idx) {
+          cid = Number(cid);
+          counts[cid] = (counts[cid] || 0) + 1;
+          if (firstVisit[cid] == null) firstVisit[cid] = idx;
+        });
+
+        // reset classes
+        var cells = gridEl ? gridEl.querySelectorAll(".er-cell") : [];
+        cells.forEach(function (el) {
+          el.classList.remove("is-current","is-visited","key-picked","door-open","show-step","is-optimal");
+          var stepBadge = el.querySelector(".er-cell-step");
+          if (stepBadge) stepBadge.textContent = "";
+        });
+
+        // mark optimal path
+        var showOptimal = !!(showOptimalEl && showOptimalEl.checked);
+        if (showOptimal && replay.optimalPath && replay.optimalPath.length) {
+          replay.optimalPath.forEach(function (cid) {
+            var node = gridEl ? gridEl.querySelector('.er-cell[data-cell-id="'+cid+'"]') : null;
+            if (node) node.classList.add("is-optimal");
+          });
+        }
+
+        // mark visited up to stepIndex based on frames
+        // We use actualPath order, and highlight everything up to the current visited frame count
+        // frame 0 corresponds to path[0], frame i corresponds to path[i] if lengths match
+        var upto = Math.min(stepIndex, replay.actualPath.length - 1);
+        for (var i = 0; i <= upto; i++) {
+          var cid = replay.actualPath[i];
+          var nodeV = gridEl ? gridEl.querySelector('.er-cell[data-cell-id="'+cid+'"]') : null;
+          if (nodeV) {
+            nodeV.classList.add("is-visited");
+            var badge = nodeV.querySelector(".er-cell-step");
+            if (badge && showStepNosEl && showStepNosEl.checked) {
+              nodeV.classList.add("show-step");
+              badge.textContent = "#" + i;
+            }
+          }
+        }
+
+        // current
+        var curEl = gridEl ? gridEl.querySelector('.er-cell[data-cell-id="'+nowCellId+'"]') : null;
+        if (curEl) curEl.classList.add("is-current");
+
+        // key picked -> hide key icon (mark key cell)
+        if (keyPicked && replay.keyId) {
+          var keyCell = gridEl ? gridEl.querySelector('.er-cell[data-cell-id="'+replay.keyId+'"]') : null;
+          if (keyCell) keyCell.classList.add("key-picked");
+        }
+
+        // door opened -> highlight door
+        if (doorOpened && replay.doorId) {
+          var doorCell = gridEl ? gridEl.querySelector('.er-cell[data-cell-id="'+replay.doorId+'"]') : null;
+          if (doorCell) doorCell.classList.add("door-open");
+        }
+
+        // meta
+        if (stepMetaEl) {
+          stepMetaEl.innerHTML = '<i class="fa-solid fa-route"></i> Step: <strong>' + stepIndex +
+            '</strong> / ' + Math.max(0, replay.frames.length - 1) +
+            ' &nbsp;•&nbsp; t(ms): <strong>' + nowT + '</strong>';
+        }
+      }
+
+      function renderPaceChart(moves) {
+        if (!paceChartEl) return;
+        paceChartEl.innerHTML = "";
+
+        if (!Array.isArray(moves) || !moves.length) {
+          paceChartEl.innerHTML = '<div class="small text-muted">No move timing data.</div>';
+          if (paceMetaEl) paceMetaEl.innerHTML = '<i class="fa-regular fa-clock"></i> -';
+          return;
+        }
+
+        // deltas based on t_ms
+        var deltas = [];
+        var prev = 0;
+        moves.forEach(function (m) {
+          var t = Number(m && m.t_ms != null ? m.t_ms : 0);
+          deltas.push(Math.max(0, t - prev));
+          prev = t;
+        });
+
+        var maxD = Math.max.apply(null, deltas.concat([1]));
+        var sum = deltas.reduce(function (a,b){return a+b;},0);
+        var avg = Math.round(sum / deltas.length);
+        var slow = Math.max.apply(null, deltas);
+        var slowIdx = deltas.indexOf(slow);
+
+        deltas.forEach(function (d) {
+          var bar = document.createElement("div");
+          bar.className = "er-pace-bar";
+          var pct = Math.max(6, Math.round((d / maxD) * 100));
+          bar.style.height = pct + "%";
+          bar.setAttribute("data-ms", d + " ms");
+          bar.title = "Δt: " + d + " ms";
+          paceChartEl.appendChild(bar);
+        });
+
+        if (paceMetaEl) {
+          paceMetaEl.innerHTML = '<i class="fa-regular fa-clock"></i> Avg: <strong>' + avg +
+            'ms</strong> • Slowest: <strong>M' + (slowIdx+1) + '</strong> (' + slow + 'ms)';
+        }
+      }
+    function clampPct(v){
+  return Math.max(0, Math.min(100, v));
+}
+
+function computeEfficiencies(optimalMoves, actualMoves, timeLimitMs, timeTakenMs) {
+  // Path Efficiency
+  var pathEff = null;
+  if (optimalMoves != null && actualMoves > 0) {
+    pathEff = clampPct(Math.round((optimalMoves / actualMoves) * 100));
+  }
+
+  // Time Efficiency (Remaining time%)
+  var timeEff = null;
+  if (timeLimitMs > 0 && timeTakenMs != null) {
+    timeEff = clampPct(Math.round(((timeLimitMs - timeTakenMs) / timeLimitMs) * 100));
+  }
+
+  // Final/Combined Efficiency
+  var finalEff = null;
+
+  if (pathEff != null && timeEff != null) {
+    // weights: Path 70%, Time 30%
+    finalEff = Math.round((0.5 * pathEff) + (0.5 * timeEff));
+  } else if (pathEff != null) {
+    finalEff = pathEff;
+  } else if (timeEff != null) {
+    finalEff = timeEff;
+  }
+
+  return { pathEff: pathEff, timeEff: timeEff, finalEff: finalEff };
+}
+
+      function renderPathStats() {
+  if (!pathStatsEl) return;
+
+  var path = replay.actualPath || [];
+  var moves = replay.moves || [];
+  var opt  = replay.optimalPath || [];
+
+  if (!path.length) {
+    pathStatsEl.innerHTML = `
+      <div class="er-mini"><div class="k">Visited</div><div class="v">-</div></div>
+      <div class="er-mini"><div class="k">Unique</div><div class="v">-</div></div>
+      <div class="er-mini"><div class="k">Optimal moves</div><div class="v">-</div></div>
+      <div class="er-mini"><div class="k">Path efficiency</div><div class="v">-</div></div>
+      <div class="er-mini"><div class="k">Time efficiency</div><div class="v">-</div></div>
+      <div class="er-mini"><div class="k">Total efficiency</div><div class="v">-</div></div>
+    `;
+    return;
+  }
+
+  var uniq = new Set(path.map(Number)).size;
+  var revisits = path.length - uniq;
+
+  var actualMoves = Array.isArray(moves) ? moves.length : 0;
+  var optimalMoves = (opt.length ? (opt.length - 1) : null);
+
+  var effObj = computeEfficiencies(
+    optimalMoves,
+    actualMoves,
+    Number(replay.timeLimitMs || 0),
+    Number(replay.timeTakenMs || 0)
+  );
+
+  var pathEffTxt  = (effObj.pathEff  != null) ? (effObj.pathEff + "%")  : "—";
+  var timeEffTxt  = (effObj.timeEff  != null) ? (effObj.timeEff + "%")  : "—";
+  var totalEffTxt = (effObj.finalEff != null) ? (effObj.finalEff + "%") : "—";
+
+  pathStatsEl.innerHTML = `
+    <div class="er-mini">
+      <div class="k">Visited cells</div>
+      <div class="v">${path.length}</div>
+    </div>
+
+    <div class="er-mini">
+      <div class="k">Unique cells</div>
+      <div class="v">${uniq}
+        <span style="font-weight:600;color:var(--muted-color)">(${revisits} revisits)</span>
+      </div>
+    </div>
+
+    <div class="er-mini">
+      <div class="k">Optimal moves</div>
+      <div class="v">${optimalMoves != null ? optimalMoves : "—"}</div>
+    </div>
+
+    <div class="er-mini">
+      <div class="k">Path efficiency</div>
+      <div class="v">${pathEffTxt}</div>
+    </div>
+
+    <div class="er-mini">
+      <div class="k">Time efficiency</div>
+      <div class="v">${timeEffTxt}</div>
+    </div>
+
+    <div class="er-mini">
+      <div class="k">Total efficiency</div>
+      <div class="v">${totalEffTxt}</div>
+    </div>
+  `;
+}
+
+
+      function detectMoveAnomalies() {
+        if (!moveWarnEl) return;
+        moveWarnEl.style.display = "none";
+        moveWarnEl.innerHTML = "";
+
+        var moves = replay.moves || [];
+        if (!moves.length) return;
+
+        var blocked = [];
+        moves.forEach(function (m, idx) {
+          var from = Number(m && m.from != null ? m.from : 0);
+          var to   = Number(m && m.to != null ? m.to : 0);
+          if (!from || !to) return;
+          if (isBlockedMove(from, to)) {
+            blocked.push({ idx: idx+1, from: from, to: to });
+          }
+        });
+
+        if (!blocked.length) return;
+
+        moveWarnEl.style.display = "block";
+        moveWarnEl.innerHTML =
+          '<i class="fa-solid fa-triangle-exclamation"></i> ' +
+          'Detected moves crossing a barrier (for review): ' +
+          blocked.map(function (b) {
+            return '<strong>M'+b.idx+'</strong> ('+b.from+'→'+b.to+')';
+          }).join(", ");
+      }
+
+      function bindReplayControls() {
+        if (btnPrev) btnPrev.addEventListener("click", function () {
+          stopReplay();
+          applyStep(replay.currentStep - 1);
+        });
+
+        if (btnNext) btnNext.addEventListener("click", function () {
+          stopReplay();
+          applyStep(replay.currentStep + 1);
+        });
+
+        if (btnPlay) btnPlay.addEventListener("click", function () {
+          if (!replay.ready) return;
+          if (replay.playing) stopReplay();
+          else playReplay();
+        });
+
+        if (seekEl) seekEl.addEventListener("input", function () {
+          stopReplay();
+          applyStep(Number(seekEl.value || 0));
+        });
+
+        if (showOptimalEl) showOptimalEl.addEventListener("change", function () {
+          applyStep(replay.currentStep);
+        });
+
+        if (showStepNosEl) showStepNosEl.addEventListener("change", function () {
+          applyStep(replay.currentStep);
+        });
+
+        if (speedEl) speedEl.addEventListener("change", function () {
+          // no-op, speed is applied during play
+        });
+      }
+
+      bindReplayControls();
 
       function renderMoves(snapshot) {
         questionListEl.innerHTML = "";
@@ -547,40 +1455,53 @@
         attemptMetaEl.textContent =
           "Attempt no " + attemptNo + " | Submitted at " + formatDateTime(submittedAt);
 
-        var snap = safeJsonParse(result.user_answer_json || result.snapshot || result.payload, {});
+        // ✅ include user_answer object too
+        var snap = safeJsonParse(
+          result.user_answer_json ||
+          result.user_answer ||
+          result.snapshot ||
+          result.payload,
+          {}
+        );
+
         var timing = (snap && snap.timing) ? snap.timing : {};
         var timeTakenMs = Number(result.time_taken_ms || timing.time_taken_ms || 0);
+        // ✅ for efficiencies
+replay.timeLimitMs = Number(game.time_limit_sec || 0) * 1000;
+replay.timeTakenMs = Number(timeTakenMs || 0);
 
         // Moves count
         var movesCount = (snap && Array.isArray(snap.moves)) ? snap.moves.length : 0;
 
-        // Score + percent (door game score is 0/1)
+        // Key/Door completion based success (graphical objective)
+        var ev = snap && snap.events ? snap.events : {};
+        var keyOk = !!(ev && ev.key);
+        var doorOk = !!(ev && ev.door);
+
+        var objectivePct = doorOk ? 100 : (keyOk ? 50 : 0);
+
+        // Score can be 0/1, but objective might still be complete
         var score = Number(result.score || 0);
-        var percent = Math.max(0, Math.min(100, Math.round(score * 100)));
 
         var chip = statusToChip(status);
         scoreChipEl.innerHTML = '<i class="fa-solid fa-' + chip.icon + '"></i> ' + chip.label;
 
-        percentEl.textContent = percent + "%";
+        percentEl.textContent = objectivePct + "%";
         marksEl.textContent   = String(score);
         attemptedEl.textContent = String(movesCount);
         timeSpentEl.textContent  = formatDurationMs(timeTakenMs);
 
         scoreTextEl.innerHTML =
-          "Status: <strong>" + String(status || "-") +
+          "Objective: <strong>" + (doorOk ? "Door opened" : (keyOk ? "Key picked" : "Not complete")) +
           "</strong>. Moves: <strong>" + movesCount +
           "</strong>. Time: <strong>" + (formatDurationMs(timeTakenMs)) + "</strong>.";
 
         requestAnimationFrame(function () {
-          scoreBarEl.style.width = percent + "%";
+          scoreBarEl.style.width = objectivePct + "%";
         });
-        barLabelEl.textContent = "Success: " + percent + "%";
+        barLabelEl.textContent = "Objective progress: " + objectivePct + "%";
 
         // Events pills
-        var ev = snap && snap.events ? snap.events : {};
-        var keyOk = !!(ev && ev.key);
-        var doorOk = !!(ev && ev.door);
-
         keyPickedEl.textContent  = "Key: " + (keyOk ? "Picked" : "Not picked");
         doorOpenedEl.textContent = "Door: " + (doorOk ? "Opened" : "Not opened");
         timeoutInfoEl.textContent = "Timeout: " + (String(status).toLowerCase() === "timeout" ? "Yes" : "No");
@@ -590,6 +1511,14 @@
         submittedAtEl.textContent = formatDateTime(submittedAt);
 
         renderMoves(snap);
+
+        // ✅ Build grid visualization
+        try{
+          buildGrid(game, snap);
+        }catch(e){
+          console.warn("Grid analysis failed:", e);
+          if (gridHintEl) gridHintEl.textContent = "Grid analysis unavailable for this attempt.";
+        }
       }
 
       async function loadResult() {

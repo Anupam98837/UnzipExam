@@ -1104,19 +1104,75 @@ private function applyIdOrUuidWhere($q, string $colId, string $colUuid, string $
     }
 
     // ✅ Determine status from payload + time limit (don’t trust client)
-    $timeTaken = (int) data_get($decoded, 'timing.time_taken_ms', 0);
+    // ✅ Determine status from GAME + PATH + TIME (don’t trust client)
+$timeTaken = (int) data_get($decoded, 'timing.time_taken_ms', 0);
+$clientStatus = (string) ($decoded['status'] ?? $request->input('status') ?? 'in_progress');
 
-    // If JS already marked timeout, keep it
-    $clientStatus = (string) ($decoded['status'] ?? $request->input('status') ?? 'in_progress');
+// Decode grid_json (can be string or array depending on DB casting)
+$gridArr = $game->grid_json;
+if (is_string($gridArr)) {
+    $gridArr = json_decode($gridArr, true);
+}
+if (!is_array($gridArr)) $gridArr = [];
 
-    // Win rule (for your current JS):
-    // - win only if all keys collected AND end cell == door cell
-    $keysTotal = (int) ($decoded['keys_total'] ?? 0);
-    $keysGot   = is_array($decoded['keys_collected'] ?? null) ? count($decoded['keys_collected']) : 0;
-    $doorCell  = (int) ($decoded['door_cell'] ?? 0);
-    $endCell   = (int) ($decoded['user_end_cell'] ?? 0);
+// Find key + door cell ids from grid
+$keyId = null;
+$doorId = null;
+$keyIds = [];
 
-    $status = ($keysTotal > 0 && $keysGot >= $keysTotal && $doorCell > 0 && $endCell === $doorCell) ? 'win' : 'fail';
+foreach ($gridArr as $cell) {
+    if (!is_array($cell)) continue;
+    if (!empty($cell['is_key'])) {
+        $keyIds[] = (int) ($cell['id'] ?? 0);
+    }
+    if (!empty($cell['is_door']) && $doorId === null) {
+        $doorId = (int) ($cell['id'] ?? 0);
+    }
+}
+
+// Support 1-key game (your current case)
+$keyId = count($keyIds) ? $keyIds[0] : null;
+
+// Get PATH safely
+$path = is_array($decoded['path'] ?? null) ? array_map('intval', $decoded['path']) : [];
+$endPathCell = !empty($path) ? (int) end($path) : 0;
+
+// ✅ reached door?
+$reachedDoor = ($doorId !== null && $endPathCell === (int)$doorId);
+
+// ✅ key picked?
+$pickedKey = ($keyId !== null && in_array((int)$keyId, $path, true));
+
+// ✅ key BEFORE door in path
+$keyPos  = $pickedKey ? array_search((int)$keyId, $path, true) : false;
+$doorPos = $reachedDoor ? array_search((int)$doorId, $path, true) : false;
+$keyBeforeDoor = ($keyPos !== false && $doorPos !== false && $keyPos < $doorPos);
+
+// ✅ time check
+$limitMs = (int) ($game->time_limit_sec ?? 0) * 1000;
+$withinTime = ($limitMs <= 0) ? true : ($timeTaken <= $limitMs);
+
+// ✅ final WIN rule
+$isWin = $withinTime && $reachedDoor && $pickedKey && $keyBeforeDoor;
+
+// ✅ timeout overrides everything
+if ($clientStatus === 'timeout') {
+    $status = 'timeout';
+} elseif ($limitMs > 0 && $timeTaken > $limitMs) {
+    $status = 'timeout';
+} else {
+    $status = $isWin ? 'win' : 'fail';
+}
+
+// ✅ score
+$score = ($status === 'win') ? 1 : 0;
+
+// (optional) patch these fields for consistency / debugging
+$decoded['door_cell'] = (int) ($doorId ?? 0);
+$decoded['user_end_cell'] = (int) ($endPathCell ?? 0);
+$decoded['keys_total'] = (int) count($keyIds);
+$decoded['keys_collected'] = ($keyId !== null && $pickedKey) ? [$keyId] : [];
+
 
     // apply time limit override
     $limitMs = (int) ($game->time_limit_sec ?? 0) * 1000;
@@ -1224,207 +1280,8 @@ private function applyIdOrUuidWhere($q, string $colId, string $colUuid, string $
         ], 500);
     }
 }
-
 public function resultDetail(Request $request, string $resultKey)
-    {
-        // if ($resp = $this->requireRole($request, ['student','admin','super_admin'])) return $resp;
-
-        $actor  = $this->actor($request);
-        $role   = $this->normalizeRole($actor['role'] ?? '');
-        $userId = (int)($actor['id'] ?? 0);
-
-        if ($userId <= 0) {
-            return response()->json(['success'=>false,'message'=>'Unauthorized'], 401);
-        }
-
-        $q = DB::table('bubble_game_results as r')
-            ->join('bubble_game as g', 'g.id', '=', 'r.bubble_game_id')
-            ->join('users as u', 'u.id', '=', 'r.user_id')
-            ->whereNull('r.deleted_at')
-            ->whereNull('g.deleted_at')
-            ->select([
-                'r.id as result_id',
-                'r.uuid as result_uuid',
-                'r.bubble_game_id',
-                'r.user_id',
-                'r.attempt_no',
-                'r.score',
-                'r.user_answer_json',
-                'r.created_at as result_created_at',
-
-                'g.id as game_id',
-                'g.uuid as game_uuid',
-                'g.title as game_title',
-                'g.description as game_description',
-                'g.max_attempts',
-                'g.per_question_time_sec',
-                'g.allow_skip',
-                'g.points_correct',
-                'g.points_wrong',
-                'g.show_solution_after',
-
-                'u.uuid as student_uuid',
-                'u.name as student_name',
-                'u.email as student_email',
-            ]);
-
-        $this->applyIdOrUuidWhere($q, 'r.id', 'r.uuid', $resultKey);
-
-        $row = $q->first();
-
-        if (!$row) {
-            return response()->json(['success'=>false,'message'=>'Result not found'], 404);
-        }
-
-        // Student ownership guard
-        if ($role === 'student' && (int)$row->user_id !== $userId) {
-            return response()->json(['success'=>false,'message'=>'Forbidden'], 403);
-        }
-
-        // Decode snapshot from bubble_game_results.user_answer_json
-        $snapshot = $this->jsonSafe($row->user_answer_json, []);
-        $snapByUuid = [];
-        if (is_array($snapshot)) {
-            foreach ($snapshot as $s) {
-                if (is_array($s) && !empty($s['question_uuid'])) {
-                    $snapByUuid[(string)$s['question_uuid']] = $s;
-                }
-            }
-        }
-
-        // Load questions
-        $questions = DB::table('bubble_game_questions as q')
-            ->where('q.bubble_game_id', (int)$row->game_id)
-            ->where('q.status', 'active')
-            ->orderBy('q.order_no')
-            ->select([
-                'q.id','q.uuid','q.order_no','q.title','q.select_type',
-                'q.bubbles_json','q.answer_sequence_json','q.answer_value_json',
-                'q.bubbles_count','q.points','q.status'
-            ])
-            ->get();
-
-        $questionPayload = [];
-
-        foreach ($questions as $qRow) {
-            $qUuid = (string)$qRow->uuid;
-            $snap  = $snapByUuid[$qUuid] ?? null;
-
-            // ✅ Decode bubbles + sequence
-            $bubbles = $this->jsonSafe($qRow->bubbles_json, []);
-            $seq     = $this->jsonSafe($qRow->answer_sequence_json, []);
-
-            // ✅ Build correct order labels based on answer_sequence_json indexes
-            $correctOrder = [];
-            if (is_array($seq) && is_array($bubbles)) {
-                foreach ($seq as $idx) {
-                    $i = is_numeric($idx) ? (int)$idx : null;
-                    if ($i !== null && isset($bubbles[$i])) {
-                        $label = $bubbles[$i]['label'] ?? null;
-                        if ($label !== null && $label !== '') {
-                            $correctOrder[] = $label;
-                        }
-                    }
-                }
-            }
-
-            // ✅ Build your order from selected_row_json (can be JSON string)
-            $yourOrder = null;
-            if (is_array($snap) && array_key_exists('selected_row_json', $snap) && $snap['selected_row_json'] !== null) {
-                $yourOrder = $this->jsonSafe($snap['selected_row_json'], null);
-            }
-            // Fallback if older snapshot uses "selected" as array
-            if ($yourOrder === null && is_array($snap) && isset($snap['selected']) && is_array($snap['selected'])) {
-                $yourOrder = $snap['selected'];
-            }
-
-            $questionPayload[] = [
-                'question_id'   => (int)$qRow->id,
-                'question_uuid' => $qUuid,
-                'order_no'      => (int)$qRow->order_no,
-                'title'         => (string)($qRow->title ?? ''),
-                'select_type'   => (string)($qRow->select_type ?? 'ascending'),
-                'bubbles_count' => (int)($qRow->bubbles_count ?? 0),
-                'points'        => (int)($qRow->points ?? 1),
-
-                // original decoded payload
-                'bubbles_json'          => $bubbles,
-                'correct_sequence_json' => is_array($seq) ? $seq : $this->jsonSafe($qRow->answer_sequence_json, null),
-                'correct_value_json'    => $this->jsonSafe($qRow->answer_value_json, null),
-
-                // ✅ NEW fields used by frontend
-                'correct_order' => $correctOrder, // labels in correct order
-                'your_order'    => $yourOrder,    // labels in user's tapped order
-
-                // snapshot fields
-                'selected'       => is_array($snap) ? ($snap['selected'] ?? null) : null,
-                'is_correct'     => is_array($snap) ? ($snap['is_correct'] ?? null) : null,
-                'spent_time_sec' => is_array($snap) ? ($snap['spent_time_sec'] ?? null) : null,
-                'is_skipped'     => is_array($snap) ? ($snap['is_skipped'] ?? null) : null,
-
-                // keep but make consistent (decoded)
-                'selected_row_json' => $yourOrder,
-            ];
-        }
-
-        // If you DON’T have bubble_game_attempts table, keep this null
-        $attempt = null;
-        if (Schema::hasTable('bubble_game_attempts')) {
-            $attemptRow = DB::table('bubble_game_attempts')
-                ->where('bubble_game_id', (int)$row->game_id)
-                ->where('user_id', (int)$row->user_id)
-                ->orderByDesc('id')
-                ->first();
-
-            if ($attemptRow) {
-                $attempt = [
-                    'id' => (int)$attemptRow->id,
-                    'status' => (string)($attemptRow->status ?? ''),
-                    'started_at' => !empty($attemptRow->started_at)
-                        ? Carbon::parse($attemptRow->started_at)->toDateTimeString()
-                        : null,
-                    'submitted_at' => !empty($attemptRow->submitted_at)
-                        ? Carbon::parse($attemptRow->submitted_at)->toDateTimeString()
-                        : null,
-                ];
-            }
-        }
-
-        return response()->json([
-            'success' => true,
-            'game' => [
-                'id' => (int)$row->game_id,
-                'uuid' => (string)$row->game_uuid,
-                'title' => (string)$row->game_title,
-                'description' => (string)($row->game_description ?? ''),
-                'max_attempts' => (int)($row->max_attempts ?? 1),
-                'per_question_time_sec' => (int)($row->per_question_time_sec ?? 0),
-                'allow_skip' => (string)($row->allow_skip ?? 'no'),
-            ],
-            'attempt' => $attempt,
-            'result' => [
-                'result_id' => (int)$row->result_id,
-                'result_uuid' => (string)$row->result_uuid,
-                'user_id' => (int)$row->user_id,
-                'attempt_no' => (int)$row->attempt_no,
-                'score' => (int)$row->score,
-                'result_created_at' => $row->result_created_at
-                    ? Carbon::parse($row->result_created_at)->toDateTimeString()
-                    : null,
-            ],
-            'student' => [
-                'id' => (int)$row->user_id,
-                'uuid' => (string)($row->student_uuid ?? ''),
-                'name' => (string)$row->student_name,
-                'email' => (string)$row->student_email,
-            ],
-            'questions' => $questionPayload,
-        ], 200);
-    }
-public function resultDetailForInstructor(Request $request, string $resultKey)
 {
-    // if ($resp = $this->requireRole($request, ['instructor','examiner','admin','super_admin'])) return $resp;
-
     $actor  = $this->actor($request);
     $role   = $this->normalizeRole($actor['role'] ?? '');
     $userId = (int)($actor['id'] ?? 0);
@@ -1433,18 +1290,20 @@ public function resultDetailForInstructor(Request $request, string $resultKey)
         return response()->json(['success'=>false,'message'=>'Unauthorized'], 401);
     }
 
-    $q = DB::table('bubble_game_results as r')
-        ->join('bubble_game as g', 'g.id', '=', 'r.bubble_game_id')
+    $q = DB::table('door_game_results as r')
+        ->join('door_game as g', 'g.id', '=', 'r.door_game_id')
         ->join('users as u', 'u.id', '=', 'r.user_id')
         ->whereNull('r.deleted_at')
         ->whereNull('g.deleted_at')
         ->select([
             'r.id as result_id',
             'r.uuid as result_uuid',
-            'r.bubble_game_id',
+            'r.door_game_id',
             'r.user_id',
             'r.attempt_no',
             'r.score',
+            'r.time_taken_ms',
+            'r.status',
             'r.user_answer_json',
             'r.created_at as result_created_at',
 
@@ -1452,8 +1311,13 @@ public function resultDetailForInstructor(Request $request, string $resultKey)
             'g.uuid as game_uuid',
             'g.title as game_title',
             'g.description as game_description',
-            'g.per_question_time_sec',
-            'g.allow_skip',
+            'g.instructions_html',
+            'g.show_solution_after',
+            'g.grid_dim',
+            'g.grid_json',
+            'g.max_attempts',
+            'g.time_limit_sec',
+            'g.status as game_status',
 
             'u.uuid as student_uuid',
             'u.name as student_name',
@@ -1467,49 +1331,14 @@ public function resultDetailForInstructor(Request $request, string $resultKey)
         return response()->json(['success'=>false,'message'=>'Result not found'], 404);
     }
 
-    // ✅ Correct instructor assignment guard (optional)
-    if (in_array($role, ['instructor','examiner'], true)) {
-        if (!$this->userAssignedToBubbleGame($userId, (int)$row->game_id)) {
-            return response()->json(['success'=>false,'message'=>'You are not assigned to this bubble game'], 403);
-        }
+    // ✅ student can only view own result
+    if ($role === 'student' && (int)$row->user_id !== $userId) {
+        return response()->json(['success'=>false,'message'=>'Forbidden'], 403);
     }
 
-    // Decode snapshot
-    $snapshot = $this->jsonSafe($row->user_answer_json, []);
-    $snapByUuid = [];
-    foreach ($snapshot as $s) if (!empty($s['question_uuid'])) $snapByUuid[(string)$s['question_uuid']] = $s;
-
-    $questions = DB::table('bubble_game_questions as q')
-        ->where('q.bubble_game_id', (int)$row->game_id)
-        ->orderBy('q.order_no')
-        ->select([
-            'q.id','q.uuid','q.order_no','q.title','q.select_type',
-            'q.bubbles_json','q.answer_sequence_json','q.answer_value_json',
-            'q.bubbles_count','q.points','q.status'
-        ])
-        ->get();
-
-    $questionPayload = [];
-    foreach ($questions as $q) {
-        $qUuid = (string)$q->uuid;
-        $snap  = $snapByUuid[$qUuid] ?? null;
-
-        $questionPayload[] = [
-            'question_id' => (int)$q->id,
-            'question_uuid' => $qUuid,
-            'order_no' => (int)$q->order_no,
-            'title' => (string)($q->title ?? ''),
-            'select_type' => (string)($q->select_type ?? 'ascending'),
-            'bubbles_json' => $this->jsonSafe($q->bubbles_json, []),
-            'correct_sequence_json' => $this->jsonSafe($q->answer_sequence_json, null),
-            'correct_value_json' => $this->jsonSafe($q->answer_value_json, null),
-
-            'selected' => $snap['selected'] ?? null,
-            'is_correct' => $snap['is_correct'] ?? null,
-            'spent_time_sec' => $snap['spent_time_sec'] ?? null,
-            'is_skipped' => $snap['is_skipped'] ?? null,
-        ];
-    }
+    // decode game grid + user snapshot
+    $grid = $this->jsonSafe($row->grid_json, []);
+    $answer = $this->jsonSafe($row->user_answer_json, []);
 
     return response()->json([
         'success' => true,
@@ -1518,21 +1347,121 @@ public function resultDetailForInstructor(Request $request, string $resultKey)
             'uuid' => (string)$row->game_uuid,
             'title' => (string)$row->game_title,
             'description' => (string)($row->game_description ?? ''),
+            'instructions_html' => (string)($row->instructions_html ?? ''),
+            'show_solution_after' => (string)($row->show_solution_after ?? 'after_finish'),
+            'grid_dim' => (int)($row->grid_dim ?? 3),
+            'grid_json' => $grid,
+            'max_attempts' => (int)($row->max_attempts ?? 1),
+            'time_limit_sec' => (int)($row->time_limit_sec ?? 30),
+            'status' => (string)($row->game_status ?? 'active'),
         ],
         'result' => [
             'result_id' => (int)$row->result_id,
             'result_uuid' => (string)$row->result_uuid,
-            'score' => (int)$row->score,
-            'attempt_no' => (int)$row->attempt_no,
-            'result_created_at' => $row->result_created_at ? Carbon::parse($row->result_created_at)->toDateTimeString() : null,
+            'user_id' => (int)$row->user_id,
+            'attempt_no' => (int)($row->attempt_no ?? 1),
+            'score' => (int)($row->score ?? 0),
+            'time_taken_ms' => (int)($row->time_taken_ms ?? 0),
+            'status' => (string)($row->status ?? ''),
+            'result_created_at' => $row->result_created_at
+                ? Carbon::parse($row->result_created_at)->toDateTimeString()
+                : null,
+            'user_answer' => $answer, // decoded
         ],
         'student' => [
             'id' => (int)$row->user_id,
             'uuid' => (string)($row->student_uuid ?? ''),
-            'name' => (string)$row->student_name,
-            'email' => (string)$row->student_email,
+            'name' => (string)($row->student_name ?? ''),
+            'email' => (string)($row->student_email ?? ''),
         ],
-        'questions' => $questionPayload,
+    ], 200);
+}
+public function resultDetailForInstructor(Request $request, string $resultKey)
+{
+    $actor  = $this->actor($request);
+    $role   = $this->normalizeRole($actor['role'] ?? '');
+    $userId = (int)($actor['id'] ?? 0);
+
+    if ($userId <= 0) {
+        return response()->json(['success'=>false,'message'=>'Unauthorized'], 401);
+    }
+
+    $q = DB::table('door_game_results as r')
+        ->join('door_game as g', 'g.id', '=', 'r.door_game_id')
+        ->join('users as u', 'u.id', '=', 'r.user_id')
+        ->whereNull('r.deleted_at')
+        ->whereNull('g.deleted_at')
+        ->select([
+            'r.id as result_id',
+            'r.uuid as result_uuid',
+            'r.door_game_id',
+            'r.user_id',
+            'r.attempt_no',
+            'r.score',
+            'r.time_taken_ms',
+            'r.status',
+            'r.user_answer_json',
+            'r.created_at as result_created_at',
+
+            'g.id as game_id',
+            'g.uuid as game_uuid',
+            'g.title as game_title',
+            'g.description as game_description',
+            'g.grid_dim',
+            'g.grid_json',
+            'g.time_limit_sec',
+
+            'u.uuid as student_uuid',
+            'u.name as student_name',
+            'u.email as student_email',
+        ]);
+
+    $this->applyIdOrUuidWhere($q, 'r.id', 'r.uuid', $resultKey);
+    $row = $q->first();
+
+    if (!$row) {
+        return response()->json(['success'=>false,'message'=>'Result not found'], 404);
+    }
+
+    // ✅ examiner/instructor can only view if assigned to this door game
+    if (in_array($role, ['instructor','examiner'], true)) {
+        if (!$this->userAssignedToDoorGame($userId, (int)$row->game_id)) {
+            return response()->json(['success'=>false,'message'=>'You are not assigned to this door game'], 403);
+        }
+    }
+
+    $grid = $this->jsonSafe($row->grid_json, []);
+    $answer = $this->jsonSafe($row->user_answer_json, []);
+
+    return response()->json([
+        'success' => true,
+        'game' => [
+            'id' => (int)$row->game_id,
+            'uuid' => (string)$row->game_uuid,
+            'title' => (string)$row->game_title,
+            'description' => (string)($row->game_description ?? ''),
+            'grid_dim' => (int)($row->grid_dim ?? 3),
+            'grid_json' => $grid,
+            'time_limit_sec' => (int)($row->time_limit_sec ?? 30),
+        ],
+        'result' => [
+            'result_id' => (int)$row->result_id,
+            'result_uuid' => (string)$row->result_uuid,
+            'score' => (int)($row->score ?? 0),
+            'attempt_no' => (int)($row->attempt_no ?? 1),
+            'time_taken_ms' => (int)($row->time_taken_ms ?? 0),
+            'status' => (string)($row->status ?? ''),
+            'result_created_at' => $row->result_created_at
+                ? Carbon::parse($row->result_created_at)->toDateTimeString()
+                : null,
+            'user_answer' => $answer,
+        ],
+        'student' => [
+            'id' => (int)$row->user_id,
+            'uuid' => (string)($row->student_uuid ?? ''),
+            'name' => (string)($row->student_name ?? ''),
+            'email' => (string)($row->student_email ?? ''),
+        ],
     ], 200);
 }
 public function assignedResultsForGame(Request $request, string $gameKey)
@@ -1545,29 +1474,24 @@ public function assignedResultsForGame(Request $request, string $gameKey)
         return response()->json(['success'=>false,'message'=>'Unauthorized'], 401);
     }
 
-    $game = $this->gameByKeyFixed($gameKey);
+    $game = $this->doorGameByKey($gameKey);
     if (!$game) {
-        return response()->json(['success'=>false,'message'=>'Bubble game not found'], 404);
+        return response()->json(['success'=>false,'message'=>'Door game not found'], 404);
     }
 
-    // ✅ examiner/instructor can only view if assigned (you wanted this)
     if (in_array($role, ['instructor','examiner'], true)) {
-        if (!$this->userAssignedToBubbleGame($userId, (int)$game->id)) {
-            return response()->json(['success'=>false,'message'=>'You are not assigned to this bubble game'], 403);
+        if (!$this->userAssignedToDoorGame($userId, (int)$game->id)) {
+            return response()->json(['success'=>false,'message'=>'You are not assigned to this door game'], 403);
         }
     }
 
-    // -----------------------------
-    // Assigned STUDENTS for this game
-    // (your assignments table can contain examiner too, so we filter users.role if exists)
-    // -----------------------------
-    $assignedUsersQ = DB::table('user_bubble_game_assignments as a')
+    // assigned students
+    $assignedUsersQ = DB::table('user_door_game_assignments as a')
         ->join('users as u', 'u.id', '=', 'a.user_id')
-        ->where('a.bubble_game_id', (int)$game->id)
+        ->where('a.door_game_id', (int)$game->id)
         ->whereNull('a.deleted_at')
         ->where('a.status', 'active');
 
-    // If users table has role column, restrict to student only
     try {
         if (Schema::hasColumn('users', 'role')) {
             $assignedUsersQ->whereRaw("LOWER(u.role) = 'student'");
@@ -1577,36 +1501,16 @@ public function assignedResultsForGame(Request $request, string $gameKey)
     $assignedStudentIds = $assignedUsersQ->pluck('u.id')->map(fn($x)=>(int)$x)->values()->all();
     $totalAssignedStudents = count($assignedStudentIds);
 
-    // -----------------------------
-    // Question stats (for accuracy%)
-    // -----------------------------
-    $qStats = DB::table('bubble_game_questions as bq')
-        ->selectRaw('bq.bubble_game_id, COUNT(*) as total_questions, COALESCE(SUM(bq.points),0) as total_points')
-        ->where('bq.status', 'active')
-        ->groupBy('bq.bubble_game_id');
-
-    // -----------------------------
-    // Attempts list (THIS is what your frontend uses)
-    // -----------------------------
-    $attemptsQ = DB::table('bubble_game_results as r')
+    $attemptsQ = DB::table('door_game_results as r')
         ->join('users as u', 'u.id', '=', 'r.user_id')
-        ->join('bubble_game as g', 'g.id', '=', 'r.bubble_game_id')
-        ->leftJoinSub($qStats, 'qs', function($j){
-            $j->on('qs.bubble_game_id', '=', 'g.id');
-        })
-        ->where('r.bubble_game_id', (int)$game->id)
+        ->join('door_game as g', 'g.id', '=', 'r.door_game_id')
+        ->where('r.door_game_id', (int)$game->id)
         ->whereNull('r.deleted_at')
         ->whereNull('g.deleted_at');
 
-    // Only assigned students should be listed
-    if ($totalAssignedStudents > 0) {
-        $attemptsQ->whereIn('r.user_id', $assignedStudentIds);
-    } else {
-        // no assigned students => no attempts
-        $attemptsQ->whereRaw('1=0');
-    }
+    if ($totalAssignedStudents > 0) $attemptsQ->whereIn('r.user_id', $assignedStudentIds);
+    else $attemptsQ->whereRaw('1=0');
 
-    // Search filter (name/email)
     $qText = trim((string)$request->query('q', ''));
     if ($qText !== '') {
         $attemptsQ->where(function($w) use ($qText){
@@ -1615,7 +1519,6 @@ public function assignedResultsForGame(Request $request, string $gameKey)
         });
     }
 
-    // Order newest first by default (frontend sorts after normalization anyway)
     $attemptsQ->orderByDesc('r.created_at');
 
     $attempts = $attemptsQ->select([
@@ -1626,17 +1529,12 @@ public function assignedResultsForGame(Request $request, string $gameKey)
             'u.email as student_email',
             'r.attempt_no',
             'r.score',
+            'r.time_taken_ms',
+            'r.status',
             'r.created_at as result_created_at',
-            DB::raw('COALESCE(qs.total_questions,0) as total_questions'),
-            DB::raw('COALESCE(qs.total_points,0) as total_points'),
         ])
         ->get()
         ->map(function($a){
-            $score = (int)($a->score ?? 0);
-            $den   = (int)($a->total_points ?? 0);
-            if ($den <= 0) $den = (int)($a->total_questions ?? 0);
-            $acc = ($den > 0) ? round(($score / $den) * 100, 2) : null;
-
             return [
                 'result_id'         => (int)$a->result_id,
                 'result_uuid'       => (string)($a->result_uuid ?? ''),
@@ -1644,21 +1542,20 @@ public function assignedResultsForGame(Request $request, string $gameKey)
                 'student_name'      => (string)($a->student_name ?? ''),
                 'student_email'     => (string)($a->student_email ?? ''),
                 'attempt_no'        => (int)($a->attempt_no ?? 1),
-                'score'             => $score,
-                'accuracy'          => $acc, // ✅ frontend uses this as percentage
-                'result_created_at' => $a->result_created_at ? Carbon::parse($a->result_created_at)->toDateTimeString() : null,
+                'score'             => (int)($a->score ?? 0),
+                'time_taken_ms'     => (int)($a->time_taken_ms ?? 0),
+                'status'            => (string)($a->status ?? ''),
+                // keep same key name frontend expects from bubble page:
+                'accuracy'          => null,
+                'result_created_at' => $a->result_created_at
+                    ? Carbon::parse($a->result_created_at)->toDateTimeString()
+                    : null,
             ];
         })
         ->values();
 
-    // -----------------------------
-    // Stats (frontend reads these too)
-    // -----------------------------
     $totalAttempts   = $attempts->count();
     $uniqueAttempted = $attempts->pluck('student_id')->unique()->count();
-
-    $avgScore = $totalAttempts ? round($attempts->avg('score'), 2) : null;
-    $avgPct   = $totalAttempts ? round($attempts->avg('accuracy'), 2) : null;
 
     return response()->json([
         'success' => true,
@@ -1667,263 +1564,19 @@ public function assignedResultsForGame(Request $request, string $gameKey)
                 'id'    => (int)$game->id,
                 'uuid'  => (string)$game->uuid,
                 'title' => (string)$game->title,
-                'total_time_minutes' => isset($game->total_time_minutes) ? (int)$game->total_time_minutes : null,
-                'pass_percentage' => isset($game->pass_percentage) ? (float)$game->pass_percentage : 40, // optional
+                'time_limit_sec' => isset($game->time_limit_sec) ? (int)$game->time_limit_sec : null,
+                'grid_dim' => isset($game->grid_dim) ? (int)$game->grid_dim : null,
             ],
             'stats' => [
                 'total_attempts'          => (int)$totalAttempts,
                 'unique_attempted'        => (int)$uniqueAttempted,
                 'total_assigned_students' => (int)$totalAssignedStudents,
-                'avg_score'               => $avgScore,
-                'avg_percentage'          => $avgPct,
             ],
             'attempts' => $attempts,
         ]
     ], 200);
 }
 
-private function userAssignedToBubbleGame(int $userId, int $gameId): bool
-{
-    return DB::table('user_bubble_game_assignments')
-        ->where('user_id', $userId)
-        ->where('bubble_game_id', $gameId)
-        ->whereNull('deleted_at')
-        ->where('status', 'active')
-        ->exists();
-}
-/**
- * EXPORT Bubble Game Result (DOCX preferred, fallback HTML)
- * GET /api/bubble-game-results/export/{resultKey}?format=docx|html
- *
- * - student: can export ONLY own result
- * - admin/super_admin: can export any
- * - instructor/examiner: (optional) assignment check (TEMP uses user_bubble_game_assignments)
- */
-public function export(Request $request, string $resultKey)
-{
-    if ($resp = $this->requireRole($request, ['student','instructor','examiner','admin','super_admin'])) {
-        return $resp;
-    }
-
-    $actor = $this->actor($request);
-    $role  = $this->normalizeRole($actor['role'] ?? '');
-    $userId= (int) ($actor['id'] ?? 0);
-
-    if ($userId <= 0) {
-        return response()->json(['success'=>false,'message'=>'Unauthorized'], 401);
-    }
-
-    // ---------- 1) Load result + game + student ----------
-    $row = DB::table('bubble_game_results as r')
-        ->join('bubble_game as g', 'g.id', '=', 'r.bubble_game_id')
-        ->join('users as u', 'u.id', '=', 'r.user_id')
-        ->whereNull('r.deleted_at')
-        ->whereNull('g.deleted_at')
-        ->where(function ($w) use ($resultKey) {
-            if (is_numeric($resultKey)) {
-                $w->where('r.id', (int)$resultKey);
-            } else {
-                $w->where('r.uuid', (string)$resultKey);
-            }
-        })
-        ->select([
-            'r.id as result_id',
-            'r.uuid as result_uuid',
-            'r.user_id',
-            'r.bubble_game_id',
-            'r.attempt_no',
-            'r.score',
-            'r.user_answer_json',
-            'r.created_at as result_created_at',
-
-            'g.id as game_id',
-            'g.uuid as game_uuid',
-            'g.title as game_title',
-            'g.description as game_description',
-            'g.max_attempts',
-            'g.per_question_time_sec',
-            'g.allow_skip',
-
-            'u.name as student_name',
-            'u.email as student_email',
-        ])
-        ->first();
-
-    if (!$row) {
-        return response()->json(['success'=>false,'message'=>'Result not found'], 404);
-    }
-
-    // ---------- 2) Ownership / assignment guards ----------
-    if ($role === 'student' && (int)$row->user_id !== $userId) {
-        return response()->json(['success'=>false,'message'=>'Forbidden'], 403);
-    }
-
-    // TEMP assignment check for instructor/examiner (remove if you don't want)
-    if (in_array($role, ['instructor','examiner'], true)) {
-        $assigned = DB::table('user_bubble_game_assignments')
-            ->where('bubble_game_id', (int)$row->game_id)
-            ->where('user_id', $userId)
-            ->whereNull('deleted_at')
-            ->where('status', 'active')
-            ->exists();
-
-        if (!$assigned) {
-            return response()->json(['success'=>false,'message'=>'You are not assigned to this bubble game'], 403);
-        }
-    }
-
-    // ---------- 3) Decode snapshot ----------
-    try {
-        $snapshot = json_decode($row->user_answer_json ?? '[]', true) ?: [];
-    } catch (\Throwable $e) {
-        $snapshot = [];
-    }
-
-    $snapByUuid = [];
-    foreach ($snapshot as $s) {
-        if (!empty($s['question_uuid'])) $snapByUuid[(string)$s['question_uuid']] = $s;
-    }
-
-    // ---------- 4) Load questions ----------
-    $questions = DB::table('bubble_game_questions')
-        ->where('bubble_game_id', (int)$row->game_id)
-        ->orderBy('order_no')
-        ->get();
-
-    // Build export rows
-    $items = [];
-    $totalCorrect = 0;
-    $totalWrong   = 0;
-    $totalSkipped = 0;
-
-    foreach ($questions as $q) {
-        $qUuid = (string)$q->uuid;
-        $snap  = $snapByUuid[$qUuid] ?? null;
-
-        $isCorrect = ($snap['is_correct'] ?? null) === 'yes';
-        $isSkipped = ($snap['is_skipped'] ?? null) === 'yes';
-
-        if ($isSkipped) $totalSkipped++;
-        else if ($isCorrect) $totalCorrect++;
-        else if (($snap['is_correct'] ?? null) !== null) $totalWrong++;
-
-        $correctSeq = $q->answer_sequence_json ? json_decode($q->answer_sequence_json, true) : null;
-        $selected   = $snap['selected'] ?? null;
-
-        $items[] = [
-            'no'            => (int)($q->order_no ?? 0),
-            'question'      => (string)($q->title ?? ''),
-            'type'          => (string)($q->select_type ?? ''),
-            'your_answer'   => is_array($selected) ? json_encode($selected, JSON_UNESCAPED_UNICODE) : (string)($selected ?? '—'),
-            'correct_order' => $correctSeq !== null
-                                ? (is_array($correctSeq) ? json_encode($correctSeq, JSON_UNESCAPED_UNICODE) : (string)$correctSeq)
-                                : '—',
-            'is_correct'    => $snap['is_correct'] ?? null,
-            'is_skipped'    => $snap['is_skipped'] ?? null,
-            'spent_time_sec'=> $snap['spent_time_sec'] ?? null,
-        ];
-    }
-
-    $format = strtolower((string)$request->query('format', 'docx'));
-    $safeName = 'bubble_game_result_'.$row->result_id;
-
-    // ---------- 5) DOCX via PhpWord if available ----------
-    if ($format === 'docx') {
-        if (class_exists(\PhpOffice\PhpWord\PhpWord::class)) {
-            $phpWord = new \PhpOffice\PhpWord\PhpWord();
-            $section = $phpWord->addSection();
-
-            $section->addText('Bubble Game Result', ['bold'=>true,'size'=>16]);
-            $section->addTextBreak(1);
-
-            $section->addText('Game: '.$row->game_title, ['bold'=>true]);
-            $section->addText('Student: '.$row->student_name.' ('.$row->student_email.')', ['size'=>11]);
-            $section->addText('Attempt #: '.$row->attempt_no, ['size'=>11]);
-            $section->addText('Score: '.$row->score, ['size'=>11]);
-            $section->addText('Result At: '.($row->result_created_at ? \Carbon\Carbon::parse($row->result_created_at)->toDayDateTimeString() : '—'), ['size'=>11]);
-            $section->addTextBreak(1);
-
-            $section->addText("Correct: {$totalCorrect}   Wrong: {$totalWrong}   Skipped: {$totalSkipped}", ['size'=>11]);
-            $section->addTextBreak(1);
-
-            $table = $section->addTable(['borderSize'=>6,'borderColor'=>'cccccc','cellMargin'=>60]);
-            $table->addRow();
-            foreach (['Q#','Question','Your Answer','Correct Order','Correct?','Skipped?','Time(sec)'] as $col) {
-                $table->addCell(2000)->addText($col, ['bold'=>true]);
-            }
-
-            foreach ($items as $it) {
-                $table->addRow();
-                $table->addCell(700)->addText((string)$it['no']);
-                $table->addCell(6000)->addText(strip_tags($it['question']));
-                $table->addCell(4000)->addText($it['your_answer'] !== '' ? $it['your_answer'] : '—');
-                $table->addCell(4000)->addText($it['correct_order'] !== '' ? $it['correct_order'] : '—');
-                $table->addCell(1400)->addText((string)($it['is_correct'] ?? '—'));
-                $table->addCell(1400)->addText((string)($it['is_skipped'] ?? '—'));
-                $table->addCell(1400)->addText($it['spent_time_sec'] !== null ? (string)$it['spent_time_sec'] : '—');
-            }
-
-            $tmp = tempnam(sys_get_temp_dir(), 'bgr_').'.docx';
-            $phpWord->save($tmp, 'Word2007');
-
-            return response()->download($tmp, $safeName.'.docx')->deleteFileAfterSend(true);
-        }
-
-        // fallback to HTML if PhpWord not installed
-        $format = 'html';
-    }
-
-    // ---------- 6) HTML fallback (Word-compatible if you want) ----------
-    $html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>'.$safeName.'</title>
-    <style>
-      body{font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#111}
-      h1{font-size:18px;margin:0 0 8px}
-      .meta{margin:0 0 10px}
-      table{border-collapse:collapse;width:100%}
-      th,td{border:1px solid #ccc;padding:6px;vertical-align:top}
-      th{background:#f5f5f5}
-      .muted{color:#555}
-    </style></head><body>';
-
-    $html .= '<h1>Bubble Game Result</h1>';
-    $html .= '<div class="meta"><b>Game:</b> '.htmlspecialchars($row->game_title).'<br>';
-    $html .= '<b>Student:</b> '.htmlspecialchars($row->student_name).' ('.htmlspecialchars($row->student_email).')<br>';
-    $html .= '<b>Attempt #:</b> '.(int)$row->attempt_no.'<br>';
-    $html .= '<b>Score:</b> '.(int)$row->score.'<br>';
-    $html .= '<b>Result At:</b> '.($row->result_created_at ? htmlspecialchars(Carbon::parse($row->result_created_at)->toDayDateTimeString()) : '—').'<br>';
-    $html .= '<b>Correct:</b> '.$totalCorrect.' &nbsp; <b>Wrong:</b> '.$totalWrong.' &nbsp; <b>Skipped:</b> '.$totalSkipped.'</div>';
-
-    $html .= '<table><thead><tr>
-        <th style="width:60px">Q#</th>
-        <th>Question</th>
-        <th>Your Answer</th>
-        <th>Correct Order</th>
-        <th style="width:80px">Correct?</th>
-        <th style="width:80px">Skipped?</th>
-        <th style="width:90px">Time(sec)</th>
-      </tr></thead><tbody>';
-
-    foreach ($items as $it) {
-        $html .= '<tr>';
-        $html .= '<td>'.(int)$it['no'].'</td>';
-        $html .= '<td>'.htmlspecialchars(strip_tags((string)$it['question'])).'</td>';
-        $html .= '<td>'.htmlspecialchars((string)($it['your_answer'] ?? '—')).'</td>';
-        $html .= '<td>'.htmlspecialchars((string)($it['correct_order'] ?? '—')).'</td>';
-        $html .= '<td>'.htmlspecialchars((string)($it['is_correct'] ?? '—')).'</td>';
-        $html .= '<td>'.htmlspecialchars((string)($it['is_skipped'] ?? '—')).'</td>';
-        $html .= '<td>'.htmlspecialchars($it['spent_time_sec'] !== null ? (string)$it['spent_time_sec'] : '—').'</td>';
-        $html .= '</tr>';
-    }
-    $html .= '</tbody></table>';
-    $html .= '<p class="muted">Exported on '.htmlspecialchars(now()->toDateTimeString()).'</p>';
-    $html .= '</body></html>';
-
-    // If you want Word download: change content-type + filename to .doc
-    return response($html, 200, [
-        'Content-Type' => 'text/html; charset=utf-8',
-        'Content-Disposition' => 'attachment; filename="'.$safeName.'.html"',
-    ]);
-}
 /**
  * Resolve a door game by "key" which can be UUID or numeric ID.
  * Returns a row from door_game table or null.
@@ -1959,5 +1612,17 @@ private function gameIdByKeyFixed(string $key): ?int
     $g = $this->gameByKeyFixed($key);
     return $g ? (int)$g->id : null;
 }
+private function jsonSafe($val, $default = null)
+{
+    if ($default === null) $default = [];
+    if ($val === null || $val === '') return $default;
+    if (is_array($val)) return $val;
 
+    try {
+        $decoded = json_decode($val, true);
+        return (json_last_error() === JSON_ERROR_NONE) ? ($decoded ?? $default) : $default;
+    } catch (\Throwable $e) {
+        return $default;
+    }
+}
 }

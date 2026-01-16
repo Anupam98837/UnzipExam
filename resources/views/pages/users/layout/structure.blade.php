@@ -258,113 +258,146 @@
     {{-- 1 ALL MENU (default population; shown only if API returns "all") --}}
     <div id="allMenuWrap" style="display:none">
       {{-- ADMIN --}}
-      <div id="allMenuAdmin" style="display:none">
-        <nav class="w3-menu" aria-label="Admin Modules">
-          <div class="w3-group">
-            <a href="#" class="w3-link w3-toggle" data-target="sm-admin-users" aria-expanded="false">
-              <i class="fa-solid fa-users"></i><span>Users</span>
-              <i class="fa fa-chevron-down w3-chev"></i>
-            </a>
-            <div id="sm-admin-users" class="w3-submenu" role="group" aria-label="Users submenu">
-              <a href="/users/manage" class="w3-link">Manage Users</a>
-            </div>
-          </div>
-          <div class="w3-group">
-  <a href="#" class="w3-link w3-toggle" data-target="sm-admin-user-folders" aria-expanded="false">
-    <i class="fa-solid fa-folder"></i><span>User Folders</span>
-    <i class="fa fa-chevron-down w3-chev"></i>
-  </a>
-  <div id="sm-admin-user-folders" class="w3-submenu" role="group" aria-label="User Folders submenu">
-    <a href="/user-folders/create" class="w3-link">Create Folder</a>
-    <a href="/user-folders/manage" class="w3-link">Manage Folders</a>
-  </div>
-</div>
+<div id="allMenuAdmin" style="display:none">
+  <nav class="w3-menu" aria-label="Admin Modules">
 
-          <div class="w3-group">
-            <a href="#" class="w3-link w3-toggle" data-target="sm-admin-quizzes" aria-expanded="false">
-              <i class="fa-solid fa-clipboard-list"></i><span>Quizzes & Exams</span>
-              <i class="fa fa-chevron-down w3-chev"></i>
-            </a>
-            <div id="sm-admin-quizzes" class="w3-submenu" role="group" aria-label="Quizzes submenu">
-              <a href="/quizz/create" class="w3-link">Create Quiz</a>
-              <a href="/quizz/manage" class="w3-link">Manage Quizzes</a>
-              <a href="/quizz/results" class="w3-link">Results</a>
-            </div>
-          </div>
-          <div class="w3-group">
-  <a href="#" class="w3-link w3-toggle" data-target="sm-admin-bubble-games" aria-expanded="false">
-    <i class="fa-solid fa-gamepad"></i><span>Bubble Games</span>
-    <i class="fa fa-chevron-down w3-chev"></i>
-  </a>
-
-  <div id="sm-admin-bubble-games" class="w3-submenu" role="group" aria-label="Bubble Games submenu">
-    <a href="/bubble-games/create" class="w3-link">Create Game</a>
-    <a href="/bubble-games/manage" class="w3-link">Manage Games</a>
-    <a href="/graphical-test/results" class="w3-link">Results</a>
-
-  </div>
-</div>
-
-          <div class="w3-group">
-            <a href="#" class="w3-link w3-toggle" data-target="sm-admin-dashboard-menu" aria-expanded="false">
-              <i class="fa-solid fa-puzzle-piece"></i><span>Dashboard Menu</span>
-              <i class="fa fa-chevron-down w3-chev"></i>
-            </a>
-            <div id="sm-admin-dashboard-menu" class="w3-submenu" role="group" aria-label="Dashboard Menu submenu">
-              <a href="/dashboard-menu/create" class="w3-link">Create Menu</a>
-              <a href="/dashboard-menu/manage" class="w3-link">Manage Menu</a>
-            </div>
-          </div>
-
-          <div class="w3-group">
-            <a href="#" class="w3-link w3-toggle" data-target="sm-admin-page-privilege" aria-expanded="false">
-              <i class="fa-solid fa-shield-halved"></i><span>Page Privilege</span>
-              <i class="fa fa-chevron-down w3-chev"></i>
-            </a>
-            <div id="sm-admin-page-privilege" class="w3-submenu" role="group" aria-label="Page Privilege submenu">
-              <a href="/page-privilege/create" class="w3-link">Create Privilege</a>
-              <a href="/page-privilege/manage" class="w3-link">Manage Privilege</a>
-            </div>
-          </div>
-        </nav>
+    <div class="w3-group">
+      <a href="#" class="w3-link w3-toggle" data-target="sm-admin-users" aria-expanded="false">
+        <i class="fa-solid fa-users"></i><span>Users</span>
+        <i class="fa fa-chevron-down w3-chev"></i>
+      </a>
+      <div id="sm-admin-users" class="w3-submenu" role="group" aria-label="Users submenu">
+        <a href="/users/manage" class="w3-link">Manage Users</a>
       </div>
+    </div>
 
-      {{-- EXAMINER --}}
-      <div id="allMenuExaminer" style="display:none">
-        <nav class="w3-menu" aria-label="Examiner Modules">
-          <div class="w3-group">
-            <a href="#" class="w3-link w3-toggle" data-target="sm-examiner-quizzes" aria-expanded="false">
-              <i class="fa-solid fa-clipboard-list"></i><span>Quizzes</span>
-              <i class="fa fa-chevron-down w3-chev"></i>
-            </a>
-            <div id="sm-examiner-quizzes" class="w3-submenu" role="group" aria-label="Quizzes submenu">
-              <a href="/quizz/create" class="w3-link">Create Quiz</a>
-              <a href="/quizz/manage" class="w3-link">Manage Quizzes</a>
-              <a href="/quizz/result/manage" class="w3-link">Results</a>
-            </div>
-          </div>
-          <div class="w3-group">
-  <a href="javascript:void(0)"
-     class="w3-link w3-toggle"
-     data-target="sm-examiner-bubble-games"
-     aria-expanded="false"
-     aria-controls="sm-examiner-bubble-games">
-    <i class="fa-solid fa-gamepad"></i><span>Bubble Games</span>
-    <i class="fa fa-chevron-down w3-chev"></i>
-  </a>
-
-  <div id="sm-examiner-bubble-games"
-       class="w3-submenu"
-       role="group"
-       aria-label="Bubble Games submenu">
-    <a href="/bubble-games/create" class="w3-link">Create Game</a>
-    <a href="/bubble-games/manage" class="w3-link">Manage Games</a>
-    <a href="/test/result/manage" class="w3-link">Results</a>
-  </div>
-</div>
-
-        </nav>
+    <div class="w3-group">
+      <a href="#" class="w3-link w3-toggle" data-target="sm-admin-user-folders" aria-expanded="false">
+        <i class="fa-solid fa-folder"></i><span>User Folders</span>
+        <i class="fa fa-chevron-down w3-chev"></i>
+      </a>
+      <div id="sm-admin-user-folders" class="w3-submenu" role="group" aria-label="User Folders submenu">
+        <a href="/user-folders/create" class="w3-link">Create Folder</a>
+        <a href="/user-folders/manage" class="w3-link">Manage Folders</a>
       </div>
+    </div>
+
+    <div class="w3-group">
+      <a href="#" class="w3-link w3-toggle" data-target="sm-admin-quizzes" aria-expanded="false">
+        <i class="fa-solid fa-clipboard-list"></i><span>Quizzes & Exams</span>
+        <i class="fa fa-chevron-down w3-chev"></i>
+      </a>
+      <div id="sm-admin-quizzes" class="w3-submenu" role="group" aria-label="Quizzes submenu">
+        <a href="/quizz/create" class="w3-link">Create Quiz</a>
+        <a href="/quizz/manage" class="w3-link">Manage Quizzes</a>
+        <a href="/quizz/results" class="w3-link">Results</a>
+      </div>
+    </div>
+
+    <div class="w3-group">
+      <a href="#" class="w3-link w3-toggle" data-target="sm-admin-bubble-games" aria-expanded="false">
+        <i class="fa-solid fa-gamepad"></i><span>Bubble Games</span>
+        <i class="fa fa-chevron-down w3-chev"></i>
+      </a>
+      <div id="sm-admin-bubble-games" class="w3-submenu" role="group" aria-label="Bubble Games submenu">
+        <a href="/bubble-games/create" class="w3-link">Create Game</a>
+        <a href="/bubble-games/manage" class="w3-link">Manage Games</a>
+        <a href="/graphical-test/results" class="w3-link">Results</a>
+      </div>
+    </div>
+
+    <!-- ✅ NEW: Door Games -->
+    <div class="w3-group">
+      <a href="#" class="w3-link w3-toggle" data-target="sm-admin-door-games" aria-expanded="false">
+        <i class="fa-solid fa-door-open"></i><span>Door Games</span>
+        <i class="fa fa-chevron-down w3-chev"></i>
+      </a>
+      <div id="sm-admin-door-games" class="w3-submenu" role="group" aria-label="Door Games submenu">
+        <a href="/door-games/create" class="w3-link">Create Game</a>
+        <a href="/door-games/manage" class="w3-link">Manage Games</a>
+        <a href="/decision-making-test/results" class="w3-link">Results</a>
+      </div>
+    </div>
+    <!-- ✅ END NEW -->
+
+    <div class="w3-group">
+      <a href="#" class="w3-link w3-toggle" data-target="sm-admin-dashboard-menu" aria-expanded="false">
+        <i class="fa-solid fa-puzzle-piece"></i><span>Dashboard Menu</span>
+        <i class="fa fa-chevron-down w3-chev"></i>
+      </a>
+      <div id="sm-admin-dashboard-menu" class="w3-submenu" role="group" aria-label="Dashboard Menu submenu">
+        <a href="/dashboard-menu/create" class="w3-link">Create Menu</a>
+        <a href="/dashboard-menu/manage" class="w3-link">Manage Menu</a>
+      </div>
+    </div>
+
+    <div class="w3-group">
+      <a href="#" class="w3-link w3-toggle" data-target="sm-admin-page-privilege" aria-expanded="false">
+        <i class="fa-solid fa-shield-halved"></i><span>Page Privilege</span>
+        <i class="fa fa-chevron-down w3-chev"></i>
+      </a>
+      <div id="sm-admin-page-privilege" class="w3-submenu" role="group" aria-label="Page Privilege submenu">
+        <a href="/page-privilege/create" class="w3-link">Create Privilege</a>
+        <a href="/page-privilege/manage" class="w3-link">Manage Privilege</a>
+      </div>
+    </div>
+
+  </nav>
+</div>
+{{-- EXAMINER --}}
+<div id="allMenuExaminer" style="display:none">
+  <nav class="w3-menu" aria-label="Examiner Modules">
+
+    <div class="w3-group">
+      <a href="#" class="w3-link w3-toggle" data-target="sm-examiner-quizzes" aria-expanded="false">
+        <i class="fa-solid fa-clipboard-list"></i><span>Quizzes</span>
+        <i class="fa fa-chevron-down w3-chev"></i>
+      </a>
+      <div id="sm-examiner-quizzes" class="w3-submenu" role="group" aria-label="Quizzes submenu">
+        <a href="/quizz/create" class="w3-link">Create Quiz</a>
+        <a href="/quizz/manage" class="w3-link">Manage Quizzes</a>
+        <a href="/quizz/result/manage" class="w3-link">Results</a>
+      </div>
+    </div>
+
+    <div class="w3-group">
+      <a href="javascript:void(0)"
+         class="w3-link w3-toggle"
+         data-target="sm-examiner-bubble-games"
+         aria-expanded="false"
+         aria-controls="sm-examiner-bubble-games">
+        <i class="fa-solid fa-gamepad"></i><span>Bubble Games</span>
+        <i class="fa fa-chevron-down w3-chev"></i>
+      </a>
+
+      <div id="sm-examiner-bubble-games" class="w3-submenu" role="group" aria-label="Bubble Games submenu">
+        <a href="/bubble-games/create" class="w3-link">Create Game</a>
+        <a href="/bubble-games/manage" class="w3-link">Manage Games</a>
+        <a href="/test/result/manage" class="w3-link">Results</a>
+      </div>
+    </div>
+
+    <!-- ✅ NEW: Door Games -->
+    <div class="w3-group">
+      <a href="javascript:void(0)"
+         class="w3-link w3-toggle"
+         data-target="sm-examiner-door-games"
+         aria-expanded="false"
+         aria-controls="sm-examiner-door-games">
+        <i class="fa-solid fa-door-open"></i><span>Door Games</span>
+        <i class="fa fa-chevron-down w3-chev"></i>
+      </a>
+
+      <div id="sm-examiner-door-games" class="w3-submenu" role="group" aria-label="Door Games submenu">
+        <a href="/door-games/create" class="w3-link">Create Game</a>
+        <a href="/door-games/manage" class="w3-link">Manage Games</a>
+        <a href="/decision-making-test/result/manage" class="w3-link">Results</a>
+      </div>
+    </div>
+    <!-- ✅ END NEW -->
+
+  </nav>
+</div>
 
       {{-- STUDENT --}}
       <div id="allMenuStudent" style="display:none">

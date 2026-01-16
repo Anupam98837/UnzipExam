@@ -15,8 +15,6 @@ use Carbon\Carbon;
 class DoorGameResultController extends Controller
 {
 
-
-
 private function normalizeRole(?string $role): string
 {
     return strtolower(preg_replace('/[^a-z0-9]+/i', '', (string)$role));
@@ -1229,7 +1227,7 @@ private function applyIdOrUuidWhere($q, string $colId, string $colUuid, string $
 
 public function resultDetail(Request $request, string $resultKey)
     {
-        if ($resp = $this->requireRole($request, ['student','admin','super_admin'])) return $resp;
+        // if ($resp = $this->requireRole($request, ['student','admin','super_admin'])) return $resp;
 
         $actor  = $this->actor($request);
         $role   = $this->normalizeRole($actor['role'] ?? '');

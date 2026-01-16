@@ -864,7 +864,9 @@ html.theme-dark .dgx-uArrow{
     tick: null,
     timeLeft: 30,
     suppressUnloadPrompt: false,
-    isSubmitting: false
+    isSubmitting: false,
+    winPromptShown: false
+
   };
 
   function getToken() {
@@ -1327,8 +1329,12 @@ html.theme-dark .dgx-uArrow{
       vibrate(35);
 
       notify('success','Door unlocked ✅', 'You finished the game!');
-setTimeout(lockAfterWin, 1800); // match the CSS duration (ms)
-      return;
+
+lockAfterWin();                 // stop timer + mark win + enable submit
+promptSubmitAfterWin();         // ✅ immediately ask for submit confirmation
+
+return;
+
     }
   }
 
@@ -1428,6 +1434,27 @@ function userHasAnyKey(){
 
     return json;
   }
+async function promptSubmitAfterWin(){
+  if(state.winPromptShown) return;
+  state.winPromptShown = true;
+
+  const r = await Swal.fire({
+    icon: 'warning',
+    title: 'Confirm Submit',
+    text: 'Confirm submit without it data will not be saved',
+    showCancelButton: true,
+    confirmButtonText: 'Submit Now',
+    cancelButtonText: 'Later',
+    confirmButtonColor: '#22c55e',
+  });
+
+  if(r.isConfirmed){
+    await submitAttempt(false);
+  }else{
+    notify('info', 'Not submitted', 'Press Submit anytime to save your data.');
+    elSubmitBtn.disabled = false; // keep enabled
+  }
+}
 
   async function submitAttempt(isAuto=false){
     if(state.isSubmitting) return;
@@ -1506,6 +1533,8 @@ function userHasAnyKey(){
 
       Swal.close();
       clearCache();
+      state.suppressUnloadPrompt = true;
+
       notify('success','Submitted successfully','Redirecting…');
       setTimeout(() => window.location.href = DASHBOARD_URL, 900);
 

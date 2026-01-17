@@ -251,7 +251,7 @@
 
     <!-- MODULES -->
     <div class="w3-nav-section">
-      <div class="w3-section-title"><i class="fa-solid fa-graduation-cap"></i> Quizzes & Exam</div>
+      <div class="w3-section-title"><i class="fa-solid fa-graduation-cap"></i> USERS</div>
       <div class="w3-section-rule"></div>
     </div>
 
@@ -281,6 +281,10 @@
         <a href="/user-folders/manage" class="w3-link">Manage Folders</a>
       </div>
     </div>
+<div class="w3-nav-section">
+      <div class="w3-section-title"><i class="fa-solid fa-graduation-cap"></i> Quizzes & Exam</div>
+      <div class="w3-section-rule"></div>
+    </div>
 
     <div class="w3-group">
       <a href="#" class="w3-link w3-toggle" data-target="sm-admin-quizzes" aria-expanded="false">
@@ -292,6 +296,10 @@
         <a href="/quizz/manage" class="w3-link">Manage Quizzes</a>
         <a href="/quizz/results" class="w3-link">Results</a>
       </div>
+    </div>
+  <div class="w3-nav-section">
+      <div class="w3-section-title"><i class="fa-solid fa-graduation-cap"></i> GAMES & RESULTS </div>
+      <div class="w3-section-rule"></div>
     </div>
 
     <div class="w3-group">
@@ -319,6 +327,10 @@
       </div>
     </div>
     <!-- ✅ END NEW -->
+    <div class="w3-nav-section">
+      <div class="w3-section-title"><i class="fa-solid fa-graduation-cap"></i> MENU PRIVILEGES</div>
+      <div class="w3-section-rule"></div>
+    </div>
 
     <div class="w3-group">
       <a href="#" class="w3-link w3-toggle" data-target="sm-admin-dashboard-menu" aria-expanded="false">

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Str;
@@ -1485,28 +1486,50 @@ public function assignedResultsForGame(Request $request, string $gameKey)
         }
     }
 
-    // assigned students
+    // ==========================
+    // Assigned students
+    // ==========================
     $assignedUsersQ = DB::table('user_door_game_assignments as a')
         ->join('users as u', 'u.id', '=', 'a.user_id')
-        ->where('a.door_game_id', (int)$game->id)
-        ->whereNull('a.deleted_at')
-        ->where('a.status', 'active');
+        ->where('a.door_game_id', (int)$game->id);
 
+    // Soft delete safe
     try {
-        if (Schema::hasColumn('users', 'role')) {
-            $assignedUsersQ->whereRaw("LOWER(u.role) = 'student'");
+        if (\Illuminate\Support\Facades\Schema::hasColumn('user_door_game_assignments', 'deleted_at')) {
+            $assignedUsersQ->whereNull('a.deleted_at');
         }
-    } catch (\Throwable $e) {}
+        if (\Illuminate\Support\Facades\Schema::hasColumn('user_door_game_assignments', 'status')) {
+            $assignedUsersQ->where('a.status', 'active');
+        }
+
+        // Student filter safe (different projects keep role column different)
+        if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'role')) {
+            $assignedUsersQ->whereRaw("LOWER(u.role) = 'student'");
+        } elseif (\Illuminate\Support\Facades\Schema::hasColumn('users', 'role_short_form')) {
+            $assignedUsersQ->whereRaw("LOWER(u.role_short_form) = 'student'");
+        }
+    } catch (\Throwable $e) {
+        // ignore
+    }
 
     $assignedStudentIds = $assignedUsersQ->pluck('u.id')->map(fn($x)=>(int)$x)->values()->all();
     $totalAssignedStudents = count($assignedStudentIds);
 
+    // ==========================
+    // Attempts (results)
+    // ==========================
     $attemptsQ = DB::table('door_game_results as r')
         ->join('users as u', 'u.id', '=', 'r.user_id')
-        ->join('door_game as g', 'g.id', '=', 'r.door_game_id')
-        ->where('r.door_game_id', (int)$game->id)
-        ->whereNull('r.deleted_at')
-        ->whereNull('g.deleted_at');
+        ->where('r.door_game_id', (int)$game->id);
+
+    // Soft delete safe for results table
+    try {
+        if (\Illuminate\Support\Facades\Schema::hasColumn('door_game_results', 'deleted_at')) {
+            $attemptsQ->whereNull('r.deleted_at');
+        }
+    } catch (\Throwable $e) {
+        // ignore
+    }
 
     if ($totalAssignedStudents > 0) $attemptsQ->whereIn('r.user_id', $assignedStudentIds);
     else $attemptsQ->whereRaw('1=0');
@@ -1519,7 +1542,16 @@ public function assignedResultsForGame(Request $request, string $gameKey)
         });
     }
 
-    $attemptsQ->orderByDesc('r.created_at');
+    // Order safe
+    try {
+        if (\Illuminate\Support\Facades\Schema::hasColumn('door_game_results', 'created_at')) {
+            $attemptsQ->orderByDesc('r.created_at');
+        } else {
+            $attemptsQ->orderByDesc('r.id');
+        }
+    } catch (\Throwable $e) {
+        $attemptsQ->orderByDesc('r.id');
+    }
 
     $attempts = $attemptsQ->select([
             'r.id as result_id',
@@ -1545,10 +1577,9 @@ public function assignedResultsForGame(Request $request, string $gameKey)
                 'score'             => (int)($a->score ?? 0),
                 'time_taken_ms'     => (int)($a->time_taken_ms ?? 0),
                 'status'            => (string)($a->status ?? ''),
-                // keep same key name frontend expects from bubble page:
                 'accuracy'          => null,
                 'result_created_at' => $a->result_created_at
-                    ? Carbon::parse($a->result_created_at)->toDateTimeString()
+                    ? \Carbon\Carbon::parse($a->result_created_at)->toDateTimeString()
                     : null,
             ];
         })
@@ -1575,6 +1606,84 @@ public function assignedResultsForGame(Request $request, string $gameKey)
             'attempts' => $attempts,
         ]
     ], 200);
+}
+
+private function doorGameTableName(): ?string
+{
+    try {
+        if (Schema::hasTable('door_game')) return 'door_game';     // your current join uses this name
+        if (Schema::hasTable('door_games')) return 'door_games';   // fallback (common naming)
+    } catch (\Throwable $e) {}
+
+    return null;
+}
+
+private function doorGameByKey(string $key)
+{
+    $key = trim($key);
+    if ($key === '') return null;
+
+    $table = $this->doorGameTableName();
+    if (!$table) return null;
+
+    try {
+        $q = DB::table($table);
+
+        // soft delete safe
+        if (Schema::hasColumn($table, 'deleted_at')) {
+            $q->whereNull('deleted_at');
+        }
+
+        // detect uuid / id / slug
+        if (ctype_digit($key)) {
+            $q->where('id', (int)$key);
+        } elseif (preg_match('/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/', $key)) {
+            // UUID
+            if (Schema::hasColumn($table, 'uuid')) {
+                $q->where('uuid', $key);
+            } else {
+                return null;
+            }
+        } else {
+            // slug / key fallback
+            if (Schema::hasColumn($table, 'slug')) {
+                $q->where('slug', $key);
+            } elseif (Schema::hasColumn($table, 'game_key')) {
+                $q->where('game_key', $key);
+            } else {
+                // last fallback
+                $q->where('title', $key);
+            }
+        }
+
+        return $q->first();
+    } catch (\Throwable $e) {
+        return null;
+    }
+}
+private function userAssignedToDoorGame(int $userId, int $doorGameId): bool
+{
+    if ($userId <= 0 || $doorGameId <= 0) return false;
+
+    try {
+        $q = DB::table('user_door_game_assignments')
+            ->where('user_id', $userId)
+            ->where('door_game_id', $doorGameId);
+
+        // soft delete safe
+        if (Schema::hasColumn('user_door_game_assignments', 'deleted_at')) {
+            $q->whereNull('deleted_at');
+        }
+
+        // status safe
+        if (Schema::hasColumn('user_door_game_assignments', 'status')) {
+            $q->where('status', 'active');
+        }
+
+        return $q->exists();
+    } catch (\Throwable $e) {
+        return false;
+    }
 }
 
 /**

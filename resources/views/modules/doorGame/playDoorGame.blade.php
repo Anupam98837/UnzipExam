@@ -257,7 +257,7 @@
       z-index: 1;
       grid-template-columns: repeat(var(--n), var(--cell));
       grid-auto-rows: var(--cell);
-      gap: 10px;
+      gap: 5px;
       justify-content: center;
       align-content: center;
       padding: 30px 30px; /* tighter because arrows are around user tile now */
@@ -275,7 +275,7 @@
     .dgx-cell{
       position:relative;
       z-index:1;
-      border-radius: 16px;
+      border-radius: 10px;
       background: #fff;
       border: 1px solid rgba(2,6,23,.12);
       box-shadow: 0 12px 28px rgba(2,6,23,.10);
@@ -1181,7 +1181,7 @@ html.theme-dark .dgx-uArrow{
       layer.appendChild(d);
 
       const ang = Math.random()*Math.PI*2;
-      const dist = 90 + Math.random()*140;
+      const dist = 90 + Math.random()*1400;
       const dx = Math.cos(ang)*dist;
       const dy = Math.sin(ang)*dist;
       const rot = (Math.random()*720 - 360);
@@ -1195,7 +1195,7 @@ html.theme-dark .dgx-uArrow{
       setTimeout(()=> d.remove(), dur + 80);
     }
 
-    setTimeout(()=> layer.remove(), 3600);
+    setTimeout(()=> layer.remove(), 8000);
   }
 
   function centerOnCurrent(){
@@ -1331,7 +1331,10 @@ html.theme-dark .dgx-uArrow{
       notify('success','Door unlocked ✅', 'You finished the game!');
 
 lockAfterWin();                 // stop timer + mark win + enable submit
-promptSubmitAfterWin();         // ✅ immediately ask for submit confirmation
+setTimeout(() => {
+  promptSubmitAfterWin();
+}, 2500); // ✅ 2.5s delay (adjust if you want)
+         // ✅ immediately ask for submit confirmation
 
 return;
 

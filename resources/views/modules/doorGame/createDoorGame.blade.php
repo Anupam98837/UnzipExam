@@ -58,139 +58,139 @@
   .btn-loading .btn-spinner{display:inline-block !important}
   .btn-spinner{display:none;width:1rem;height:1rem;border:.2rem solid #0001;border-top-color:#fff;border-radius:50%;vertical-align:-.125em;animation:rot 1s linear infinite}
 
-  /* ===== Grid Table UI ===== */
+  /* =========================================================
+   * ✅ TABLE-LIKE GRID (NO GAPS) + ✅ BARRIERS ON CELL BORDERS
+   * ========================================================= */
+
   .grid-wrap{
     border:1px solid var(--line-strong);
-    /* border-radius:14px; */
-    background:color-mix(in oklab, var(--surface) 85%, #fff);
+    border-radius:16px;
+    background:color-mix(in oklab, var(--surface) 88%, #fff);
     padding:12px;
   }
-  .grid-scroll{overflow:auto;max-width:100%}
+
+  .grid-scroll{
+    overflow:auto;
+    max-width:100%;
+    padding:0; /* ✅ no inner spacing = table look */
+  }
+
   .grid-table{
-    border-collapse:separate;
-    border-spacing:0;
+    border-collapse:collapse; /* ✅ real table merge */
     margin:0 auto;
+    background:#fff;
+  }
+
+  /* ✅ border belongs to TD so there is NO double border + NO gap */
+  .grid-table td{
+    padding:0;
+    border:1px solid var(--line-strong);
     background:transparent;
   }
+
   .grid-cell{
-    width:64px;height:64px;
-    min-width:64px;min-height:64px;
-    border:1px solid var(--line-soft);
-    background:#fff;
-    border-radius:12px;
+    width:86px;height:86px;
+    min-width:86px;min-height:86px;
+    border:none;              /* ✅ no border here (table handles it) */
+    border-radius:0;          /* ✅ table blocks */
     position:relative;
     cursor:pointer;
     user-select:none;
-    transition:transform .08s ease, box-shadow .08s ease, border-color .08s ease;
+    background:#fff;
+    transition:background .12s ease, box-shadow .12s ease;
   }
+
   .grid-cell:hover{
-    transform:translateY(-1px);
-    box-shadow:var(--shadow-1);
-    border-color:color-mix(in oklab, var(--accent-color) 35%, var(--line-soft));
+    background:color-mix(in oklab, var(--accent-color) 6%, #fff);
   }
+  .grid-cell:active{
+    background:color-mix(in oklab, var(--accent-color) 10%, #fff);
+  }
+
   .grid-cell .idx{
-    position:absolute;top:6px;left:8px;
-    font-size:11px;color:#8b97a8;
+    position:absolute;
+    top:6px;left:8px;
+    font-size:11px;
+    color:#8b97a8;
+    z-index:2;
   }
+
   .grid-cell .ico{
-    position:absolute;inset:0;
-    display:flex;align-items:center;justify-content:center;
-    font-size:20px;
+    position:absolute;
+    inset:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:22px;
     color:var(--accent-color);
+    z-index:1;
   }
 
-  /* Barrier visuals (thin lines inside cell) */
- /* ===== Better Professional Grid UI ===== */
-.grid-wrap{
-  border:1px solid var(--line-strong);
-  border-radius:16px;
-  background:color-mix(in oklab, var(--surface) 85%, #fff);
-  padding:14px;
-}
+  /* highlight types (still clean like table) */
+  .grid-cell.has-user{
+    background:color-mix(in oklab, var(--accent-color) 10%, #fff);
+  }
+  .grid-cell.has-key{
+    background:color-mix(in oklab, #f59e0b 12%, #fff);
+  }
+  .grid-cell.has-door{
+    background:color-mix(in oklab, #10b981 10%, #fff);
+  }
 
-.grid-scroll{
-  overflow:auto;
-  max-width:100%;
-  padding:6px;
-}
+  /* ✅ Barrier lines ON THE BORDER (no inside gap) */
+  .bar{
+    position:absolute;
+    background:color-mix(in oklab, var(--accent-color) 85%, #0f172a);
+    display:none;
+    z-index:3;
+    pointer-events:none;
+  }
 
-.grid-cell{
-  width:72px;height:72px;
-  min-width:72px;min-height:72px;
-  border:1px solid color-mix(in oklab, var(--line-strong) 55%, transparent);
-  background:linear-gradient(180deg, #fff, color-mix(in oklab, #fff 70%, var(--surface)));
-  /* border-radius:16px; */
-  position:relative;
-  cursor:pointer;
-  user-select:none;
-  transition:transform .10s ease, box-shadow .12s ease, border-color .12s ease;
-  box-shadow:0 8px 18px rgba(15,23,42,.06);
-}
+  /* use -1px to fully cover td border line */
+  .bar.top{
+    height:4px;
+    top:-1px; left:-1px; right:-1px;
+  }
+  .bar.bottom{
+    height:4px;
+    bottom:-1px; left:-1px; right:-1px;
+  }
+  .bar.left{
+    width:4px;
+    left:-1px; top:-1px; bottom:-1px;
+  }
+  .bar.right{
+    width:4px;
+    right:-1px; top:-1px; bottom:-1px;
+  }
 
-.grid-cell:hover{
-  transform:translateY(-2px);
-  border-color:color-mix(in oklab, var(--accent-color) 40%, var(--line-strong));
-  box-shadow:0 12px 26px rgba(15,23,42,.10);
-}
-
-.grid-cell:active{ transform:translateY(-1px) scale(.99); }
-
-.grid-cell .idx{
-  position:absolute;
-  top:7px;left:9px;
-  font-size:11px;
-  color:#8b97a8;
-}
-
-.grid-cell .ico{
-  position:absolute;inset:0;
-  display:flex;align-items:center;justify-content:center;
-  font-size:22px;
-  color:var(--accent-color);
-}
-
-.grid-cell.has-user{ outline:2px solid color-mix(in oklab, var(--accent-color) 35%, transparent); }
-.grid-cell.has-key { outline:2px solid color-mix(in oklab, #f59e0b 35%, transparent); }
-.grid-cell.has-door{ outline:2px solid color-mix(in oklab, #10b981 35%, transparent); }
-
-/* ===== Barrier lines (drawn via spans — no duplicates) ===== */
-.bar{
-  position:absolute;
-  background:color-mix(in oklab, var(--accent-color) 78%, #0f172a);
-  border-radius:999px;
-  opacity:.95;
-  display:none; /* default hidden */
-}
-
-.bar.top{ height:4px; left:12px; right:12px; top:7px; }
-.bar.bottom{ height:4px; left:12px; right:12px; bottom:7px; }
-.bar.left{ width:4px; top:12px; bottom:12px; left:7px; }
-.bar.right{ width:4px; top:12px; bottom:12px; right:7px; }
-
-.grid-cell.b-top .bar.top{display:block}
-.grid-cell.b-bottom .bar.bottom{display:block}
-.grid-cell.b-left .bar.left{display:block}
-.grid-cell.b-right .bar.right{display:block}
-
-/* Dark mode parity */
-html.theme-dark .grid-wrap{
-  background:#0b1220;
-  border-color:var(--line-strong);
-}
-html.theme-dark .grid-cell{
-  background:linear-gradient(180deg, #0f172a, #0b1220);
-  border-color:var(--line-strong);
-  box-shadow:0 10px 24px rgba(0,0,0,.25);
-}
-html.theme-dark .grid-cell .idx{color:#94a3b8}
+  .grid-cell.b-top .bar.top{display:block}
+  .grid-cell.b-bottom .bar.bottom{display:block}
+  .grid-cell.b-left .bar.left{display:block}
+  .grid-cell.b-right .bar.right{display:block}
 
   .grid-legend{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
   .legend-item{display:flex;gap:8px;align-items:center;color:var(--muted-color);font-size:13px}
   .legend-dot{width:10px;height:10px;border-radius:50%;background:var(--accent-color);opacity:.85}
 
-  /* Dark mode */
-  html.theme-dark .grid-wrap{background:#0b1220;border-color:var(--line-strong)}
-  html.theme-dark .grid-cell{background:#0f172a;border-color:var(--line-strong)}
+  /* Dark mode parity */
+  html.theme-dark .grid-wrap{
+    background:#0b1220;
+    border-color:var(--line-strong);
+  }
+  html.theme-dark .grid-table{
+    background:#0b1220;
+  }
+  html.theme-dark .grid-table td{
+    border-color:var(--line-strong);
+    background:#0b1220;
+  }
+  html.theme-dark .grid-cell{
+    background:#0f172a;
+  }
+  html.theme-dark .grid-cell:hover{
+    background:color-mix(in oklab, var(--accent-color) 12%, #0f172a);
+  }
   html.theme-dark .grid-cell .idx{color:#94a3b8}
   html.theme-dark .tool{background:#0f172a;border-color:var(--line-strong);color:#e5e7eb}
   html.theme-dark .rte{background:#0f172a;border-color:var(--line-strong);color:#e5e7eb}
@@ -899,7 +899,7 @@ html.theme-dark .grid-cell .idx{color:#94a3b8}
       setExclusive(cell,'door', !!wantDoor);
 
       if(wantKey && wantDoor){
-        // keep door, remove key (consistent with your previous choice)
+        // keep door, remove key
         cell.is_key = false;
         cell.is_door = true;
       }
@@ -940,10 +940,8 @@ html.theme-dark .grid-cell .idx{color:#94a3b8}
     const newDim = Math.max(1, Math.min(10, Number($('grid_dim').value || 3)));
     $('grid_dim').value = newDim;
 
-    // if same, do nothing
     if(newDim === prevDim) return;
 
-    // confirm only when there is data placed
     if(gridHasAnyData()){
       const res = await Swal.fire({
         title: 'Change grid dimension?',

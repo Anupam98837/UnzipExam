@@ -103,6 +103,144 @@ class UserController extends Controller
     }
 
     /**
+     * POST /api/auth/student-register
+     * Body:
+     * {
+     *   "user_folder_id": 5,
+     *   "email": "student@gmail.com",
+     *   "phone_number": "9876543210",
+     *   "password": "Student@123",
+     *   "password_confirmation": "Student@123"
+     * }
+     *
+     * ✅ Group = Folder (user_folder_id)
+     * ✅ Registers STUDENT only
+     */
+    public function studentRegister(Request $request)
+{
+    Log::info('[Student Register] begin', ['ip' => $request->ip()]);
+
+    // ✅ Normalize folder id (in case FE sends null/undefined)
+    if ($request->has('user_folder_id')) {
+        $raw = $request->input('user_folder_id');
+
+        if ($raw === '' || $raw === null || $raw === 'null' || $raw === 'undefined') {
+            $request->merge(['user_folder_id' => null]);
+        } else {
+            $request->merge(['user_folder_id' => (int)$raw]);
+        }
+    }
+
+    $v = Validator::make($request->all(), [
+        'user_folder_id'        => [
+            'required',
+            'integer',
+            Rule::exists('user_folders', 'id')->whereNull('deleted_at'),
+        ],
+
+        // ✅ ADDED: name comes from FE
+        'name'                 => 'required|string|max:255',
+
+        'email'                 => 'required|email|max:255',
+        'phone_number'          => 'required|string|max:32',
+        'password'              => 'required|string|min:8|confirmed',
+        // password_confirmation must be sent ✅
+    ]);
+
+    if ($v->fails()) {
+        return response()->json([
+            'status' => 'error',
+            'errors' => $v->errors(),
+        ], 422);
+    }
+
+    $data = $v->validated();
+
+    // ✅ Duplicate checks (ignore soft-deleted)
+    if (DB::table('users')->where('email', $data['email'])->whereNull('deleted_at')->exists()) {
+        return response()->json([
+            'status'  => 'error',
+            'message' => 'Email already exists',
+        ], 422);
+    }
+
+    if (DB::table('users')->where('phone_number', $data['phone_number'])->whereNull('deleted_at')->exists()) {
+        return response()->json([
+            'status'  => 'error',
+            'message' => 'Phone number already exists',
+        ], 422);
+    }
+
+    // ✅ UUID unique
+    do { $uuid = (string) Str::uuid(); }
+    while (DB::table('users')->where('uuid', $uuid)->exists());
+
+    // ✅ Name from request (trim + clean)
+    $name = trim($data['name']);
+
+    // ✅ Unique slug
+    $base = Str::slug($name ?: 'student');
+    do { $slug = $base . '-' . Str::lower(Str::random(24)); }
+    while (DB::table('users')->where('slug', $slug)->exists());
+
+    // ✅ Force student role
+    [$role, $roleShort] = $this->normalizeRole('student', null);
+
+    $now = now();
+
+    try {
+        DB::table('users')->insert([
+            'uuid'            => $uuid,
+            'name'            => $name, // ✅ name from FE
+            'email'           => $data['email'],
+            'phone_number'    => $data['phone_number'],
+            'password'        => Hash::make($data['password']),
+
+            // ✅ Group = folder
+            'user_folder_id'  => (int)$data['user_folder_id'],
+
+            'role'            => $role,
+            'role_short_form' => $roleShort,
+            'slug'            => $slug,
+            'status'          => 'active',
+            'remember_token'  => Str::random(60),
+            'created_by'      => null,
+            'created_at'      => $now,
+            'created_at_ip'   => $request->ip(),
+            'updated_at'      => $now,
+            'metadata'        => json_encode([
+                'timezone' => 'Asia/Kolkata',
+                'source'   => 'student_register_api',
+            ], JSON_UNESCAPED_UNICODE),
+        ]);
+
+        $user = DB::table('users')->where('email', $data['email'])->first();
+
+        // ✅ Auto login after register
+        $expiresAt  = now()->addDays(30);
+        $plainToken = $this->issueToken((int)$user->id, $expiresAt);
+
+        return response()->json([
+            'status'       => 'success',
+            'message'      => 'Student registered successfully',
+            'access_token' => $plainToken,
+            'token_type'   => 'Bearer',
+            'expires_at'   => $expiresAt->toIso8601String(),
+            'user'         => $this->publicUserPayload($user),
+        ], 201);
+
+    } catch (\Throwable $e) {
+        Log::error('[Student Register] failed', ['error' => $e->getMessage()]);
+        return response()->json([
+            'status'  => 'error',
+            'message' => 'Student registration failed',
+        ], 500);
+    }
+}
+
+
+
+    /**
      * POST /api/auth/logout
      * Header: Authorization: Bearer <token>
      */

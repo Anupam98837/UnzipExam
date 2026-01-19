@@ -30,6 +30,7 @@ Route::get('/user', function (Request $request) {
 // Auth Routes 
 
 Route::post('/auth/login',  [UserController::class, 'login']);
+Route::post('/auth/student-register', [UserController::class, 'studentRegister']);
 Route::post('/auth/logout', [UserController::class, 'logout'])
     ->middleware('checkRole');
 Route::get('/auth/check',   [UserController::class, 'authenticateToken']);

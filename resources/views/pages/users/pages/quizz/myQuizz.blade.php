@@ -37,17 +37,34 @@
     font-weight:700;
     color:var(--ink);
     margin:0;
+    display:flex;
+    align-items:center;
+    gap:10px;
+    flex-wrap:wrap;
   }
   .qz-head-sub{color:var(--muted-color); font-size:var(--fs-13);}
+
+  .qz-count-pill{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    min-width:26px;
+    height:20px;
+    padding:0 8px;
+    border-radius:999px;
+    border:1px solid var(--line-strong);
+    background:var(--surface-2);
+    color:var(--muted-color);
+    font-size:11px;
+  }
+
   .qz-head-tools{
     margin-left:auto;
     display:flex;
     align-items:center;
     gap:8px;
   }
-  .qz-search{
-    min-width:220px;
-  }
+  .qz-search{min-width:260px;}
   .qz-search .form-control{
     border-radius:999px;
     padding-left:32px;
@@ -61,137 +78,6 @@
   }
 
   .qz-body{padding:14px 16px 16px; position:relative;}
-
-  .qz-grid{
-    display:grid;
-    grid-template-columns:repeat(auto-fit, minmax(260px, 1fr));
-    gap:14px;
-  }
-  .qz-card{
-    position:relative;
-    border-radius:14px;
-    border:1px solid var(--line-strong);
-    background:var(--surface-2);
-    padding:12px 12px 10px;
-    display:flex;
-    flex-direction:column;
-    gap:8px;
-    min-height:160px;
-    box-shadow:var(--shadow-1);
-    transition:transform .16s ease, box-shadow .16s ease, border-color .16s ease, background .16s ease;
-  }
-  .qz-card:hover{
-    transform:translateY(-3px);
-    box-shadow:var(--shadow-2);
-    border-color:var(--accent-color);
-    background:var(--surface);
-  }
-
-  .qz-card-top{
-    display:flex;
-    align-items:flex-start;
-    gap:10px;
-  }
-  .qz-avatar{
-    width:40px;height:40px;
-    border-radius:14px;
-    background:var(--surface);
-    border:1px solid var(--line-strong);
-    display:flex;align-items:center;justify-content:center;
-    color:var(--accent-color);
-    flex-shrink:0;
-  }
-  .qz-title{
-    font-family:var(--font-head);
-    font-size:.98rem;
-    font-weight:600;
-    margin:0;
-    color:var(--ink);
-  }
-  .qz-excerpt{
-    font-size:var(--fs-13);
-    color:var(--muted-color);
-    max-height:40px;
-    overflow:hidden;
-    text-overflow:ellipsis;
-  }
-  .qz-badges{
-    display:flex;
-    flex-wrap:wrap;
-    gap:4px;
-    margin-top:2px;
-  }
-  .qz-chip{
-    font-size:11px;
-    padding:2px 7px;
-    border-radius:999px;
-    border:1px solid var(--line-strong);
-    background:var(--surface);
-    color:var(--muted-color);
-    display:inline-flex;
-    align-items:center;
-    gap:4px;
-  }
-  .qz-chip i{font-size:10px;}
-  .qz-chip-primary{
-    background:var(--t-primary);
-    border-color:rgba(20,184,166,.3);
-    color:#0f766e;
-  }
-  .qz-chip-success{
-    background:var(--t-success);
-    border-color:rgba(22,163,74,.25);
-    color:#15803d;
-  }
-  .qz-chip-warn{
-    background:var(--t-warn);
-    border-color:rgba(245,158,11,.25);
-    color:#92400e;
-  }
-
-  .qz-meta{
-    display:flex;
-    flex-wrap:wrap;
-    gap:8px 14px;
-    font-size:var(--fs-12);
-    color:var(--muted-color);
-    margin-top:4px;
-  }
-  .qz-meta span{
-    display:inline-flex;
-    align-items:center;
-    gap:6px;
-  }
-  .qz-meta i{font-size:11px;}
-
-  .qz-footer{
-    display:flex;
-    align-items:center;
-    gap:8px;
-    margin-top:8px;
-  }
-  .qz-footer .btn{
-    border-radius:999px;
-    padding-inline:12px;
-  }
-  .qz-footer .btn-outline-primary{
-    border-style:dashed;
-  }
-  .qz-footer .sub{
-    margin-left:auto;
-    font-size:11px;
-    color:var(--muted-color);
-  }
-
-  .qz-empty{
-    border:1px dashed var(--line-strong);
-    border-radius:10px;
-    padding:22px 16px;
-    text-align:center;
-    color:var(--muted-color);
-    background:var(--surface-2);
-    font-size:var(--fs-13);
-  }
 
   .qz-loader-wrap{
     position:absolute;
@@ -220,6 +106,151 @@
   }
   .qz-error.show{display:block;}
 
+  .qz-empty{
+    border:1px dashed var(--line-strong);
+    border-radius:12px;
+    padding:22px 16px;
+    text-align:center;
+    color:var(--muted-color);
+    background:var(--surface-2);
+    font-size:var(--fs-13);
+  }
+
+  /* ======= Table ======= */
+  .qz-table-wrap{
+    border:1px solid var(--line-strong);
+    border-radius:14px;
+    overflow:auto;
+    background:var(--surface);
+  }
+  .qz-table{width:100%; margin:0;}
+  .qz-table thead th{
+    position:sticky;
+    top:0;
+    z-index:1;
+    background:var(--surface);
+    border-bottom:1px solid var(--line-strong);
+    font-size:var(--fs-12);
+    text-transform:uppercase;
+    letter-spacing:.06em;
+    color:var(--muted-color);
+    padding:10px 12px;
+    white-space:nowrap;
+  }
+  .qz-table tbody td{
+    border-color:var(--line-soft);
+    padding:10px 12px;
+    vertical-align:top;
+    font-size:var(--fs-13);
+    color:var(--ink);
+  }
+
+  .qz-title-cell{
+    display:flex;
+    gap:10px;
+    align-items:flex-start;
+    min-width:260px;
+  }
+  .qz-avatar{
+    width:36px;height:36px;
+    border-radius:14px;
+    background:var(--surface-2);
+    border:1px solid var(--line-strong);
+    display:flex;align-items:center;justify-content:center;
+    color:var(--accent-color);
+    flex-shrink:0;
+  }
+  .qz-title-text{min-width:0; flex:1;}
+  .qz-title{
+    font-family:var(--font-head);
+    font-weight:700;
+    font-size:.98rem;
+    color:var(--ink);
+    margin:0;
+    line-height:1.2;
+    display:flex;
+    align-items:center;
+    flex-wrap:wrap;
+    gap:6px;
+  }
+  .qz-submeta{
+    margin-top:4px;
+    font-size:11px;
+    color:var(--muted-color);
+  }
+
+  .qz-chip{
+    font-size:11px;
+    padding:2px 7px;
+    border-radius:999px;
+    border:1px solid var(--line-strong);
+    background:var(--surface);
+    color:var(--muted-color);
+    display:inline-flex;
+    align-items:center;
+    gap:4px;
+    white-space:nowrap;
+  }
+  .qz-chip i{font-size:10px;}
+  .qz-chip-primary{
+    background:var(--t-primary);
+    border-color:rgba(20,184,166,.3);
+    color:#0f766e;
+  }
+  .qz-chip-success{
+    background:var(--t-success);
+    border-color:rgba(22,163,74,.25);
+    color:#15803d;
+  }
+  .qz-chip-warn{
+    background:var(--t-warn);
+    border-color:rgba(245,158,11,.25);
+    color:#92400e;
+  }
+
+  .qz-status-stack{
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px;
+  }
+
+  .qz-num{
+    font-variant-numeric:tabular-nums;
+    white-space:nowrap;
+    color:var(--ink);
+  }
+
+  .qz-actions{
+    display:flex;
+    justify-content:flex-end;
+    gap:8px;
+    white-space:nowrap;
+  }
+  .qz-actions .btn{
+    border-radius:999px;
+    padding-inline:12px;
+  }
+
+  .qz-inst-btn{
+    border-radius:999px;
+    padding:5px 10px;
+    border:1px dashed var(--line-strong);
+    background:var(--surface-2);
+    color:var(--muted-color);
+    transition:transform .14s ease, border-color .14s ease, background .14s ease;
+  }
+  .qz-inst-btn:hover{
+    transform:translateY(-1px);
+    border-color:var(--accent-color);
+    background:var(--surface);
+    color:var(--ink);
+  }
+  .qz-inst-btn:disabled{
+    opacity:.55;
+    cursor:not-allowed;
+    transform:none;
+  }
+
   .qz-pagination{
     margin-top:14px;
     display:flex;
@@ -247,73 +278,12 @@
     .qz-search{min-width:0; flex:1;}
   }
 
-  /* Dark tweaks */
-  html.theme-dark .qz-card-shell{background:var(--surface);}
-  html.theme-dark .qz-card{background:#04151f;}
-  html.theme-dark .qz-card:hover{background:#020b13;}
-  html.theme-dark .qz-empty{background:#020b13;}
-  html.theme-dark .qz-head{background:#020b13;}
-
-  /* ==========================
-   * Tabs (scoped)
-   * ========================== */
-  .qz-tabs{
-    display:flex;
-    align-items:center;
-    gap:8px;
-    margin-top:10px;
-    flex-wrap:wrap;
-  }
-  .qz-tab-btn{
-    border:1px solid var(--line-strong);
-    background:var(--surface-2);
-    color:var(--muted-color);
-    border-radius:999px;
-    padding:7px 12px;
-    font-size:var(--fs-13);
-    display:inline-flex;
-    align-items:center;
-    gap:8px;
-    transition:background .15s ease, border-color .15s ease, transform .15s ease;
-    user-select:none;
-  }
-  .qz-tab-btn:hover{
-    transform:translateY(-1px);
-    border-color:var(--accent-color);
-    background:var(--surface);
-  }
-  .qz-tab-btn.active{
-    background:var(--t-primary);
-    border-color:rgba(20,184,166,.35);
-    color:#0f766e;
-    font-weight:600;
-  }
-  .qz-tab-count{
-    min-width:22px;
-    height:18px;
-    padding:0 6px;
-    border-radius:999px;
-    background:var(--surface);
-    border:1px solid var(--line-strong);
-    display:inline-flex;
-    align-items:center;
-    justify-content:center;
-    font-size:11px;
-    color:var(--muted-color);
-  }
-  .qz-tab-btn.active .qz-tab-count{
-    color:#0f766e;
-    border-color:rgba(20,184,166,.25);
-  }
-
-  .qz-tab-panel{display:none;}
-  .qz-tab-panel.active{display:block;}
-
   /* =========================
-   * Attempts Modal (shared)
+   * Instructions Modal
    * ========================= */
   body.modal-open{overflow:hidden;}
-  .qz-attempt-modal{
+
+  .qz-ins-modal{
     position:fixed;
     inset:0;
     z-index:1050;
@@ -321,16 +291,16 @@
     align-items:center;
     justify-content:center;
   }
-  .qz-attempt-modal.show{display:flex;}
-  .qz-attempt-backdrop{
+  .qz-ins-modal.show{display:flex;}
+  .qz-ins-backdrop{
     position:absolute;
     inset:0;
     background:rgba(0,0,0,.45);
   }
-  .qz-attempt-dialog{
+  .qz-ins-dialog{
     position:relative;
     width:100%;
-    max-width:920px;
+    max-width:860px;
     background:var(--surface);
     border-radius:16px;
     border:1px solid var(--line-strong);
@@ -341,15 +311,13 @@
     flex-direction:column;
     overflow:hidden;
   }
-  html.theme-dark .qz-attempt-dialog{background:#020b13;}
-
-  .qz-attempt-head{
+  .qz-ins-head{
     display:flex;
     align-items:flex-start;
     gap:10px;
     margin-bottom:8px;
   }
-  .qz-attempt-eyebrow{
+  .qz-ins-eyebrow{
     font-size:var(--fs-11);
     text-transform:uppercase;
     letter-spacing:.08em;
@@ -357,25 +325,24 @@
     font-weight:600;
     margin-bottom:2px;
   }
-  .qz-attempt-title{
+  .qz-ins-title{
     font-family:var(--font-head);
     font-size:1.02rem;
-    font-weight:600;
+    font-weight:700;
     color:var(--ink);
     margin:0;
   }
-  .qz-attempt-meta{
+  .qz-ins-meta{
     margin-top:3px;
     font-size:var(--fs-12);
     color:var(--muted-color);
   }
-  .qz-attempt-meta span+span::before{
+  .qz-ins-meta span+span::before{
     content:"•";
     margin:0 6px;
     opacity:.6;
   }
-
-  .qz-attempt-close{
+  .qz-ins-close{
     margin-left:auto;
     border:none;
     background:transparent;
@@ -387,98 +354,43 @@
     color:var(--muted-color);
     transition:background .15s ease, color .15s ease;
   }
-  .qz-attempt-close:hover{
+  .qz-ins-close:hover{
     background:var(--surface-2);
     color:var(--ink);
   }
-
-  .qz-attempt-body{
-    position:relative;
+  .qz-ins-body{
+    overflow:auto;
     padding-top:6px;
     padding-bottom:8px;
-    overflow:auto;
   }
-
-  .qz-attempt-loader-wrap{
-    position:absolute;
-    inset:0;
-    display:none;
-    align-items:center;
-    justify-content:center;
-    background:rgba(0,0,0,.03);
-    z-index:2;
-  }
-  .qz-attempt-loader-wrap.show{display:flex;}
-  .qz-attempt-loader{
-    width:22px;height:22px;
-    border-radius:50%;
-    border:3px solid #0001;
-    border-top-color:var(--accent-color);
-    animation:rot 1s linear infinite;
-  }
-
-  .qz-attempt-error{
-    font-size:12px;
-    color:var(--danger-color);
-    margin-bottom:6px;
-    display:none;
-  }
-  .qz-attempt-error.show{display:block;}
-
-  .qz-attempt-empty{
-    border-radius:10px;
-    border:1px dashed var(--line-strong);
-    padding:16px 12px;
-    font-size:var(--fs-13);
-    color:var(--muted-color);
-    text-align:center;
-    display:none;
+  .qz-ins-box{
+    border:1px solid var(--line-strong);
     background:var(--surface-2);
-  }
-
-  .qz-attempt-table-wrap{
-    max-height:360px;
-    overflow:auto;
-  }
-  .qz-attempt-table{
-    width:100%;
-    margin-bottom:0;
-  }
-  .qz-attempt-table thead th{
-    font-size:var(--fs-12);
-    text-transform:uppercase;
-    letter-spacing:.06em;
-    color:var(--muted-color);
-    border-bottom:1px solid var(--line-strong);
-    white-space:nowrap;
-    padding-block:8px;
-  }
-  .qz-attempt-table tbody td{
+    border-radius:14px;
+    padding:12px 12px;
     font-size:var(--fs-13);
-    vertical-align:middle;
-    border-color:var(--line-strong);
-    padding-block:6px;
+    color:var(--ink);
+    line-height:1.45;
+    white-space:normal;
   }
-  .qz-attempt-table tbody tr:last-child td{border-bottom:none;}
-  .qz-attempt-col-idx{width:40px;}
-  .qz-attempt-col-score{white-space:nowrap;}
-  .qz-attempt-col-action{text-align:right; white-space:nowrap;}
-
-  .qz-attempt-note{
-    font-size:11px;
-    color:var(--muted-color);
-  }
-
-  .qz-attempt-foot{
+  .qz-ins-foot{
     display:flex;
     justify-content:flex-end;
     padding-top:6px;
     border-top:1px solid var(--line-strong);
   }
-  .qz-attempt-foot .btn{
+  .qz-ins-foot .btn{
     border-radius:999px;
     padding-inline:14px;
   }
+
+  /* Dark tweaks */
+  html.theme-dark .qz-card-shell{background:var(--surface);}
+  html.theme-dark .qz-head{background:#020b13;}
+  html.theme-dark .qz-table-wrap{background:#020b13;}
+  html.theme-dark .qz-table thead th{background:#020b13;}
+  html.theme-dark .qz-ins-dialog{background:#020b13;}
+  html.theme-dark .qz-ins-box{background:#04151f;}
 </style>
 
 <div class="qz-wrap">
@@ -489,169 +401,88 @@
       </div>
 
       <div class="flex-grow-1">
-        <h1 class="qz-head-title">My Quizzes & Games</h1>
+        <h1 class="qz-head-title">
+          My Quizzes & Games
+          <span class="qz-count-pill d-none" id="qzTotalCount">0</span>
+        </h1>
         <div class="qz-head-sub">
-          Switch tabs to view your quizzes or graphical tests, and start/continue attempts.
-        </div>
-
-        <div class="qz-tabs" role="tablist" aria-label="My exams tabs">
-          <button type="button" class="qz-tab-btn active" data-tab="quizzes" role="tab" aria-selected="true">
-            <i class="fa-solid fa-graduation-cap"></i>
-            Quizzes
-            <span class="qz-tab-count d-none" id="tabCountQuizzes">0</span>
-          </button>
-
-          <button type="button" class="qz-tab-btn" data-tab="games" role="tab" aria-selected="false">
-            <i class="fa-solid fa-gamepad"></i>
-            Graphical Tests
-            <span class="qz-tab-count d-none" id="tabCountGames">0</span>
-          </button>
-
-          {{-- ✅ NEW: Door Games Tab --}}
-          <button type="button" class="qz-tab-btn" data-tab="door" role="tab" aria-selected="false">
-            <i class="fa-solid fa-door-open"></i>
-            Decision Making Test 
-            <span class="qz-tab-count d-none" id="tabCountDoor">0</span>
-          </button>
+          All your quizzes, bubble games, and door games are listed here in one place.
         </div>
       </div>
 
       <div class="qz-head-tools">
         <div class="position-relative qz-search">
           <span class="qz-search-icon"><i class="fa-solid fa-magnifying-glass"></i></span>
-          <input type="text" id="qzSearch" class="form-control" placeholder="Search…">
+          <input type="text" id="qzSearch" class="form-control" placeholder="Search by title…">
         </div>
       </div>
     </div>
 
     <div class="qz-body">
-
-      {{-- ============ QUIZZES TAB ============ --}}
-      <div class="qz-tab-panel active" id="panelQuizzes" data-panel="quizzes">
-        <div class="qz-loader-wrap" id="qzLoaderQuizzes">
-          <div class="qz-loader"></div>
-        </div>
-
-        <div id="qzErrorQuizzes" class="qz-error"></div>
-
-        <div id="qzEmptyQuizzes" class="qz-empty d-none">
-          <i class="fa-regular fa-face-smile-beam mb-1"></i><br>
-          No quizzes available for you right now. Your upcoming quizzes will appear here.
-        </div>
-
-        <div id="qzListQuizzes" class="qz-grid"></div>
-
-        <div id="qzPaginationQuizzes" class="qz-pagination d-none">
-          <button type="button" class="btn btn-light btn-sm" id="qzPrevQuizzes">
-            <i class="fa-solid fa-arrow-left-long"></i> Previous
-          </button>
-          <span id="qzPageInfoQuizzes"></span>
-          <button type="button" class="btn btn-light btn-sm" id="qzNextQuizzes">
-            Next <i class="fa-solid fa-arrow-right-long"></i>
-          </button>
-        </div>
+      <div class="qz-loader-wrap" id="qzLoader">
+        <div class="qz-loader"></div>
       </div>
 
-      {{-- ============ BUBBLE GAMES TAB ============ --}}
-      <div class="qz-tab-panel" id="panelGames" data-panel="games">
-        <div class="qz-loader-wrap" id="qzLoaderGames">
-          <div class="qz-loader"></div>
-        </div>
+      <div id="qzError" class="qz-error"></div>
 
-        <div id="qzErrorGames" class="qz-error"></div>
-
-        <div id="qzEmptyGames" class="qz-empty d-none">
-          <i class="fa-regular fa-face-smile-beam mb-1"></i><br>
-          No games available for you right now. Your upcoming games will appear here.
-        </div>
-
-        <div id="qzListGames" class="qz-grid"></div>
-
-        <div id="qzPaginationGames" class="qz-pagination d-none">
-          <button type="button" class="btn btn-light btn-sm" id="qzPrevGames">
-            <i class="fa-solid fa-arrow-left-long"></i> Previous
-          </button>
-          <span id="qzPageInfoGames"></span>
-          <button type="button" class="btn btn-light btn-sm" id="qzNextGames">
-            Next <i class="fa-solid fa-arrow-right-long"></i>
-          </button>
-        </div>
+      <div id="qzEmpty" class="qz-empty d-none">
+        <i class="fa-regular fa-face-smile-beam mb-1"></i><br>
+        No quizzes or games available for you right now.
       </div>
 
-      {{-- ✅ NEW: DOOR GAMES TAB --}}
-      <div class="qz-tab-panel" id="panelDoor" data-panel="door">
-        <div class="qz-loader-wrap" id="qzLoaderDoor">
-          <div class="qz-loader"></div>
-        </div>
-
-        <div id="qzErrorDoor" class="qz-error"></div>
-
-        <div id="qzEmptyDoor" class="qz-empty d-none">
-          <i class="fa-regular fa-face-smile-beam mb-1"></i><br>
-          No door games available for you right now. Your assigned door games will appear here.
-        </div>
-
-        <div id="qzListDoor" class="qz-grid"></div>
-
-        <div id="qzPaginationDoor" class="qz-pagination d-none">
-          <button type="button" class="btn btn-light btn-sm" id="qzPrevDoor">
-            <i class="fa-solid fa-arrow-left-long"></i> Previous
-          </button>
-          <span id="qzPageInfoDoor"></span>
-          <button type="button" class="btn btn-light btn-sm" id="qzNextDoor">
-            Next <i class="fa-solid fa-arrow-right-long"></i>
-          </button>
-        </div>
+      <div class="qz-table-wrap d-none" id="qzTableWrap">
+        <table class="table table-sm qz-table">
+          <thead>
+          <tr>
+            <th style="min-width:320px;">Title</th>
+            <th style="min-width:50px;">Duration</th>
+            <th style="min-width:50px;">Instructions</th>
+            <th style="min-width:50px;">Status</th>
+            <th style="min-width:50px;">Attempts</th>
+            <!-- <th style="min-width:120px;">Remaining</th> -->
+            <th style="min-width:30px; text-align:right;">Action</th>
+          </tr>
+          </thead>
+          <tbody id="qzTbody"></tbody>
+        </table>
       </div>
 
+      <div id="qzPagination" class="qz-pagination d-none">
+        <button type="button" class="btn btn-light btn-sm" id="qzPrev">
+          <i class="fa-solid fa-arrow-left-long"></i> Previous
+        </button>
+        <span id="qzPageInfo"></span>
+        <button type="button" class="btn btn-light btn-sm" id="qzNext">
+          Next <i class="fa-solid fa-arrow-right-long"></i>
+        </button>
+      </div>
     </div>
   </div>
 </div>
 
-{{-- Attempts Modal (shared for both) --}}
-<div class="qz-attempt-modal" id="qzAttemptModal" aria-hidden="true">
-  <div class="qz-attempt-backdrop" data-close="attempt-modal"></div>
-  <div class="qz-attempt-dialog" role="dialog" aria-modal="true" aria-labelledby="qzAttemptTitle">
-    <div class="qz-attempt-head">
+{{-- ✅ Instructions Modal --}}
+<div class="qz-ins-modal" id="qzInsModal" aria-hidden="true">
+  <div class="qz-ins-backdrop" data-close="ins-modal"></div>
+
+  <div class="qz-ins-dialog" role="dialog" aria-modal="true" aria-labelledby="qzInsTitle">
+    <div class="qz-ins-head">
       <div>
-        <div class="qz-attempt-eyebrow" id="qzAttemptEyebrow">Attempts</div>
-        <h2 class="qz-attempt-title" id="qzAttemptTitle">Item</h2>
-        <div class="qz-attempt-meta" id="qzAttemptMeta"></div>
+        <div class="qz-ins-eyebrow" id="qzInsEyebrow">Instructions</div>
+        <h2 class="qz-ins-title" id="qzInsTitle">Item</h2>
+        <div class="qz-ins-meta" id="qzInsMeta"></div>
       </div>
-      <button type="button" class="qz-attempt-close" data-close="attempt-modal" aria-label="Close">
+
+      <button type="button" class="qz-ins-close" data-close="ins-modal" aria-label="Close instructions">
         <i class="fa-solid fa-xmark"></i>
       </button>
     </div>
 
-    <div class="qz-attempt-body">
-      <div class="qz-attempt-loader-wrap" id="qzAttemptLoader">
-        <div class="qz-attempt-loader"></div>
-      </div>
-
-      <div id="qzAttemptError" class="qz-attempt-error"></div>
-
-      <div id="qzAttemptEmpty" class="qz-attempt-empty">
-        No attempts yet. Start to see your attempts here.
-      </div>
-
-      <div class="table-responsive qz-attempt-table-wrap">
-        <table class="table table-sm qz-attempt-table">
-          <thead>
-          <tr>
-            <th class="qz-attempt-col-idx">#</th>
-            <th>Attempted on</th>
-            <th>Status</th>
-            <th class="qz-attempt-col-score">Score</th>
-            <th class="qz-attempt-col-action">Action</th>
-          </tr>
-          </thead>
-          <tbody id="qzAttemptTbody"></tbody>
-        </table>
-      </div>
+    <div class="qz-ins-body">
+      <div class="qz-ins-box" id="qzInsContent"></div>
     </div>
 
-    <div class="qz-attempt-foot">
-      <button type="button" class="btn btn-light btn-sm" data-close="attempt-modal">Close</button>
+    <div class="qz-ins-foot">
+      <button type="button" class="btn btn-light btn-sm" data-close="ins-modal">Close</button>
     </div>
   </div>
 </div>
@@ -660,62 +491,45 @@
 @push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+
   // =======================
-  // APIs (tabs)
+  // APIs (all in one list)
   // =======================
   const API_QUIZZES = '/api/quizz/my';
   const API_GAMES   = '/api/bubble-games/my';
-  const API_DOOR    = '/api/door-games/my'; // ✅ NEW
+  const API_DOOR    = '/api/door-games/my';
 
-  // Attempts base (keep your existing quiz attempts URL)
-  const ATTEMPTS_QUIZZES = '/api/exam/quizzes';     // /{quizKey}/my-attempts
-  const ATTEMPTS_GAMES   = '/api/bubble-games';     // /{gameKey}/my-attempts
-  const ATTEMPTS_DOOR    = '/api/door-games';       // /{gameKey}/my-attempts (add backend if needed later)
-
-  // Exam start routes
+  // Start routes
   const START_QUIZ_ROUTE = '/exam/';                 // /exam/{quiz_uuid}
-  const START_GAME_ROUTE = '/tests/play?game=';      // bubble game start URL
-  const START_DOOR_ROUTE = '/door-tests/play?game='; // ✅ NEW (change if your play url differs)
+  const START_GAME_ROUTE = '/tests/play?game=';      // bubble games play
+  const START_DOOR_ROUTE = '/door-games/exam?game='; // door games play
 
   // =======================
-  // Tabs
+  // DOM
   // =======================
-  const tabBtns = document.querySelectorAll('.qz-tab-btn');
-  const panels  = document.querySelectorAll('.qz-tab-panel');
+  const loader = document.getElementById('qzLoader');
+  const errEl  = document.getElementById('qzError');
+  const emptyEl = document.getElementById('qzEmpty');
+
+  const tableWrap = document.getElementById('qzTableWrap');
+  const tbody = document.getElementById('qzTbody');
+
   const searchInput = document.getElementById('qzSearch');
+  const totalCountEl = document.getElementById('qzTotalCount');
 
-  const tabCountQuizzes = document.getElementById('tabCountQuizzes');
-  const tabCountGames   = document.getElementById('tabCountGames');
-  const tabCountDoor    = document.getElementById('tabCountDoor'); // ✅ NEW
+  const pagWrap = document.getElementById('qzPagination');
+  const btnPrev = document.getElementById('qzPrev');
+  const btnNext = document.getElementById('qzNext');
+  const pageInfo = document.getElementById('qzPageInfo');
 
-  let activeTab = 'quizzes'; // quizzes | games | door
-
-  function setActiveTab(tab) {
-    activeTab = tab;
-
-    tabBtns.forEach(btn => {
-      const isActive = btn.getAttribute('data-tab') === tab;
-      btn.classList.toggle('active', isActive);
-      btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
-    });
-
-    panels.forEach(p => {
-      const isActive = p.getAttribute('data-panel') === tab;
-      p.classList.toggle('active', isActive);
-    });
-
-    // trigger fetch for that tab if first time
-    if (tab === 'quizzes' && !state.quizzes.loadedOnce) fetchList('quizzes', 1);
-    if (tab === 'games'   && !state.games.loadedOnce)   fetchList('games', 1);
-    if (tab === 'door'    && !state.door.loadedOnce)    fetchList('door', 1); // ✅ NEW
-  }
-
-  tabBtns.forEach(btn => {
-    btn.addEventListener('click', () => setActiveTab(btn.getAttribute('data-tab')));
-  });
+  // Instructions modal DOM
+  const insModal   = document.getElementById('qzInsModal');
+  const insTitle   = document.getElementById('qzInsTitle');
+  const insMeta    = document.getElementById('qzInsMeta');
+  const insContent = document.getElementById('qzInsContent');
 
   // =======================
-  // Shared auth helpers
+  // Auth helpers
   // =======================
   function getToken() {
     return sessionStorage.getItem('token') || localStorage.getItem('token') || null;
@@ -736,13 +550,19 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   // =======================
-  // UI helpers (same)
+  // UI helpers
   // =======================
   function sanitize(text) {
     if (!text) return '';
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+  }
+
+  function nl2brSafe(text) {
+    // escape then convert new lines to <br>
+    const safe = sanitize(text || '');
+    return safe.replace(/\n/g, '<br>');
   }
 
   function myStatusBadge(status) {
@@ -755,400 +575,498 @@ document.addEventListener('DOMContentLoaded', function () {
     return '<span class="qz-chip"><i class="fa-regular fa-clock"></i>Upcoming</span>';
   }
 
-  function statusBadge(status) {
+  function itemStatusBadge(status) {
     if (status === 'active') {
       return '<span class="qz-chip qz-chip-primary"><i class="fa-solid fa-signal"></i>Active</span>';
     }
     if (status === 'archived') {
       return '<span class="qz-chip qz-chip-warn"><i class="fa-solid fa-box-archive"></i>Archived</span>';
     }
+    if (status === 'inactive') {
+      return '<span class="qz-chip qz-chip-warn"><i class="fa-solid fa-ban"></i>Inactive</span>';
+    }
     return '';
   }
 
-  function publicBadge(isPublic) {
-    return isPublic
-      ? '<span class="qz-chip"><i class="fa-solid fa-globe"></i>Public</span>'
-      : '<span class="qz-chip"><i class="fa-solid fa-lock"></i>Private</span>';
+  function typeChip(type) {
+    if (type === 'door') return '<span class="qz-chip"><i class="fa-solid fa-door-open"></i>Door</span>';
+    if (type === 'game') return '<span class="qz-chip"><i class="fa-solid fa-gamepad"></i>Game</span>';
+    return '<span class="qz-chip"><i class="fa-solid fa-graduation-cap"></i>Quiz</span>';
+  }
+
+  function iconHtml(type) {
+    if (type === 'door') return '<i class="fa-solid fa-door-open"></i>';
+    if (type === 'game') return '<i class="fa-solid fa-gamepad"></i>';
+    return '<i class="fa-solid fa-graduation-cap"></i>';
+  }
+
+  function toBool(v) {
+    if (v === true || v === 1) return true;
+    if (v === false || v === 0) return false;
+    if (typeof v === 'string') {
+      const s = v.trim().toLowerCase();
+      if (s === '1' || s === 'true' || s === 'yes') return true;
+      if (s === '0' || s === 'false' || s === 'no') return false;
+    }
+    return null;
+  }
+
+  function toDurationText(item) {
+    const t = item.total_time ?? item.total_time_minutes ?? item.duration ?? null;
+    if (t === null || t === undefined || t === '') return '—';
+    const n = parseInt(t, 10);
+    if (!isNaN(n) && n > 0) return n + ' min';
+    return String(t);
+  }
+
+  function pickInstructions(item) {
+    return item.instructions || item.excerpt || item.description || item.note || '';
+  }
+
+  function pickAllowedAttempts(item) {
+    const v =
+      item.max_attempts_allowed ??
+      item.max_attempts ??
+      item.max_attempt ??
+      item.total_attempts_allowed ??
+      item.attempts_allowed ??
+      item.allowed_attempts ??
+      item.total_attempts ??
+      1;
+    const n = parseInt(v, 10);
+    return (isNaN(n) || n <= 0) ? 1 : n;
+  }
+
+  function pickUsedAttempts(item) {
+    const v =
+      item.my_attempts ??
+      item.attempts_used ??
+      item.attempts_taken ??
+      item.attempt_count ??
+      item.latest_attempt_no ??
+      (item.result && item.result.attempt_no ? item.result.attempt_no : null) ??
+      item.used_attempts ??
+      0;
+    const n = parseInt(v, 10);
+    return isNaN(n) ? 0 : n;
+  }
+
+  function computeRemainingAttempts(item, allowed, used) {
+    if (item.remaining_attempts !== undefined && item.remaining_attempts !== null) {
+      const n = parseInt(item.remaining_attempts, 10);
+      return isNaN(n) ? 0 : Math.max(n, 0);
+    }
+    return Math.max((allowed || 0) - (used || 0), 0);
+  }
+
+  // ✅ "No Attempts left" ONLY for Games & Door (NOT quizzes)
+  function computeActionMeta(type, item) {
+    const myStatus = item.my_status || 'upcoming';
+    const status   = item.status || 'active';
+
+    const allowed = pickAllowedAttempts(item);
+    const used    = pickUsedAttempts(item);
+    const remaining = computeRemainingAttempts(item, allowed, used);
+
+    const enforceAttemptLimit = (type === 'game' || type === 'door');
+
+    const allowContinueEvenIfMax = (enforceAttemptLimit && myStatus === 'in_progress');
+
+    const apiMaxReached = toBool(item.max_attempt_reached);
+    const apiCanAttempt = toBool(item.can_attempt);
+
+    const maxAttemptReached = (enforceAttemptLimit && !allowContinueEvenIfMax && (
+      apiMaxReached === true ||
+      apiCanAttempt === false ||
+      remaining <= 0 ||
+      (allowed > 0 && used >= allowed)
+    ));
+
+    let label = 'Start';
+    if (myStatus === 'in_progress') label = 'Continue';
+    else if (myStatus === 'completed') label = 'Retake';
+
+    if (enforceAttemptLimit && maxAttemptReached) label = 'No Attempts left';
+
+    const isDisabled = (status !== 'active') || (enforceAttemptLimit && maxAttemptReached);
+
+    let title = '';
+    if (status !== 'active') title = 'This item is not active';
+    if (enforceAttemptLimit && maxAttemptReached) {
+      title = `Maximum attempts reached (${used}/${allowed})`;
+    }
+
+    let startUrl = '#';
+    if (type === 'quiz') startUrl = START_QUIZ_ROUTE + encodeURIComponent(item.uuid);
+    if (type === 'game') startUrl = START_GAME_ROUTE + encodeURIComponent(item.uuid);
+    if (type === 'door') startUrl = START_DOOR_ROUTE + encodeURIComponent(item.uuid);
+
+    return { myStatus, status, allowed, used, remaining, label, isDisabled, title, startUrl, maxAttemptReached };
   }
 
   // =======================
-  // State per tab
+  // Instructions Modal
+  // =======================
+  function openInsModal(row) {
+    if (!row) return;
+
+    const duration = toDurationText(row);
+    const created = row.created_at ? new Date(row.created_at).toLocaleDateString() : '';
+
+    insTitle.innerHTML = `${sanitize(row.title || 'Item')} ${typeChip(row.type)}`;
+    insMeta.innerHTML = `
+      <span><i class="fa-regular fa-clock"></i> ${sanitize(duration)}</span>
+      ${created ? `<span><i class="fa-regular fa-calendar"></i> Added ${sanitize(created)}</span>` : ''}
+    `;
+
+    const inst = pickInstructions(row);
+    insContent.innerHTML = inst ? nl2brSafe(inst) : '<span class="text-muted">No instructions available.</span>';
+
+    insModal.classList.add('show');
+    insModal.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('modal-open');
+  }
+
+  function closeInsModal() {
+    insModal.classList.remove('show');
+    insModal.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('modal-open');
+  }
+
+  // Close clicks
+  document.querySelectorAll('[data-close="ins-modal"]').forEach(el => {
+    el.addEventListener('click', closeInsModal);
+  });
+
+  // ESC close
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'Escape' && insModal.classList.contains('show')) closeInsModal();
+  });
+
+  // =======================
+  // Client pagination + state
   // =======================
   const state = {
-    quizzes: {
-      loadedOnce: false,
-      currentPage: 1,
-      lastPage: 1,
-      q: '',
-      els: {
-        list: document.getElementById('qzListQuizzes'),
-        empty: document.getElementById('qzEmptyQuizzes'),
-        loader: document.getElementById('qzLoaderQuizzes'),
-        error: document.getElementById('qzErrorQuizzes'),
-        pagination: document.getElementById('qzPaginationQuizzes'),
-        prev: document.getElementById('qzPrevQuizzes'),
-        next: document.getElementById('qzNextQuizzes'),
-        info: document.getElementById('qzPageInfoQuizzes')
-      }
-    },
-    games: {
-      loadedOnce: false,
-      currentPage: 1,
-      lastPage: 1,
-      q: '',
-      els: {
-        list: document.getElementById('qzListGames'),
-        empty: document.getElementById('qzEmptyGames'),
-        loader: document.getElementById('qzLoaderGames'),
-        error: document.getElementById('qzErrorGames'),
-        pagination: document.getElementById('qzPaginationGames'),
-        prev: document.getElementById('qzPrevGames'),
-        next: document.getElementById('qzNextGames'),
-        info: document.getElementById('qzPageInfoGames')
-      }
-    },
-    // ✅ NEW
-    door: {
-      loadedOnce: false,
-      currentPage: 1,
-      lastPage: 1,
-      q: '',
-      els: {
-        list: document.getElementById('qzListDoor'),
-        empty: document.getElementById('qzEmptyDoor'),
-        loader: document.getElementById('qzLoaderDoor'),
-        error: document.getElementById('qzErrorDoor'),
-        pagination: document.getElementById('qzPaginationDoor'),
-        prev: document.getElementById('qzPrevDoor'),
-        next: document.getElementById('qzNextDoor'),
-        info: document.getElementById('qzPageInfoDoor')
-      }
-    }
+    loadedOnce: false,
+    q: '',
+    perPage: 10,
+    page: 1,
+    all: [],
+    filtered: []
   };
 
-  // =======================
-  // Render cards (shared)
-  // =======================
-  function renderCards(tab, items) {
-    const S = state[tab];
-    const listEl = S.els.list;
+  function applySearchAndPagination(resetPage) {
+    const q = (state.q || '').trim().toLowerCase();
 
-    listEl.innerHTML = '';
+    state.filtered = state.all.filter(x => {
+      const t = (x.title || '').toLowerCase();
+      return q === '' ? true : t.includes(q);
+    });
 
-    if (!items || !items.length) {
-      S.els.empty.classList.remove('d-none');
-      S.els.pagination.classList.add('d-none');
+    if (resetPage) state.page = 1;
+
+    renderTable();
+    renderPagination();
+    renderCount();
+  }
+
+  function renderCount() {
+    const n = state.filtered.length || 0;
+    totalCountEl.textContent = String(n);
+    totalCountEl.classList.toggle('d-none', n <= 0);
+  }
+
+  function renderTable() {
+    tbody.innerHTML = '';
+
+    if (!state.filtered.length) {
+      tableWrap.classList.add('d-none');
+      pagWrap.classList.add('d-none');
+      emptyEl.classList.remove('d-none');
       return;
     }
-    S.els.empty.classList.add('d-none');
 
-    // ✅ robust boolean parser (handles "1"/"0"/true/false/1/0)
-    function toBool(v) {
-      if (v === true || v === 1) return true;
-      if (v === false || v === 0) return false;
-      if (typeof v === 'string') {
-        const s = v.trim().toLowerCase();
-        if (s === '1' || s === 'true' || s === 'yes') return true;
-        if (s === '0' || s === 'false' || s === 'no') return false;
-      }
-      return null;
-    }
+    emptyEl.classList.add('d-none');
+    tableWrap.classList.remove('d-none');
+
+    const start = (state.page - 1) * state.perPage;
+    const end   = start + state.perPage;
+    const pageItems = state.filtered.slice(start, end);
 
     const frag = document.createDocumentFragment();
 
-    items.forEach(item => {
-      const card = document.createElement('article');
-      card.className = 'qz-card';
+    pageItems.forEach(row => {
+      const tr = document.createElement('tr');
 
-      const totalTime = item.total_time
-        ? item.total_time + ' min'
-        : (item.total_time_minutes ? (item.total_time_minutes + ' min') : '—');
+      const meta = computeActionMeta(row.type, row);
+      const durationText = toDurationText(row);
 
-      const totalQ = item.total_questions || 0;
+      const allowed = meta.allowed;
+      const used = meta.used;
+      const remaining = meta.remaining;
 
-      // ✅ Status
-      const myStatus = item.my_status || 'upcoming';
+      const addedText = row.created_at ? new Date(row.created_at).toLocaleDateString() : '';
+      const hasInstructions = !!(pickInstructions(row) || '').trim();
 
-      // ✅ attempts allowed (try all keys)
-      const attemptsAllowed = parseInt(
-        item.max_attempts_allowed ??
-        item.max_attempts ??
-        item.max_attempt ??
-        item.total_attempts_allowed ??
-        item.attempts_allowed ??
-        item.allowed_attempts ??
-        item.total_attempts ??
-        1,
-        10
-      ) || 1;
-
-      // ✅ attempts used (fallback to result.attempt_no)
-      const attemptsUsed = parseInt(
-        item.my_attempts ??
-        item.attempts_used ??
-        item.attempts_taken ??
-        item.attempt_count ??
-        item.latest_attempt_no ??
-        (item.result && item.result.attempt_no ? item.result.attempt_no : null) ??
-        item.used_attempts ??
-        0,
-        10
-      ) || 0;
-
-      // ✅ remaining attempts (prefer backend)
-      const remainingAttempts = (item.remaining_attempts !== undefined && item.remaining_attempts !== null)
-        ? (parseInt(item.remaining_attempts, 10) || 0)
-        : Math.max(attemptsAllowed - attemptsUsed, 0);
-
-      const isGameLike = (tab === 'games' || tab === 'door'); // ✅ NEW
-
-      // ✅ Allow continue even if max reached (only in_progress)
-      const allowContinueEvenIfMax = (isGameLike && myStatus === 'in_progress');
-
-      // ✅ API flags are KING
-      const apiMaxReached = toBool(item.max_attempt_reached);
-      const apiCanAttempt = toBool(item.can_attempt);
-
-      // ✅ max attempt reached
-      const maxAttemptReached = isGameLike && !allowContinueEvenIfMax && (
-        apiMaxReached === true ||
-        apiCanAttempt === false ||
-        remainingAttempts <= 0 ||
-        (attemptsAllowed > 0 && attemptsUsed >= attemptsAllowed)
-      );
-
-      // ✅ FINAL LABEL RULES
-      let primaryLabel = 'Start';
-
-      if (myStatus === 'in_progress') {
-        primaryLabel = 'Continue';
-      } else if (isGameLike) {
-        if (maxAttemptReached) {
-          primaryLabel = 'No Attempts left';
-        } else if (myStatus === 'completed') {
-          primaryLabel = 'Retake';
-        } else {
-          primaryLabel = 'Start';
-        }
-      } else {
-        // ✅ quizzes
-        if (myStatus === 'completed') {
-          primaryLabel = 'Retake';
-        } else {
-          primaryLabel = 'Start';
-        }
-      }
-
-      // ✅ Disable button only for game-like tabs max reached OR inactive
-      const isDisabled = (item.status !== 'active') || (isGameLike && maxAttemptReached);
-      const disabledAttr = isDisabled ? 'disabled' : '';
-
-      // ✅ Tooltip
-      let startTitle = '';
-      if (item.status !== 'active') startTitle = 'This item is not active';
-      if (isGameLike && maxAttemptReached) {
-        startTitle = `Maximum attempts reached (${attemptsUsed}/${attemptsAllowed})`;
-      }
-
-      const iconHtml = (tab === 'door')
-        ? '<i class="fa-solid fa-door-open"></i>'
-        : (tab === 'games'
-          ? '<i class="fa-solid fa-gamepad"></i>'
-          : '<i class="fa-solid fa-graduation-cap"></i>');
-
-      card.innerHTML = `
-        <div class="qz-card-top">
-          <div class="qz-avatar">${iconHtml}</div>
-          <div class="flex-grow-1">
-            <h3 class="qz-title">${sanitize(item.title || 'Item')}</h3>
-            <p class="qz-excerpt">${sanitize(item.excerpt || '')}</p>
-            <div class="qz-badges">
-              ${myStatusBadge(myStatus)}
-              ${statusBadge(item.status)}
-              ${publicBadge(!!item.is_public)}
+      tr.innerHTML = `
+        <td>
+          <div class="qz-title-cell">
+            <div class="qz-avatar">${iconHtml(row.type)}</div>
+            <div class="qz-title-text">
+              <div class="qz-title">
+                ${sanitize(row.title || 'Item')}
+                ${typeChip(row.type)}
+              </div>
+              <div class="qz-submeta">
+                ${addedText ? ('Added ' + sanitize(addedText)) : ''}
+              </div>
             </div>
           </div>
-        </div>
+        </td>
 
-        <div class="qz-meta">
-          <span><i class="fa-regular fa-circle-question "></i>${totalQ} questions</span>
-          <span><i class="fa-regular fa-clock"></i>${totalTime}</span>
-          <span><i class="fa-solid fa-rotate-right"></i>${attemptsAllowed} attempt${attemptsAllowed > 1 ? 's' : ''} allowed</span>
-        </div>
+        <td class="qz-num">${sanitize(durationText)}</td>
 
-        <div class="qz-footer">
+        <td>
           <button type="button"
-            class="btn btn-primary btn-sm"
-            data-action="start"
-            ${disabledAttr}
-            ${startTitle ? `title="${sanitize(startTitle)}"` : ''}>
-            <i class="fa-solid fa-arrow-right"></i>
-            <span>${primaryLabel}</span>
+            class="btn btn-sm qz-inst-btn"
+            data-action="view-instructions"
+            ${hasInstructions ? '' : 'disabled'}
+            title="${hasInstructions ? 'View instructions' : 'No instructions'}">
+            <i class="fa-regular fa-eye"></i> View
           </button>
+        </td>
 
-          <span class="sub">
-            Added ${item.created_at ? new Date(item.created_at).toLocaleDateString() : ''}
-          </span>
-        </div>
+        <td>
+          <div class="qz-status-stack">
+            ${myStatusBadge(meta.myStatus)}
+          </div>
+        </td>
+
+        <td class="qz-num">${used}/${allowed}</td>
+
+        <td>
+          <div class="qz-actions">
+            <button type="button"
+              class="btn btn-primary btn-sm"
+              data-action="start"
+              ${meta.isDisabled ? 'disabled' : ''}
+              ${meta.title ? `title="${sanitize(meta.title)}"` : ''}>
+              <i class="fa-solid fa-arrow-right"></i>
+              <span>${sanitize(meta.label)}</span>
+            </button>
+          </div>
+        </td>
       `;
 
-      const startBtn = card.querySelector('[data-action="start"]');
+      // Start
+      const startBtn = tr.querySelector('[data-action="start"]');
       if (startBtn) {
-        startBtn.addEventListener('click', function () {
-          if (!item.uuid) return;
-          if (isDisabled) return;
-
-          if (tab === 'quizzes') {
-            window.location.href = START_QUIZ_ROUTE + encodeURIComponent(item.uuid);
-          } else if (tab === 'games') {
-            window.location.href = START_GAME_ROUTE + encodeURIComponent(item.uuid);
-          } else {
-            // ✅ door games
-            window.location.href = START_DOOR_ROUTE + encodeURIComponent(item.uuid);
-          }
+        startBtn.addEventListener('click', () => {
+          if (!row.uuid) return;
+          if (meta.isDisabled) return;
+          window.location.href = meta.startUrl;
         });
       }
 
-      frag.appendChild(card);
+      // Instructions modal open
+      const viewBtn = tr.querySelector('[data-action="view-instructions"]');
+      if (viewBtn) {
+        viewBtn.addEventListener('click', () => {
+          if (!hasInstructions) return;
+          openInsModal(row);
+        });
+      }
+
+      frag.appendChild(tr);
     });
 
-    listEl.appendChild(frag);
+    tbody.appendChild(frag);
   }
 
-  function updatePagination(tab, total, perPage, current, last) {
-    const S = state[tab];
+  function renderPagination() {
+    const total = state.filtered.length || 0;
+    const lastPage = Math.max(Math.ceil(total / state.perPage), 1);
 
-    if (!total || last <= 1) {
-      S.els.pagination.classList.add('d-none');
+    if (!total || lastPage <= 1) {
+      pagWrap.classList.add('d-none');
       return;
     }
 
-    S.els.pagination.classList.remove('d-none');
+    pagWrap.classList.remove('d-none');
 
-    S.currentPage = current;
-    S.lastPage    = last;
+    if (state.page > lastPage) state.page = lastPage;
 
-    S.els.prev.disabled = S.currentPage <= 1;
-    S.els.next.disabled = S.currentPage >= S.lastPage;
+    btnPrev.disabled = state.page <= 1;
+    btnNext.disabled = state.page >= lastPage;
 
-    const label = (tab === 'door') ? 'door game' : (tab === 'games' ? 'game' : 'quiz');
-    S.els.info.textContent =
-      `Page ${S.currentPage} of ${S.lastPage} • ${total} ${label}${total > 1 ? 's' : ''}`;
+    pageInfo.textContent = `Page ${state.page} of ${lastPage} • ${total} item${total > 1 ? 's' : ''}`;
   }
 
+  btnPrev.addEventListener('click', () => {
+    if (state.page > 1) {
+      state.page -= 1;
+      renderTable();
+      renderPagination();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  });
+
+  btnNext.addEventListener('click', () => {
+    const total = state.filtered.length || 0;
+    const lastPage = Math.max(Math.ceil(total / state.perPage), 1);
+    if (state.page < lastPage) {
+      state.page += 1;
+      renderTable();
+      renderPagination();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  });
+
   // =======================
-  // Fetch list per tab
+  // Fetch all items (merge)
   // =======================
-  async function fetchList(tab, page) {
+  async function fetchOne(url, token) {
+    const params = new URLSearchParams();
+    params.set('page', 1);
+    params.set('per_page', 1000);
+
+    const res = await fetch(url + '?' + params.toString(), {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': 'Bearer ' + token
+      }
+    });
+
+    const json = await res.json().catch(() => ({}));
+
+    if (res.status === 401 || res.status === 403) {
+      clearAuth();
+      window.location.replace('/login');
+      return { ok: false, data: [] };
+    }
+
+    if (!res.ok) {
+      const msg = json.message || json.error || 'Failed to load list.';
+      throw new Error(msg);
+    }
+
+    return { ok: true, data: (json.data || []) };
+  }
+
+  function normalizeItem(item, type) {
+    return {
+      type: type, // quiz | game | door
+      uuid: item.uuid || item.id || null,
+      title: item.title || item.name || 'Item',
+      instructions: pickInstructions(item),
+      excerpt: item.excerpt || '',
+      description: item.description || '',
+      status: item.status || 'active',
+      my_status: item.my_status || item.myStatus || 'upcoming',
+      is_public: item.is_public ?? item.public ?? 0,
+
+      total_time: item.total_time ?? item.total_time_minutes ?? item.duration ?? null,
+
+      max_attempts_allowed: item.max_attempts_allowed,
+      max_attempts: item.max_attempts,
+      max_attempt: item.max_attempt,
+      attempts_allowed: item.attempts_allowed,
+      total_attempts_allowed: item.total_attempts_allowed,
+
+      my_attempts: item.my_attempts,
+      attempts_used: item.attempts_used,
+      attempts_taken: item.attempts_taken,
+      attempt_count: item.attempt_count,
+      latest_attempt_no: item.latest_attempt_no,
+      used_attempts: item.used_attempts,
+      remaining_attempts: item.remaining_attempts,
+
+      max_attempt_reached: item.max_attempt_reached,
+      can_attempt: item.can_attempt,
+
+      created_at: item.created_at || null
+    };
+  }
+
+  async function fetchAll() {
     const token = requireAuthToken();
     if (!token) return;
 
-    const S = state[tab];
-    S.els.loader.classList.add('show');
-    S.els.error.classList.remove('show');
-    S.els.error.textContent = '';
-
-    const api =
-      (tab === 'games') ? API_GAMES :
-      (tab === 'door')  ? API_DOOR  :
-      API_QUIZZES;
-
-    const params = new URLSearchParams();
-    params.set('page', page);
-    params.set('per_page', 9);
-    if ((S.q || '').trim() !== '') params.set('q', (S.q || '').trim());
+    loader.classList.add('show');
+    errEl.classList.remove('show');
+    errEl.textContent = '';
 
     try {
-      const res = await fetch(api + '?' + params.toString(), {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-          'Authorization': 'Bearer ' + token
-        }
+      const [qz, gm, dr] = await Promise.all([
+        fetchOne(API_QUIZZES, token).catch(e => ({ ok:false, data:[], _err:e })),
+        fetchOne(API_GAMES, token).catch(e => ({ ok:false, data:[], _err:e })),
+        fetchOne(API_DOOR, token).catch(e => ({ ok:false, data:[], _err:e })),
+      ]);
+
+      if (!qz.ok && !gm.ok && !dr.ok) {
+        const firstErr = (qz._err || gm._err || dr._err);
+        throw firstErr || new Error('Failed to load items.');
+      }
+
+      const merged = [];
+      (qz.data || []).forEach(i => merged.push(normalizeItem(i, 'quiz')));
+      (gm.data || []).forEach(i => merged.push(normalizeItem(i, 'game')));
+      (dr.data || []).forEach(i => merged.push(normalizeItem(i, 'door')));
+
+      // newest first
+      merged.sort((a,b) => {
+        const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return tb - ta;
       });
 
-      const json = await res.json().catch(() => ({}));
+      state.all = merged;
+      state.loadedOnce = true;
 
-      if (res.status === 401 || res.status === 403) {
-        clearAuth();
-        window.location.replace('/login');
-        return;
+      applySearchAndPagination(true);
+
+      // partial load warning (optional)
+      const partialErrors = [];
+      if (!qz.ok && qz._err) partialErrors.push('Quizzes');
+      if (!gm.ok && gm._err) partialErrors.push('Games');
+      if (!dr.ok && dr._err) partialErrors.push('Door Games');
+
+      if (partialErrors.length) {
+        errEl.textContent = partialErrors.join(', ') + ' failed to load (showing available items).';
+        errEl.classList.add('show');
       }
 
-      if (!res.ok) {
-        throw new Error(json.message || json.error || 'Failed to load list.');
-      }
-
-      const items      = json.data || [];
-      const pagination = json.pagination || {};
-
-      renderCards(tab, items);
-      updatePagination(
-        tab,
-        pagination.total || items.length,
-        pagination.per_page || 9,
-        pagination.current_page || page,
-        pagination.last_page || 1
-      );
-
-      S.loadedOnce = true;
-
-      // update counts on tabs (nice UX)
-      const totalCount = String(pagination.total || items.length || 0);
-      if (tab === 'quizzes') tabCountQuizzes.textContent = totalCount;
-      if (tab === 'games')   tabCountGames.textContent   = totalCount;
-      if (tab === 'door')    tabCountDoor.textContent    = totalCount;
-
-    } catch (err) {
-      console.error(err);
-      S.els.error.textContent = err.message || 'Something went wrong while loading.';
-      S.els.error.classList.add('show');
-      renderCards(tab, []);
+    } catch (e) {
+      console.error(e);
+      state.all = [];
+      state.filtered = [];
+      applySearchAndPagination(true);
+      errEl.textContent = e.message || 'Something went wrong while loading.';
+      errEl.classList.add('show');
     } finally {
-      S.els.loader.classList.remove('show');
+      loader.classList.remove('show');
     }
   }
 
-  // Pagination events per tab
-  state.quizzes.els.prev.addEventListener('click', () => {
-    if (state.quizzes.currentPage > 1) fetchList('quizzes', state.quizzes.currentPage - 1);
-  });
-  state.quizzes.els.next.addEventListener('click', () => {
-    if (state.quizzes.currentPage < state.quizzes.lastPage) fetchList('quizzes', state.quizzes.currentPage + 1);
-  });
-
-  state.games.els.prev.addEventListener('click', () => {
-    if (state.games.currentPage > 1) fetchList('games', state.games.currentPage - 1);
-  });
-  state.games.els.next.addEventListener('click', () => {
-    if (state.games.currentPage < state.games.lastPage) fetchList('games', state.games.currentPage + 1);
-  });
-
-  // ✅ NEW: door pagination
-  state.door.els.prev.addEventListener('click', () => {
-    if (state.door.currentPage > 1) fetchList('door', state.door.currentPage - 1);
-  });
-  state.door.els.next.addEventListener('click', () => {
-    if (state.door.currentPage < state.door.lastPage) fetchList('door', state.door.currentPage + 1);
-  });
-
   // =======================
-  // Search (debounced, per active tab)
+  // Search (debounced)
   // =======================
   let searchTimer = null;
   if (searchInput) {
     searchInput.addEventListener('input', function () {
       if (searchTimer) clearTimeout(searchTimer);
-      searchTimer = setTimeout(function () {
-        const val = searchInput.value || '';
-        state[activeTab].q = val;
-        fetchList(activeTab, 1);
-      }, 350);
+      searchTimer = setTimeout(() => {
+        state.q = searchInput.value || '';
+        applySearchAndPagination(true);
+      }, 300);
     });
   }
 
-  // Initial load (Quizzes tab)
-  setActiveTab('quizzes');
+  // Initial load
+  fetchAll();
+
 });
 </script>
 @endpush
+ 

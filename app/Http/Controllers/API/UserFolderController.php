@@ -8,20 +8,20 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
-use Carbon\Carbon;
 
 class UserFolderController extends Controller
 {
     /**
      * ✅ Helper: Insert log into DB
+     * NOTE: uuid column removed from insert to avoid SQL error (no migration change)
      */
     private function writeLog(Request $request, string $action, int|string|null $entityId, ?array $old = null, ?array $new = null): void
     {
         try {
-            $actorId = optional($request->user())->id; // Sanctum/Auth user if available
+            $actorId = optional($request->user())->id;
 
             DB::table('user_data_activity_log')->insert([
-                'uuid'        => (string) Str::uuid(),
+                // 'uuid'        => (string) Str::uuid(), // ❌ table doesn't have uuid column
                 'action'      => $action,
                 'entity_type' => 'user_folders',
                 'entity_id'   => $entityId ? (int)$entityId : null,
@@ -34,82 +34,112 @@ class UserFolderController extends Controller
                 'updated_at'  => now(),
             ]);
 
-            // Optional: file log too
             Log::info("UserFolder {$action}", [
                 'entity_id' => $entityId,
-                'actor_id' => $actorId,
-                'ip' => $request->ip(),
+                'actor_id'  => $actorId,
+                'ip'        => $request->ip(),
             ]);
         } catch (\Throwable $e) {
-            // Never break CRUD due to log failure
             Log::error("Activity log failed: " . $e->getMessage());
         }
     }
 
     /**
-     * ✅ LIST all folders
-     * GET /api/user-folders
+     * ✅ FIX: Resolve folder by id OR uuid (string)
+     * Accepts:
+     * - numeric id: "2"
+     * - uuid: "58f1040d-c0b3-4076-88c8-2edb5a5792f2"
      */
-    public function index(Request $request)
-{
-    $q = DB::table('user_folders')
-        ->whereNull('deleted_at')
-        ->orderByDesc('id');
+    private function resolveFolderId(int|string|null $id): ?int
+    {
+        $raw = trim((string)($id ?? ''));
 
-    // Optional filter by status
-    if ($request->filled('status')) {
-        $q->where('status', $request->query('status'));
+        if ($raw === '' || $raw === 'null' || $raw === 'undefined') {
+            return null;
+        }
+
+        // numeric
+        if (ctype_digit($raw)) {
+            return (int)$raw;
+        }
+
+        // uuid -> id
+        $row = DB::table('user_folders')
+            ->select('id')
+            ->where('uuid', $raw)
+            ->whereNull('deleted_at')
+            ->first();
+
+        return $row ? (int)$row->id : null;
     }
 
     /**
-     * ✅ Dropdown mode:
-     * If frontend sends X-dropdown: 1  => return ALL (no pagination)
-     * OR ?show=all is sent            => return ALL (no pagination)
+     * ✅ LIST all folders
+     * GET /api/user-folders
+     * - default: paginated
+     * - dropdown: header X-dropdown: 1  OR  ?show=all
      */
-    $xDropdown = strtolower(trim((string) $request->header('X-dropdown', '')));
-    $isDropdown = in_array($xDropdown, ['1', 'true', 'yes'], true) || $request->query('show') === 'all';
+    public function index(Request $request)
+    {
+        $q = DB::table('user_folders')
+            ->whereNull('deleted_at')
+            ->orderByDesc('id');
 
-    if ($isDropdown) {
-        $folders = $q->get();
+        // Optional filter by status
+        if ($request->filled('status')) {
+            $q->where('status', $request->query('status'));
+        }
+
+        // ✅ Dropdown mode
+        $xDropdown  = strtolower(trim((string)$request->header('X-dropdown', '')));
+        $isDropdown = in_array($xDropdown, ['1', 'true', 'yes'], true) || $request->query('show') === 'all';
+
+        if ($isDropdown) {
+            // ✅ Return only what FE needs for dropdown (fast + clean)
+            $folders = $q->select('id', 'uuid', 'title', 'status')->get();
+
+            return response()->json([
+                'success' => true,
+                'data'    => $folders,
+                'meta'    => [
+                    'dropdown' => true,
+                    'total'    => $folders->count(),
+                ],
+            ]);
+        }
+
+        // ✅ Paginated mode
+        $perPage = (int)$request->query('per_page', 20);
+        $perPage = max(1, min($perPage, 100));
+
+        $p = $q->paginate($perPage);
 
         return response()->json([
             'success' => true,
-            'data'    => $folders,
+            'data'    => $p->items(),
             'meta'    => [
-                'dropdown' => true,
-                'total'    => $folders->count(),
+                'current_page' => $p->currentPage(),
+                'per_page'     => $p->perPage(),
+                'total'        => $p->total(),
+                'total_pages'  => $p->lastPage(),
             ],
         ]);
     }
 
     /**
-     * ✅ Paginated mode (default)
-     */
-    $perPage = (int) $request->query('per_page', 20);
-    $perPage = max(1, min($perPage, 100)); // clamp 1..100
-
-    $p = $q->paginate($perPage);
-
-    return response()->json([
-        'success' => true,
-        'data'    => $p->items(),
-        'meta'    => [
-            'current_page' => $p->currentPage(),
-            'per_page'     => $p->perPage(),
-            'total'        => $p->total(),
-            'total_pages'  => $p->lastPage(),
-        ],
-    ]);
-}
-
-    /**
      * ✅ SHOW one folder + assigned users
-     * GET /api/user-folders/{id}
+     * GET /api/user-folders/{id OR uuid}
      */
-    public function show(Request $request, int $id)
+    public function show(Request $request, $id)
     {
+        $folderId = $this->resolveFolderId($id);
+
+        if (!$folderId) {
+            return response()->json(['success' => false, 'message' => 'Folder not found'], 404);
+        }
+
         $folder = DB::table('user_folders')
-            ->where('id', $id)
+            ->where('id', $folderId)
             ->whereNull('deleted_at')
             ->first();
 
@@ -119,13 +149,13 @@ class UserFolderController extends Controller
 
         $users = DB::table('users')
             ->select('id', 'uuid', 'name', 'email', 'user_folder_id')
-            ->where('user_folder_id', $id)
+            ->where('user_folder_id', $folderId)
             ->orderBy('id', 'asc')
             ->get();
 
         return response()->json([
             'success' => true,
-            'folder' => $folder,
+            'folder'  => $folder,
             'assigned_users' => $users,
         ]);
     }
@@ -157,17 +187,17 @@ class UserFolderController extends Controller
         DB::beginTransaction();
         try {
             $folderId = DB::table('user_folders')->insertGetId([
-                'uuid'         => (string) Str::uuid(),
-                'title'        => $request->title,
-                'description'  => $request->description,
-                'reason'       => $request->reason,
-                'status'       => $request->status ?? 'active',
-                'metadata'     => $request->metadata ? json_encode($request->metadata) : null,
-                'created_by'   => $actorId,
-                'created_at_ip'=> $request->ip(),
-                'updated_at_ip'=> $request->ip(),
-                'created_at'   => now(),
-                'updated_at'   => now(),
+                'uuid'          => (string)Str::uuid(),
+                'title'         => $request->title,
+                'description'   => $request->description,
+                'reason'        => $request->reason,
+                'status'        => $request->status ?? 'active',
+                'metadata'      => $request->metadata ? json_encode($request->metadata) : null,
+                'created_by'    => $actorId,
+                'created_at_ip' => $request->ip(),
+                'updated_at_ip' => $request->ip(),
+                'created_at'    => now(),
+                'updated_at'    => now(),
             ]);
 
             $newRow = DB::table('user_folders')->where('id', $folderId)->first();
@@ -179,7 +209,7 @@ class UserFolderController extends Controller
                 'success' => true,
                 'message' => 'Folder created successfully',
                 'id'      => $folderId,
-                'data'    => $newRow
+                'data'    => $newRow,
             ], 201);
 
         } catch (\Throwable $e) {
@@ -194,12 +224,18 @@ class UserFolderController extends Controller
 
     /**
      * ✅ UPDATE folder
-     * PUT /api/user-folders/{id}
+     * PUT /api/user-folders/{id OR uuid}
      */
-    public function update(Request $request, int $id)
+    public function update(Request $request, $id)
     {
+        $folderId = $this->resolveFolderId($id);
+
+        if (!$folderId) {
+            return response()->json(['success' => false, 'message' => 'Folder not found'], 404);
+        }
+
         $folder = DB::table('user_folders')
-            ->where('id', $id)
+            ->where('id', $folderId)
             ->whereNull('deleted_at')
             ->first();
 
@@ -223,7 +259,7 @@ class UserFolderController extends Controller
             ], 422);
         }
 
-        $oldRow = (array) $folder;
+        $oldRow = (array)$folder;
 
         $payload = [
             'updated_at'    => now(),
@@ -234,23 +270,24 @@ class UserFolderController extends Controller
         if ($request->has('description')) $payload['description'] = $request->description;
         if ($request->has('reason')) $payload['reason'] = $request->reason;
         if ($request->filled('status')) $payload['status'] = $request->status;
+
         if ($request->has('metadata')) {
             $payload['metadata'] = $request->metadata ? json_encode($request->metadata) : null;
         }
 
         DB::beginTransaction();
         try {
-            DB::table('user_folders')->where('id', $id)->update($payload);
+            DB::table('user_folders')->where('id', $folderId)->update($payload);
 
-            $newRow = DB::table('user_folders')->where('id', $id)->first();
-            $this->writeLog($request, 'update', $id, $oldRow, (array)$newRow);
+            $newRow = DB::table('user_folders')->where('id', $folderId)->first();
+            $this->writeLog($request, 'update', $folderId, $oldRow, (array)$newRow);
 
             DB::commit();
 
             return response()->json([
                 'success' => true,
                 'message' => 'Folder updated successfully',
-                'data'    => $newRow
+                'data'    => $newRow,
             ]);
 
         } catch (\Throwable $e) {
@@ -265,12 +302,18 @@ class UserFolderController extends Controller
 
     /**
      * ✅ DELETE folder (Soft delete)
-     * DELETE /api/user-folders/{id}
+     * DELETE /api/user-folders/{id OR uuid}
      */
-    public function destroy(Request $request, int $id)
+    public function destroy(Request $request, $id)
     {
+        $folderId = $this->resolveFolderId($id);
+
+        if (!$folderId) {
+            return response()->json(['success' => false, 'message' => 'Folder not found'], 404);
+        }
+
         $folder = DB::table('user_folders')
-            ->where('id', $id)
+            ->where('id', $folderId)
             ->whereNull('deleted_at')
             ->first();
 
@@ -282,19 +325,17 @@ class UserFolderController extends Controller
 
         DB::beginTransaction();
         try {
-            // soft delete folder
-            DB::table('user_folders')->where('id', $id)->update([
-                'deleted_at' => now(),
-                'updated_at' => now(),
+            DB::table('user_folders')->where('id', $folderId)->update([
+                'deleted_at'    => now(),
+                'updated_at'    => now(),
                 'updated_at_ip' => $request->ip(),
             ]);
 
-            // unlink users from folder (since users.user_folder_id is nullable)
             DB::table('users')
-                ->where('user_folder_id', $id)
+                ->where('user_folder_id', $folderId)
                 ->update(['user_folder_id' => null]);
 
-            $this->writeLog($request, 'delete', $id, $oldRow, null);
+            $this->writeLog($request, 'delete', $folderId, $oldRow, null);
 
             DB::commit();
 
@@ -314,14 +355,20 @@ class UserFolderController extends Controller
     }
 
     /**
-     * ✅ ASSIGN users to folder (Optional but very useful)
-     * POST /api/user-folders/{id}/assign-users
+     * ✅ ASSIGN users to folder
+     * POST /api/user-folders/{id OR uuid}/assign-users
      * body: { "user_ids": [1,2,3] }
      */
-    public function assignUsers(Request $request, int $id)
+    public function assignUsers(Request $request, $id)
     {
+        $folderId = $this->resolveFolderId($id);
+
+        if (!$folderId) {
+            return response()->json(['success' => false, 'message' => 'Folder not found'], 404);
+        }
+
         $folder = DB::table('user_folders')
-            ->where('id', $id)
+            ->where('id', $folderId)
             ->whereNull('deleted_at')
             ->first();
 
@@ -346,7 +393,6 @@ class UserFolderController extends Controller
 
         DB::beginTransaction();
         try {
-            // old mapping snapshot
             $oldUsers = DB::table('users')
                 ->select('id', 'user_folder_id')
                 ->whereIn('id', $userIds)
@@ -354,7 +400,7 @@ class UserFolderController extends Controller
 
             DB::table('users')
                 ->whereIn('id', $userIds)
-                ->update(['user_folder_id' => $id]);
+                ->update(['user_folder_id' => $folderId]);
 
             $newUsers = DB::table('users')
                 ->select('id', 'user_folder_id')
@@ -364,7 +410,7 @@ class UserFolderController extends Controller
             $this->writeLog(
                 $request,
                 'assign_users',
-                $id,
+                $folderId,
                 ['users' => $oldUsers],
                 ['users' => $newUsers]
             );

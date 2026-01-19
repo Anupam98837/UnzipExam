@@ -18,6 +18,7 @@
       - Full-screen + more “pro” layout
       - Uses SweetAlert2 (Swal) for dialogs & toast
       - Skip button appears only when allow_skip = "yes"
+      - ✅ NEW: Bootstrap Start Modal auto-opens before exam starts
       - No global body/:root edits
     ========================================================= */
 
@@ -503,6 +504,231 @@
       filter: grayscale(1) !important;
       cursor: not-allowed !important;
     }
+
+    /* =========================================================
+      ✅ NEW: Start Exam Modal (Bootstrap) — professional
+    ========================================================= */
+    .bgx-start-modal .modal-dialog{
+      max-width: 860px;
+    }
+    .bgx-start-modal .modal-content{
+      border-radius: 22px;
+      border: 1px solid color-mix(in srgb, var(--bgx-brand) 25%, var(--bgx-line));
+      overflow: hidden;
+      box-shadow: 0 26px 70px rgba(2,6,23,.28);
+      background: var(--bgx-card);
+      color: var(--bgx-ink);
+    }
+    html.theme-dark .bgx-start-modal .modal-content{
+      box-shadow: 0 30px 80px rgba(0,0,0,.62);
+      border-color: rgba(148,163,184,.22);
+    }
+    .bgx-start-modal .modal-header{
+      border-bottom: 1px solid var(--bgx-line);
+      padding: 16px 18px;
+      background:
+        radial-gradient(900px 240px at 14% 0%, rgba(201,79,240,.22), transparent 55%),
+        radial-gradient(900px 240px at 86% 0%, rgba(149,30,170,.18), transparent 55%),
+        linear-gradient(135deg,
+          color-mix(in srgb, var(--bgx-brand) 72%, white) 0%,
+          color-mix(in srgb, var(--bgx-brand2) 72%, white) 100%);
+      color: #fff;
+    }
+    html.theme-dark .bgx-start-modal .modal-header{
+      background:
+        radial-gradient(900px 240px at 14% 0%, rgba(201,79,240,.16), transparent 55%),
+        radial-gradient(900px 240px at 86% 0%, rgba(149,30,170,.14), transparent 55%),
+        linear-gradient(135deg,
+          color-mix(in srgb, var(--bgx-brand) 58%, #0b1220) 0%,
+          color-mix(in srgb, var(--bgx-brand2) 58%, #0b1220) 100%);
+    }
+
+    .bgx-modal-title{
+      display:flex;
+      align-items:center;
+      gap: 12px;
+      min-width:0;
+    }
+    .bgx-modal-ico{
+      width: 44px;
+      height: 44px;
+      border-radius: 16px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      background: rgba(255,255,255,.16);
+      border: 1px solid rgba(255,255,255,.22);
+      backdrop-filter: blur(10px);
+      flex: 0 0 auto;
+    }
+    .bgx-modal-title h5{
+      margin:0;
+      font-weight: 950;
+      letter-spacing: .2px;
+      font-size: 16px;
+      white-space: nowrap;
+      overflow:hidden;
+      text-overflow: ellipsis;
+      max-width: 64vw;
+    }
+    .bgx-modal-title .small{
+      opacity: .92;
+      font-size: 12px;
+      font-weight: 700;
+      margin-top: 2px;
+    }
+
+    .bgx-start-modal .modal-body{
+      padding: 16px 18px 6px;
+    }
+    .bgx-modal-grid{
+      display:grid;
+      grid-template-columns: 1.35fr .85fr;
+      gap: 14px;
+      align-items:start;
+    }
+    @media (max-width: 992px){
+      .bgx-modal-grid{ grid-template-columns: 1fr; }
+    }
+
+    .bgx-modal-box{
+      border: 1px solid var(--bgx-line);
+      border-radius: 18px;
+      padding: 14px 14px;
+      background: white;
+    }
+    html.theme-dark .bgx-modal-box{
+      background: linear-gradient(180deg, rgba(148,163,184,.06), transparent);
+    }
+
+    .bgx-modal-kicker{
+      font-size: 12px;
+      font-weight: 950;
+      letter-spacing: .55px;
+      text-transform: uppercase;
+      color: color-mix(in srgb, var(--bgx-brand) 70%, var(--bgx-ink));
+      display:flex;
+      align-items:center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+    .bgx-modal-text{
+      color: var(--bgx-muted);
+      font-weight: 750;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .bgx-modal-stats{
+      display:flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .bgx-stat{
+      display:flex;
+      align-items:flex-start;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 16px;
+      border: 1px solid var(--bgx-line);
+      background: rgba(2,6,23,.02);
+    }
+    html.theme-dark .bgx-stat{ background: rgba(148,163,184,.06); }
+    .bgx-stat i{
+      width: 34px;
+      height: 34px;
+      border-radius: 14px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      background: color-mix(in srgb, var(--bgx-brand2) 16%, transparent);
+      border: 1px solid color-mix(in srgb, var(--bgx-brand2) 24%, var(--bgx-line));
+      flex: 0 0 auto;
+    }
+    .bgx-stat .t{
+      font-weight: 950;
+      font-size: 13px;
+      line-height: 1.2;
+      margin-bottom: 2px;
+    }
+    .bgx-stat .s{
+      color: var(--bgx-muted);
+      font-weight: 750;
+      font-size: 12px;
+      line-height: 1.25;
+    }
+
+    .bgx-modal-list{
+      margin: 10px 0 0;
+      padding-left: 16px;
+      color: var(--bgx-muted);
+      font-weight: 750;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .bgx-modal-list li{ margin-bottom: 6px; }
+
+    .bgx-start-modal .modal-footer{
+      border-top: 1px solid var(--bgx-line);
+      padding: 12px 18px 16px;
+      display:flex;
+      align-items:center;
+      gap: 10px;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      background: linear-gradient(180deg, transparent, rgba(2,6,23,.02));
+    }
+    html.theme-dark .bgx-start-modal .modal-footer{
+      background: linear-gradient(180deg, transparent, rgba(148,163,184,.05));
+    }
+
+    .bgx-modal-footnote{
+      color: var(--bgx-muted);
+      font-weight: 750;
+      font-size: 12px;
+      display:flex;
+      align-items:center;
+      gap: 8px;
+      max-width: 560px;
+    }
+
+    .bgx-modal-actions{
+      display:flex;
+      align-items:center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-left:auto;
+    }
+
+    .bgx-modal-btn{
+      border-radius: 14px;
+      border: 1px solid var(--bgx-line);
+      background: rgba(2,6,23,.03);
+      padding: 10px 14px;
+      font-weight: 950;
+      font-size: 13px;
+      display:inline-flex;
+      align-items:center;
+      gap: 9px;
+      transition: .15s ease;
+      user-select:none;
+      text-decoration:none;
+      color: var(--bgx-ink);
+    }
+    html.theme-dark .bgx-modal-btn{ background: rgba(148,163,184,.08); }
+    .bgx-modal-btn:hover{ transform: translateY(-1px); }
+    .bgx-modal-btn:active{ transform: translateY(0px); }
+
+    .bgx-modal-btn.primary{
+      background: linear-gradient(135deg, var(--bgx-brand), var(--bgx-brand2));
+      color:#fff;
+      border-color: rgba(255,255,255,.08);
+    }
+    .bgx-modal-btn.danger{
+      background: rgba(239,68,68,.10);
+      border-color: rgba(239,68,68,.20);
+      color: #ef4444;
+    }
   </style>
 </head>
 
@@ -645,6 +871,108 @@
   </div>
 </div>
 
+{{-- ✅ NEW: Start Exam Modal (Bootstrap) --}}
+<div class="modal fade bgx-start-modal" id="bgxStartModal" tabindex="-1" aria-hidden="true"
+     data-bs-backdrop="static" data-bs-keyboard="false">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="bgx-modal-title">
+          <div class="bgx-modal-ico">
+            <i class="fa-solid fa-circle-play"></i>
+          </div>
+          <div style="min-width:0">
+            <h5 id="bgxStartModalTitle">Bubble Game Exam</h5>
+            <div class="small" id="bgxStartModalSub">Please read the instructions before starting.</div>
+          </div>
+        </div>
+        {{-- no close button (professional + forced) --}}
+      </div>
+
+      <div class="modal-body">
+        <div class="bgx-modal-grid">
+          <div class="bgx-modal-box">
+            <div class="bgx-modal-kicker">
+              <i class="fa-solid fa-book-open"></i> Description & Instructions
+            </div>
+
+            <div class="bgx-modal-text" id="bgxStartModalDesc">
+              Loading details…
+            </div>
+
+            <ul class="bgx-modal-list" id="bgxStartModalRules">
+              <li>Read each question and select bubbles in the required order.</li>
+              <li>Your selection is auto-saved locally (until you Submit).</li>
+              <li>Timer runs per question. If time ends, it will auto move next.</li>
+            </ul>
+          </div>
+
+          <div class="bgx-modal-stats">
+            <div class="bgx-stat">
+              <i class="fa-solid fa-layer-group"></i>
+              <div>
+                <div class="t">Total Questions</div>
+                <div class="s"><span id="bgxStartModalTotalQ">0</span> rounds</div>
+              </div>
+            </div>
+
+            <div class="bgx-stat">
+              <i class="fa-solid fa-clock"></i>
+              <div>
+                <div class="t">Time per Question</div>
+                <div class="s"><span id="bgxStartModalPerQ">--</span> seconds</div>
+              </div>
+            </div>
+
+            <div class="bgx-stat">
+              <i class="fa-solid fa-forward"></i>
+              <div>
+                <div class="t">Skip</div>
+                <div class="s" id="bgxStartModalSkip">Disabled</div>
+              </div>
+            </div>
+
+            <div class="bgx-stat">
+              <i class="fa-solid fa-trophy"></i>
+              <div>
+                <div class="t">Total Points</div>
+                <div class="s"><span id="bgxStartModalPoints">0</span> max</div>
+              </div>
+            </div>
+
+            <div class="bgx-stat" id="bgxStartModalResumeCard" style="display:none">
+              <i class="fa-solid fa-rotate"></i>
+              <div>
+                <div class="t">Resume Attempt</div>
+                <div class="s"><span id="bgxStartModalResumeTxt">0</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <div class="bgx-modal-footnote">
+          <i class="fa-solid fa-shield-halved"></i>
+          Once you start, the timer begins. Submit only when you are finished.
+        </div>
+
+        <div class="bgx-modal-actions">
+          <a href="/dashboard" class="bgx-modal-btn">
+            <i class="fa-solid fa-arrow-left"></i> Back
+          </a>
+          <button type="button" class="bgx-modal-btn danger d-none" id="bgxModalResetBtn">
+            <i class="fa-solid fa-rotate-left"></i> Reset Attempt
+          </button>
+          <button type="button" class="bgx-modal-btn primary" id="bgxModalStartBtn">
+            <i class="fa-solid fa-circle-play"></i> Start Exam
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
@@ -652,6 +980,7 @@
   /* =========================================================
     ✅ SWAL EDITION + SKIP SUPPORT
     - Uses SweetAlert2 for confirm + toast
+    - ✅ NEW: Bootstrap Modal auto-opens before exam starts
     - Skip button shows only if allow_skip = "yes"
     - Submit payload supports BOTH formats:
         1) { game_uuid, answers:[...] } (your successful input)
@@ -674,7 +1003,7 @@
 
   const CACHE_KEY = `bg_exam_${GAME_UUID}`;
 
-  // Swal toast
+  // Swal toast (kept for small non-modal notifications)
   const Toast = Swal.mixin({
     toast: true,
     position: 'bottom-end',
@@ -721,6 +1050,26 @@
   const elSelectTip = document.getElementById('bgxSelectTip');
   const elQHint = document.getElementById('bgxQHint');
 
+  // ✅ Start Modal DOM
+  const elStartModal = document.getElementById('bgxStartModal');
+  const elStartModalTitle = document.getElementById('bgxStartModalTitle');
+  const elStartModalSub = document.getElementById('bgxStartModalSub');
+  const elStartModalDesc = document.getElementById('bgxStartModalDesc');
+  const elStartModalRules = document.getElementById('bgxStartModalRules');
+
+  const elStartModalTotalQ = document.getElementById('bgxStartModalTotalQ');
+  const elStartModalPerQ = document.getElementById('bgxStartModalPerQ');
+  const elStartModalSkip = document.getElementById('bgxStartModalSkip');
+  const elStartModalPoints = document.getElementById('bgxStartModalPoints');
+
+  const elStartModalResumeCard = document.getElementById('bgxStartModalResumeCard');
+  const elStartModalResumeTxt = document.getElementById('bgxStartModalResumeTxt');
+
+  const elModalStartBtn = document.getElementById('bgxModalStartBtn');
+  const elModalResetBtn = document.getElementById('bgxModalResetBtn');
+
+  let startModal = null;
+
   // State
   let state = {
     game: null,
@@ -737,6 +1086,11 @@
 
     // ✅ intro drop animation only on first render after page load
     introDropDone: false,
+
+    // ✅ new start modal behavior
+    examStarted: false,
+    startModalShown: false,
+    isRestoredAttempt: false,
   };
 
   function clampQIndex(){
@@ -760,6 +1114,10 @@
     return String(s ?? '').replace(/[&<>"']/g, m => ({
       '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'
     }[m]));
+  }
+
+  function nl2br(s){
+    return escapeHtml(String(s ?? '')).replace(/\n/g, '<br>');
   }
 
   function stopTick() {
@@ -1075,6 +1433,9 @@
       div.appendChild(document.createTextNode(label));
 
       div.addEventListener('click', () => {
+        // ✅ exam must start first (modal accept)
+        if (state.examStarted !== true) return;
+
         const pos = state.currentSelection.indexOf(origIdx);
         if (pos !== -1) {
           state.currentSelection = state.currentSelection.slice(0, pos);
@@ -1201,6 +1562,23 @@
       elSkipBtn.classList.add('d-none');
     }
 
+    // ✅ while exam not started -> disable action buttons safely
+    if (state.examStarted !== true){
+      elNextBtn.disabled = true;
+      elSubmitBtn.disabled = true;
+      elUndoBtn.disabled = true;
+      elClearBtn.disabled = true;
+      if (elSkipBtn) elSkipBtn.disabled = true;
+
+      elSelectTip.innerHTML = `Tip: Click <b>Start Exam</b> to begin.`;
+      elQHint.innerHTML = `<i class="fa-solid fa-circle-info"></i> Exam will start after accepting instructions.`;
+      return;
+    } else {
+      elUndoBtn.disabled = false;
+      elClearBtn.disabled = false;
+      if (elSkipBtn) elSkipBtn.disabled = false;
+    }
+
     if (allowSkip === 'no'){
       const ok = state.currentSelection.length === need;
       elNextBtn.disabled = !ok;
@@ -1219,6 +1597,9 @@
     const q = currentQuestion();
     if (!q) return;
 
+    // ✅ do not auto-advance if exam not started (modal open)
+    if (state.examStarted !== true) return;
+
     persistCurrentAnswer(true, true);
 
     const lastIndex = state.questions.length - 1;
@@ -1233,7 +1614,6 @@
     if (state.autoSubmitted) return;
     state.autoSubmitted = true;
 
-    // optional: avoid unhandled promise
     submitExamNow(true).catch(() => {});
   }
 
@@ -1262,7 +1642,12 @@
     renderRightPanel();
     updateNavButtons();
 
-    startTimerFor(qKey(q));
+    // ✅ start timer only when exam started
+    if (state.examStarted === true){
+      startTimerFor(qKey(q));
+    } else {
+      renderTimer(qKey(q)); // just show default time
+    }
   }
 
   function buildSubmitAnswersArray(){
@@ -1305,8 +1690,151 @@
     return json;
   }
 
+  /* =========================================================
+      ✅ NEW: Start Modal functions
+  ========================================================= */
+  function computeTotalPoints(){
+    return (state.questions || []).reduce((sum, q) => sum + (parseInt(q?.points || 1, 10) || 0), 0);
+  }
+
+ function sanitizeBasicHtml(html){
+  // ✅ basic safety (removes <script> and inline onClick/onError etc.)
+  // (Best practice: sanitize on backend too)
+  return String(html || '')
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    .replace(/\son\w+="[^"]*"/gi, '')
+    .replace(/\son\w+='[^']*'/gi, '');
+}
+
+function buildModalTextFromGame(game){
+  const desc = String(game?.description || '').trim();
+
+  // ✅ your real field from API
+  const instrHtmlRaw = String(game?.instructions_html || '').trim();
+  const instrHtml = sanitizeBasicHtml(instrHtmlRaw);
+
+  const blocks = [];
+
+  // Description
+  if (desc) {
+    blocks.push(`
+      <div>
+        <b>Game Description</b>
+        <div style="margin-top:6px">${escapeHtml(desc)}</div>
+      </div>
+    `);
+  }
+
+  // Instructions HTML (preferred)
+  if (instrHtml) {
+    blocks.push(`
+      <div style="margin-top:12px">
+        <b>Game Instructions</b>
+        <div style="margin-top:6px">${instrHtml}</div>
+      </div>
+    `);
+  }
+
+  // Fallback
+  if (!blocks.length) {
+    blocks.push(`
+      <div>
+        <b>Instructions</b>
+        <div style="margin-top:6px">
+          Follow the on-screen instruction for each question and select bubbles in the correct order.
+        </div>
+      </div>
+    `);
+  }
+
+  return blocks.join('');
+}
+
+  function fillStartModalUI(){
+    const g = state.game || {};
+    const totalQ = (state.questions || []).length;
+    const allowSkip = String(g?.allow_skip ?? 'no') === 'yes';
+
+    elStartModalTitle.textContent = g?.title ? String(g.title) : 'Bubble Game Exam';
+    elStartModalSub.textContent = state.isRestoredAttempt ? 'Your previous attempt is available. You can resume now.' : 'Please read the instructions before starting.';
+
+    elStartModalDesc.innerHTML = buildModalTextFromGame(g);
+
+    elStartModalTotalQ.textContent = String(totalQ);
+    elStartModalPerQ.textContent = String(state.perQTime || 30);
+    elStartModalSkip.textContent = allowSkip ? 'Enabled (You can skip)' : 'Disabled (Must answer)';
+
+    const totalPts = computeTotalPoints();
+    elStartModalPoints.textContent = String(totalPts);
+
+    // rules list (professional + dynamic)
+    const rules = [];
+    rules.push(`Read each question and select bubbles in the required order.`);
+    rules.push(`Your attempt is auto-saved locally until you Submit.`);
+    rules.push(`Timer runs per question. If time ends, it auto moves next.`);
+    if (allowSkip){
+      rules.push(`Skip is allowed, but blank/wrong answers may reduce score.`);
+    } else {
+      rules.push(`Skipping is not allowed. You must select all bubbles to continue.`);
+    }
+
+    elStartModalRules.innerHTML = rules.map(r => `<li>${escapeHtml(r)}</li>`).join('');
+
+    // resume card
+    if (state.isRestoredAttempt){
+      elStartModalResumeCard.style.display = '';
+      elStartModalResumeTxt.textContent = `${countAnswered()} answered out of ${totalQ}`;
+      elModalStartBtn.innerHTML = `<i class="fa-solid fa-circle-play"></i> Resume Exam`;
+      elModalResetBtn.classList.remove('d-none');
+    } else {
+      elStartModalResumeCard.style.display = 'none';
+      elModalStartBtn.innerHTML = `<i class="fa-solid fa-circle-play"></i> Start Exam`;
+      elModalResetBtn.classList.add('d-none');
+    }
+  }
+
+  function showStartModal(){
+    if (!elStartModal) return;
+
+    if (!startModal){
+      startModal = new bootstrap.Modal(elStartModal, { backdrop: 'static', keyboard: false });
+    }
+
+    fillStartModalUI();
+    state.startModalShown = true;
+    state.examStarted = false;
+    pauseTimer();
+    updateNavButtons();
+
+    // show placeholder bubbles while waiting
+    elBubblesWrap.innerHTML = `
+      <div class="bgx-loader">
+        <i class="fa-solid fa-circle-play"></i>
+        Waiting to start… Please read the instructions.
+      </div>
+    `;
+
+    startModal.show();
+  }
+
+  function beginExam(){
+    state.examStarted = true;
+    state.startModalShown = false;
+
+    // enable local reset button on topbar only for restored attempt
+    if (state.isRestoredAttempt){
+      elClearLocal.style.display = '';
+    }
+
+    // start from current index (restored) or first question
+    loadQuestion();
+    notify('success', 'Exam started', 'Good luck!');
+  }
+
   /* ============ events ============ */
   elPrevBtn.addEventListener('click', () => {
+    if (state.examStarted !== true) return;
+
     persistCurrentAnswer(false, true);
     pauseTimer();
 
@@ -1320,6 +1848,8 @@
   });
 
   elNextBtn.addEventListener('click', () => {
+    if (state.examStarted !== true) return;
+
     persistCurrentAnswer(false, true);
     pauseTimer();
 
@@ -1333,6 +1863,8 @@
   });
 
   elSkipBtn.addEventListener('click', () => {
+    if (state.examStarted !== true) return;
+
     const allowSkip = String(state.game?.allow_skip ?? 'no');
     if (allowSkip !== 'yes') return;
 
@@ -1352,6 +1884,7 @@
   });
 
   elUndoBtn.addEventListener('click', () => {
+    if (state.examStarted !== true) return;
     if (!state.currentSelection.length) return;
     state.currentSelection.pop();
     renderBubbles(false);
@@ -1361,6 +1894,7 @@
   });
 
   elClearBtn.addEventListener('click', () => {
+    if (state.examStarted !== true) return;
     state.currentSelection = [];
     renderBubbles(false);
     renderSelectedChips();
@@ -1396,6 +1930,30 @@
       cancelButtonText: 'Stay',
     });
     if (r.isConfirmed) window.location.href = DASHBOARD_URL;
+  });
+
+  // ✅ Modal Start button
+  elModalStartBtn.addEventListener('click', () => {
+    if (startModal){
+      startModal.hide();
+    }
+    beginExam();
+  });
+
+  // ✅ Modal Reset button
+  elModalResetBtn.addEventListener('click', async () => {
+    const r = await Swal.fire({
+      icon: 'warning',
+      title: 'Reset attempt?',
+      text: 'This will clear locally saved answers for this game.',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, reset',
+      cancelButtonText: 'Cancel',
+      confirmButtonColor: '#ef4444'
+    });
+    if (!r.isConfirmed) return;
+    clearCache();
+    location.reload();
   });
 
   async function submitExamNow(isAuto=false){
@@ -1464,6 +2022,8 @@
   }
 
   elSubmitBtn.addEventListener('click', async () => {
+    if (state.examStarted !== true) return;
+
     persistCurrentAnswer(false, true);
     pauseTimer();
 
@@ -1507,12 +2067,27 @@
       return;
     }
 
+    // prepare modal instance early
+    if (elStartModal){
+      startModal = new bootstrap.Modal(elStartModal, { backdrop: 'static', keyboard: false });
+    }
+
     const restored = loadCache();
     if (restored){
+      state.isRestoredAttempt = true;
+
       elGameTitle.textContent = state.game?.title ? String(state.game.title) : 'Bubble Game Exam';
       elPerQ.textContent = String(state.perQTime);
       renderRightPanel();
+
+      // show start modal BEFORE starting timer
+      showStartModal();
+
+      // still prep first question UI (no timer start)
       loadQuestion();
+
+      // show reset attempt button (also in modal)
+      elClearLocal.style.display = '';
       notify('success', 'Attempt restored', 'Loaded from sessionStorage.');
       return;
     }
@@ -1532,8 +2107,13 @@
       applyGameConfig(game);
 
       saveCache();
+      renderRightPanel();
+
+      // show modal automatically (professional start)
+      showStartModal();
+
+      // prep first question UI behind modal (no timer until start)
       loadQuestion();
-      notify('success', 'Exam loaded', 'Good luck!');
 
     }catch(err){
       elBubblesWrap.innerHTML = `

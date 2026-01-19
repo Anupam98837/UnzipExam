@@ -18,6 +18,8 @@ use App\Http\Controllers\API\BubbleGameResultController;
 use App\Http\Controllers\API\DoorGameController;
 use App\Http\Controllers\API\DoorGameResultController;
 use App\Http\Controllers\API\UserFolderController;
+use App\Http\Controllers\API\StudentResultController;
+
 
 
 Route::get('/user', function (Request $request) {
@@ -116,6 +118,11 @@ Route::middleware(['checkRole:student,admin,examiner,super_admin'])
         Route::get('/quizzes/{quizKey}/my-attempts', [ExamController::class, 'myAttemptsForQuiz']);
         Route::get('/results/{resultKey}',            [ExamController::class, 'resultDetail']);
         Route::get('/results/{resultId}/export',     [ExamController::class, 'export']);
+            // ✅ Single publish/unpublish
+    Route::patch('/result/{resultId}/publish', [QuizzResultController::class, 'publishToStudent']);
+
+    // ✅ Bulk publish/unpublish
+    Route::post('/result/publish/bulk', [QuizzResultController::class, 'bulkPublishToStudent']);
 
         // examiner / instructor views (used by the new UI)
         Route::get('/quizzes/{quizKey}/assigned-results', [
@@ -436,6 +443,9 @@ Route::middleware('checkRole')->prefix('bubble-game-results')->group(function ()
     Route::get('/instructor/{resultId}', [BubbleGameResultController::class, 'resultDetailForInstructor']);
     Route::get('/assigned/{gameKey}', [BubbleGameResultController::class, 'assignedResultsForGame']);
     Route::get('/export/{resultId}', [BubbleGameResultController::class, 'export']);
+    // ✅ publish/unpublish
+Route::match(['PATCH','POST','PUT'], '/{resultId}/publish', [BubbleGameResultController::class, 'publishResultToStudent']);
+      Route::post('/bulk-publish',       [\App\Http\Controllers\API\BubbleGameResultController::class, 'bulkSetPublishToStudent']);
 });
 
 // Public endpoints (no authentication required)
@@ -484,6 +494,12 @@ Route::middleware('checkRole')->prefix('door-game-results')->group(function () {
     Route::put('/{id}', [DoorGameResultController::class, 'update']);
     Route::patch('/{id}', [DoorGameResultController::class, 'update']);
     Route::delete('/{id}', [DoorGameResultController::class, 'destroy']);
+    // ✅ BULK must come BEFORE {resultKey}
+    Route::patch('/bulk/publish-any', [\App\Http\Controllers\API\DoorGameResultController::class, 'bulkPublishAny']);
+
+        // ✅ single publish/unpublish
+    Route::patch('/{resultKey}/publish-to-student',   [\App\Http\Controllers\API\DoorGameResultController::class, 'publishResultToStudent']);
+ Route::patch('/{resultKey}/unpublish-to-student', [\App\Http\Controllers\API\DoorGameResultController::class, 'unpublishResultToStudent']);
 });
 Route::prefix('user-folders')->group(function () {
     Route::get('/', [UserFolderController::class, 'index']);
@@ -505,3 +521,13 @@ Route::get('/door-game-results/instructor/{resultKey}', [DoorGameResultControlle
 Route::get('/door-game-results/assigned/{gameKey}', [DoorGameResultController::class, 'assignedResultsForGame']);
 Route::get('/door-game-results/export/{resultKey}', [DoorGameResultController::class, 'export']);
 });
+
+Route::prefix('student-results')
+    ->middleware('checkRole:student,admin,super_admin,director')
+    ->group(function () {
+        Route::get('/', [StudentResultController::class, 'index']);
+         Route::get('/my', [StudentResultController::class, 'myPublished']);
+        Route::get('/{uuid}', [StudentResultController::class, 'show']);
+
+        Route::post('/', [StudentResultController::class, 'store']);
+    });

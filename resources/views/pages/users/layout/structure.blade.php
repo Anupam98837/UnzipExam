@@ -417,6 +417,9 @@
           <a href="/quizzes" class="w3-link">
             <i class="fa-solid fa-book-open"></i><span>My Quizzes</span>
           </a>
+           <a href="/my/result" class="w3-link">
+           <i class="fa-duotone fa-solid fa-square-poll-horizontal"></i><span>My Results</span>
+          </a>
         </nav>
       </div>
 

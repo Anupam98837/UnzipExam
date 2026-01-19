@@ -16,12 +16,17 @@
     .asr-layout{ grid-template-columns: minmax(0,1fr); }
   }
 
+  /* Header */
   .asr-header-main{
-    display:flex;justify-content:space-between;align-items:flex-start;
-    gap:10px;
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:12px;
+    flex-wrap:wrap;
   }
   .asr-head-left{
     display:flex;align-items:flex-start;gap:10px;
+    min-width:240px;
   }
   .asr-head-icon{
     width:40px;height:40px;border-radius:14px;
@@ -46,27 +51,69 @@
     color:var(--muted-color);
     font-size:var(--fs-12);
     white-space:nowrap;
+    padding-top:6px;
+  }
+  @media (max-width: 576px){
+    .asr-head-meta{white-space:normal;}
   }
 
+  /* Filters */
   .asr-filters{
     display:flex;
     flex-wrap:wrap;
+    align-items:center;
     gap:10px;
     margin-top:16px;
   }
+
+  /* ✅ same height for all controls */
   .asr-filters .form-control,
   .asr-filters .form-select{
     border-radius:999px;
     padding-left:14px;
     padding-right:14px;
+    height:42px;
+    min-height:42px;
   }
   .asr-filters .btn{
     border-radius:999px;
-  }
-  .asr-filters-quiz{
-    min-width:220px;
+    height:42px;
+    min-height:42px;
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding:0 14px;
+    white-space:nowrap;
   }
 
+  .asr-filters-quiz{
+    min-width:260px;
+    flex:0 0 260px;
+  }
+  .asr-search-wrap{
+    flex:1 1 320px;
+    min-width:240px;
+  }
+  .asr-status-wrap{
+    flex:0 0 160px;
+    min-width:150px;
+  }
+  .asr-sort-wrap{
+    flex:0 0 220px;
+    min-width:200px;
+  }
+  .asr-refresh-wrap{
+    flex:0 0 auto;
+  }
+
+  @media (max-width: 992px){
+    .asr-filters-quiz{flex:1 1 260px;}
+    .asr-status-wrap{flex:1 1 180px;}
+    .asr-sort-wrap{flex:1 1 220px;}
+    .asr-refresh-wrap{flex:1 1 160px;}
+  }
+
+  /* Metrics */
   .asr-metrics-row{
     display:grid;
     grid-template-columns:repeat(4,minmax(0,1fr));
@@ -76,6 +123,9 @@
   @media (max-width: 992px){
     .asr-metrics-row{ grid-template-columns:repeat(2,minmax(0,1fr)); }
   }
+  @media (max-width: 576px){
+    .asr-metrics-row{ grid-template-columns:repeat(1,minmax(0,1fr)); }
+  }
   .asr-metric{
     border-radius:14px;
     border:1px solid var(--line-soft);
@@ -84,6 +134,7 @@
     display:flex;
     flex-direction:column;
     gap:4px;
+    min-height:86px;
   }
   .asr-metric-label{
     font-size:var(--fs-12);
@@ -92,7 +143,7 @@
   }
   .asr-metric-value{
     font-size:1.1rem;
-    font-weight:600;
+    font-weight:700;
     color:var(--ink);
     line-height:1.2;
   }
@@ -101,6 +152,7 @@
     color:var(--muted-color);
   }
 
+  /* Table Card */
   .asr-table-card{
     border-radius:16px;
     border:1px solid var(--line-strong);
@@ -110,6 +162,7 @@
   }
   .asr-table-head{
     display:flex;align-items:center;justify-content:space-between;
+    gap:10px;
     padding:10px 14px;
     border-bottom:1px solid var(--line-strong);
     background:var(--surface-2);
@@ -119,11 +172,19 @@
     font-weight:600;
     color:var(--ink);
   }
+
+  /* ✅ better scroll + stable width */
   .asr-table-body-wrap{
     max-height:420px;
     overflow:auto;
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
   }
-  .asr-table-body-wrap table{ margin-bottom:0; }
+  .asr-table-body-wrap table{
+    margin-bottom:0;
+    min-width:980px; /* ✅ prevents column collapsing */
+  }
+
   .asr-table-body-wrap thead th{
     position:sticky;
     top:0;
@@ -132,16 +193,57 @@
   }
   .asr-table-body-wrap tbody tr:hover{ background:var(--surface-3); }
 
+  .asr-table-body-wrap th,
+  .asr-table-body-wrap td{
+    vertical-align:middle !important;
+  }
+
+  /* Column tweaks */
+  .asr-table-body-wrap thead th:nth-child(1),
+  .asr-table-body-wrap tbody td:nth-child(1){
+    width:52px;
+    text-align:center;
+    color:var(--muted-color);
+  }
+  .asr-table-body-wrap thead th:nth-child(3),
+  .asr-table-body-wrap tbody td:nth-child(3){
+    width:120px;
+    white-space:nowrap;
+  }
+  .asr-table-body-wrap thead th:nth-child(4),
+  .asr-table-body-wrap tbody td:nth-child(4){
+    width:95px;
+    text-align:center;
+    white-space:nowrap;
+  }
+  .asr-table-body-wrap thead th:nth-child(5),
+  .asr-table-body-wrap tbody td:nth-child(5){
+    width:170px;
+    white-space:nowrap;
+  }
+  .asr-table-body-wrap thead th:nth-child(6),
+  .asr-table-body-wrap tbody td:nth-child(6){
+    width:120px;
+    white-space:nowrap;
+  }
+  .asr-table-body-wrap thead th:nth-child(7),
+  .asr-table-body-wrap tbody td:nth-child(7){
+    width:260px;
+    white-space:nowrap;
+  }
+
   .asr-student-cell{ display:flex;flex-direction:column;gap:2px; }
-  .asr-student-name{ font-weight:600;color:var(--ink); }
+  .asr-student-name{ font-weight:700;color:var(--ink); }
   .asr-student-meta{ font-size:var(--fs-12);color:var(--muted-color); }
 
+  /* Status badge */
   .asr-status-badge{
-    display:inline-flex;align-items:center;gap:5px;
-    padding:3px 8px;
+    display:inline-flex;align-items:center;gap:6px;
+    padding:4px 10px;
     border-radius:999px;
     font-size:var(--fs-12);
-    font-weight:600;
+    font-weight:700;
+    white-space:nowrap;
   }
   .asr-status-badge span{
     width:8px;height:8px;border-radius:50%;
@@ -163,8 +265,39 @@
     border:1px solid var(--line-soft);
   }
 
-  .asr-actions{ display:flex;gap:6px;justify-content:flex-end;align-items:center; }
-  .asr-actions select{ min-width:180px; }
+  /* ✅ Actions aligned */
+  .asr-actions{
+    display:flex;
+    gap:8px;
+    justify-content:flex-end;
+    align-items:center;
+    flex-wrap:nowrap;
+  }
+  .asr-actions select{
+    min-width:170px;
+    height:34px;
+  }
+  .asr-actions .btn{
+    height:34px;
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    white-space:nowrap;
+  }
+
+  @media (max-width: 768px){
+    .asr-actions{
+      justify-content:flex-start;
+      flex-wrap:wrap;
+    }
+    .asr-actions select{
+      min-width:160px;
+      flex:1 1 160px;
+    }
+    .asr-actions .btn{
+      flex:0 0 auto;
+    }
+  }
 
   .asr-empty{
     border-radius:10px;border:1px dashed var(--line-strong);
@@ -183,6 +316,7 @@
   }
   @keyframes asr-spin{to{transform:rotate(360deg)}}
 
+  /* Right side */
   .asr-side-card{
     border-radius:16px;border:1px solid var(--line-strong);
     background:var(--surface);box-shadow:var(--shadow-2);
@@ -199,7 +333,7 @@
   }
   .asr-side-small{ font-size:var(--fs-12);color:var(--muted-color); }
 
-  .asr-dist-label{ font-weight:600;font-size:var(--fs-13);margin-top:4px; }
+  .asr-dist-label{ font-weight:700;font-size:var(--fs-13);margin-top:4px; }
   .asr-dist-bar{
     margin-top:6px;border-radius:999px;background:var(--surface-2);
     border:1px solid var(--line-soft);height:12px;overflow:hidden;display:flex;
@@ -210,21 +344,22 @@
   .asr-dist-pending{ background:var(--t-info); }
 
   .asr-dist-legend{
-    display:flex;flex-wrap:wrap;gap:8px;
+    display:flex;flex-wrap:wrap;gap:10px;
     margin-top:8px;font-size:var(--fs-12);color:var(--muted-color);
   }
-  .asr-dist-legend span{ display:inline-flex;align-items:center;gap:5px; }
+  .asr-dist-legend span{ display:inline-flex;align-items:center;gap:6px; }
   .asr-dot{ width:8px;height:8px;border-radius:50%;background:currentColor; }
 
   .asr-snap{ margin-top:14px;font-size:var(--fs-13); }
   .asr-snap-row{
     display:flex;justify-content:space-between;
-    padding:4px 0;border-bottom:1px dashed var(--line-soft);
+    padding:6px 0;border-bottom:1px dashed var(--line-soft);
   }
   .asr-snap-row:last-child{ border-bottom:none; }
 
   .asr-side-error{ margin-top:10px;font-size:var(--fs-12);display:none; }
 
+  /* Detail */
   .asr-detail-card{
     border-radius:14px;border:1px solid var(--line-soft);
     background:var(--surface-2);
@@ -235,7 +370,7 @@
     display:flex;align-items:center;justify-content:space-between;
     gap:10px;margin-bottom:8px;
   }
-  .asr-detail-title{ font-weight:600;color:var(--ink); }
+  .asr-detail-title{ font-weight:700;color:var(--ink); }
   .asr-detail-sub{ font-size:var(--fs-12);color:var(--muted-color); }
   .asr-detail-body{ display:flex;flex-direction:column;gap:10px; }
 
@@ -249,12 +384,12 @@
     gap:8px;margin-bottom:4px;
   }
   .asr-q-title{
-    font-weight:600;font-size:var(--fs-13);color:var(--ink);
+    font-weight:700;font-size:var(--fs-13);color:var(--ink);
   }
   .asr-chip-correct,
   .asr-chip-wrong{
     padding:3px 8px;border-radius:999px;
-    font-size:var(--fs-12);font-weight:600;
+    font-size:var(--fs-12);font-weight:800;
   }
   .asr-chip-correct{
     background:var(--t-success);color:#15803d;
@@ -271,6 +406,7 @@
   }
   .asr-q-body{ font-size:var(--fs-13); }
 
+  /* Dark */
   html.theme-dark .asr-metric{background:#04151f;border-color:var(--line-strong);}
   html.theme-dark .asr-empty{background:#04151f;}
   html.theme-dark .asr-side-card{background:#04151f;}
@@ -305,11 +441,13 @@
             <option value="">Loading games…</option>
           </select>
         </div>
-        <div class="flex-grow-1">
+
+        <div class="asr-search-wrap">
           <input id="asrSearch" type="text" class="form-control"
                  placeholder="Search by student name, email, roll…">
         </div>
-        <div>
+
+        <div class="asr-status-wrap">
           <select id="asrStatusFilter" class="form-select">
             <option value="all">All statuses</option>
             <option value="win">Win</option>
@@ -317,7 +455,8 @@
             <option value="timeout">Timeout</option>
           </select>
         </div>
-        <div>
+
+        <div class="asr-sort-wrap">
           <select id="asrSort" class="form-select">
             <option value="last_attempt">Last attempt (newest → oldest)</option>
             <option value="name">Name (A → Z)</option>
@@ -326,7 +465,8 @@
             <option value="attempts">Most attempts</option>
           </select>
         </div>
-        <div>
+
+        <div class="asr-refresh-wrap">
           <button id="asrRefresh" type="button" class="btn btn-light">
             <i class="fa-solid fa-rotate"></i>
             Refresh
@@ -387,7 +527,7 @@
                     <th>Attempts</th>
                     <th>Last attempt</th>
                     <th>Status</th>
-                    <th style="width:220px;">Actions</th>
+                    <th style="width:260px;">Actions</th>
                   </tr>
                 </thead>
                 <tbody id="asrTableBody">
@@ -702,7 +842,6 @@
       }
 
       const score = (a.score != null) ? Number(a.score) : null;
-      // Door score is typically 0/1 => %
       const pct = (a.percentage != null) ? Number(a.percentage)
                : (score != null ? (score * 100) : null);
 
@@ -726,7 +865,7 @@
             result_id: a.result_id || a.uuid || a.id,
             score,
             percentage: pct,
-            is_pass: isWin, // reusing pass slot for win
+            is_pass: isWin,
             status
           };
 
@@ -775,8 +914,8 @@
       assignedStudents,
       avgPct,
       avgScore,
-      passCount: winCount,   // win
-      failCount: failCount,  // fail
+      passCount: winCount,
+      failCount: failCount,
       timeoutCount,
       topStudentName,
       topStudentPercent
@@ -1087,7 +1226,7 @@
     const game    = payload.game || payload.door_game || {};
     const result  = payload.result || payload || {};
 
-    const snap = safeParseJson(result.user_answer_json || result.snapshot || null) || {};
+const snap = safeParseJson(result.user_answer_json || result.user_answer || result.snapshot || null) || {};
     const timing = snap.timing || {};
     const moves = Array.isArray(snap.moves) ? snap.moves : [];
     const path  = Array.isArray(snap.path)  ? snap.path  : [];
@@ -1133,7 +1272,6 @@
 
     const inner = container.querySelector('#asrDetailBodyInner');
 
-    // Snapshot card
     const snapCard = document.createElement('div');
     snapCard.className = 'asr-q-item';
     snapCard.innerHTML = `
@@ -1151,7 +1289,6 @@
     `;
     inner.appendChild(snapCard);
 
-    // Moves list
     if (!moves.length){
       const div = document.createElement('div');
       div.className = 'asr-q-item';
@@ -1200,7 +1337,6 @@
       return;
     }
 
-    // ✅ Door game detail API
     const url = `/api/door-game-results/detail/${encodeURIComponent(resultId)}`;
 
     fetch(url, {
@@ -1278,7 +1414,6 @@
       els.gameMeta.innerHTML = `<i class="fa-regular fa-circle-question"></i><span>Loading game info…</span>`;
     }
 
-    // ✅ Door game assigned-results API
     const url = `/api/door-game-results/assigned/${encodeURIComponent(gameKey)}`;
 
     fetch(url, {
@@ -1334,7 +1469,6 @@
     sel.innerHTML = '<option value="">Loading games…</option>';
     sel.disabled  = true;
 
-    // ✅ Door games list API
     const url = '/api/door-games?per_page=100&status=active';
 
     fetch(url, {
@@ -1438,7 +1572,6 @@
     });
   }
 
-  // init
   loadGameOptions();
 })();
 </script>

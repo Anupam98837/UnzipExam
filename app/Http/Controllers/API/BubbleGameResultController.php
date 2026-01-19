@@ -54,26 +54,36 @@ private function normalizeRole(?string $role): string
 }
     public function index(Request $request)
 {
+    // ✅ token-safe actor
+    $actor  = $this->actor($request);
+    $role   = $this->normalizeRole($actor['role'] ?? '');
+    $userId = (int) ($actor['id'] ?? 0);
+
     /*
-     |--------------------------------------------------------------------------
-     | Subquery: question stats per game (no row explosion)
-     |--------------------------------------------------------------------------
-     */
+    |--------------------------------------------------------------------------
+    | Subquery: question stats per game (no row explosion)
+    |--------------------------------------------------------------------------
+    */
     $qStats = DB::table('bubble_game_questions as bq')
         ->selectRaw('bq.bubble_game_id, COUNT(*) as total_questions, COALESCE(SUM(bq.points),0) as total_points')
         ->where('bq.status', 'active')
         ->groupBy('bq.bubble_game_id');
 
     /*
-     |--------------------------------------------------------------------------
-     | Base query (results + game + user + assignment + question stats)
-     |--------------------------------------------------------------------------
-     | assignment table: user_bubble_game_assignments
-     |--------------------------------------------------------------------------
-     */
+    |--------------------------------------------------------------------------
+    | Base query (results + game + user + assignment + question stats)
+    |--------------------------------------------------------------------------
+    */
     $query = DB::table('bubble_game_results as r')
         ->join('bubble_game as g', 'r.bubble_game_id', '=', 'g.id')
         ->join('users as u', 'r.user_id', '=', 'u.id')
+
+        // ✅ NEW: folder join from users.user_folder_id -> user_folders.id
+        ->leftJoin('user_folders as uf', function ($j) {
+            $j->on('uf.id', '=', 'u.user_folder_id')
+              ->whereNull('uf.deleted_at');
+        })
+
         ->leftJoin('user_bubble_game_assignments as a', function ($j) {
             $j->on('a.user_id', '=', 'r.user_id')
               ->on('a.bubble_game_id', '=', 'r.bubble_game_id')
@@ -92,6 +102,7 @@ private function normalizeRole(?string $role): string
             'r.attempt_no',
             'r.score',
             'r.user_answer_json',
+            'r.publish_to_student', // ✅ publish flag
             'r.created_at as result_created_at',
             'r.updated_at as result_updated_at',
 
@@ -108,6 +119,11 @@ private function normalizeRole(?string $role): string
             'u.uuid as student_uuid',
             'u.name as student_name',
             'u.email as student_email',
+            'u.user_folder_id as user_folder_id', // ✅ NEW
+
+            // ✅ folder (dropdown filter will use uf.title)
+            'uf.id as folder_id',
+            'uf.title as folder_title',
 
             // assignment
             'a.id as assignment_id',
@@ -122,10 +138,22 @@ private function normalizeRole(?string $role): string
         ]);
 
     /*
-     |--------------------------------------------------------------------------
-     | Filters
-     |--------------------------------------------------------------------------
-     */
+    |--------------------------------------------------------------------------
+    | ✅ Student visibility rule:
+    | student can see ONLY published results + only own results
+    |--------------------------------------------------------------------------
+    */
+    if ($role === 'student') {
+        $query->where('r.user_id', $userId);
+        $query->where('r.publish_to_student', 1);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Filters
+    |--------------------------------------------------------------------------
+    */
+
     if ($request->filled('bubble_game_id')) {
         $query->where('r.bubble_game_id', (int) $request->get('bubble_game_id'));
     }
@@ -142,12 +170,31 @@ private function normalizeRole(?string $role): string
         $query->where('u.email', 'like', '%' . $request->string('student_email')->toString() . '%');
     }
 
-    if ($request->boolean('my_results')) {
-        $query->where('r.user_id', (int) Auth::id());
+    // ✅ NEW: Folder dropdown filter (folder title)
+    // Example: ?folder_name=BCA
+    if ($request->filled('folder_name')) {
+        $folderName = trim((string) $request->get('folder_name'));
+        $query->where('uf.title', 'like', "%{$folderName}%");
+    }
+
+    // ✅ Optional: if you want filter by folder_id too
+    // Example: ?folder_id=5
+    if ($request->filled('folder_id')) {
+        $query->where('u.user_folder_id', (int) $request->get('folder_id'));
+    }
+
+    // ✅ my_results (token-safe)
+    if ($request->boolean('my_results') && $userId > 0) {
+        $query->where('r.user_id', $userId);
     }
 
     if ($request->filled('attempt_no')) {
         $query->where('r.attempt_no', (int) $request->get('attempt_no'));
+    }
+
+    // ✅ Filter by publish flag (admin/instructor only usually)
+    if ($request->filled('publish_to_student') && $role !== 'student') {
+        $query->where('r.publish_to_student', (int)$request->get('publish_to_student'));
     }
 
     // Date range (YYYY-MM-DD)
@@ -166,36 +213,39 @@ private function normalizeRole(?string $role): string
               ->orWhere('u.email', 'like', "%{$search}%")
               ->orWhere('g.title', 'like', "%{$search}%")
               ->orWhere('r.uuid', 'like', "%{$search}%")
-              ->orWhere('a.assignment_code', 'like', "%{$search}%");
+              ->orWhere('a.assignment_code', 'like', "%{$search}%")
+              ->orWhere('uf.title', 'like', "%{$search}%"); // ✅ NEW: search folder too
         });
     }
 
     /*
-     |--------------------------------------------------------------------------
-     | Sorting (matches your frontend sort param)
-     |--------------------------------------------------------------------------
-     */
-    $sort = (string) $request->get('sort', '-result_created_at'); // default newest first
+    |--------------------------------------------------------------------------
+    | Sorting
+    |--------------------------------------------------------------------------
+    */
+    $sort = (string) $request->get('sort', '-result_created_at');
     $dir  = str_starts_with($sort, '-') ? 'desc' : 'asc';
     $key  = ltrim($sort, '-');
 
     $sortMap = [
-        'student_name'      => 'u.name',
-        'game_title'        => 'g.title',
-        'score'             => 'r.score',
-        'accuracy'          => 'r.score',      // since percentage doesn't exist, use score ordering
-        'result_created_at' => 'r.created_at',
-        'attempt_no'        => 'r.attempt_no',
+        'student_name'       => 'u.name',
+        'game_title'         => 'g.title',
+        'score'              => 'r.score',
+        'accuracy'           => 'r.score',
+        'result_created_at'  => 'r.created_at',
+        'attempt_no'         => 'r.attempt_no',
+        'publish_to_student' => 'r.publish_to_student',
+        'folder_title'       => 'uf.title', // ✅ NEW (optional)
     ];
 
     $orderCol = $sortMap[$key] ?? 'r.created_at';
     $query->orderBy($orderCol, $dir);
 
     /*
-     |--------------------------------------------------------------------------
-     | No pagination support
-     |--------------------------------------------------------------------------
-     */
+    |--------------------------------------------------------------------------
+    | No pagination support
+    |--------------------------------------------------------------------------
+    */
     if ($request->boolean('paginate') === false || $request->get('paginate') === 'false') {
         $rows = $query->get();
         return response()->json([
@@ -206,15 +256,15 @@ private function normalizeRole(?string $role): string
     }
 
     /*
-     |--------------------------------------------------------------------------
-     | Pagination (manual)
-     |--------------------------------------------------------------------------
-     */
+    |--------------------------------------------------------------------------
+    | Pagination (manual)
+    |--------------------------------------------------------------------------
+    */
     $perPage = max(1, min((int) $request->get('per_page', 20), 100));
     $page    = max(1, (int) $request->get('page', 1));
     $offset  = ($page - 1) * $perPage;
 
-    $total = (clone $query)->count(); // safe (no groupBy)
+    $total = (clone $query)->count();
     $rows  = $query->offset($offset)->limit($perPage)->get();
 
     return response()->json([
@@ -229,12 +279,15 @@ private function normalizeRole(?string $role): string
     ]);
 }
 
+
+
 /**
  * Convert flat DB rows -> nested objects for your Blade/JS.
  */
 private function transformBubbleRows($rows)
 {
     return collect($rows)->map(function ($r) {
+
         $answers = null;
         if (isset($r->user_answer_json) && is_string($r->user_answer_json) && $r->user_answer_json !== '') {
             $answers = json_decode($r->user_answer_json, true);
@@ -245,11 +298,13 @@ private function transformBubbleRows($rows)
         $totalQuestions = (int) ($r->total_questions ?? 0);
         $score          = (int) ($r->score ?? 0);
 
-        // If total questions exist, you can show an "accuracy%" as score/total_points OR score/total_questions.
-        // Here: score vs total_points if points are used; else fallback to total_questions.
         $den = (int) ($r->total_points ?? 0);
         if ($den <= 0) $den = $totalQuestions;
+
         $accuracy = ($den > 0) ? round(($score / $den) * 100, 2) : null;
+
+        // ✅ Folder title (from leftJoin user_folders uf.title as folder_title)
+        $folderTitle = $r->folder_title ?? null;
 
         return [
             'student' => [
@@ -257,7 +312,15 @@ private function transformBubbleRows($rows)
                 'uuid'  => (string) ($r->student_uuid ?? ''),
                 'name'  => (string) ($r->student_name ?? ''),
                 'email' => (string) ($r->student_email ?? ''),
+
+                // ✅ folder fields (aligned with your frontend folderBadge())
+                'user_folder_id'   => $r->user_folder_id ?? null,
+                'folder_id'        => $r->folder_id ?? null,
+                'folder_title'     => $folderTitle,
+                'folder_name'      => $folderTitle,        // ✅ fallback key used in frontend
+                'user_folder_name' => $folderTitle,        // ✅ first preference in frontend
             ],
+
             'game' => [
                 'id'              => (int) ($r->game_id ?? 0),
                 'uuid'            => (string) ($r->game_uuid ?? ''),
@@ -268,29 +331,34 @@ private function transformBubbleRows($rows)
                 'total_questions' => $totalQuestions,
                 'total_points'    => (int) ($r->total_points ?? 0),
             ],
+
             'assignment' => [
-                'id'             => $r->assignment_id ? (int) $r->assignment_id : null,
-                'uuid'           => (string) ($r->assignment_uuid ?? ''),
-                'assignment_code'=> (string) ($r->assignment_code ?? ''),
-                'status'         => (string) ($r->assignment_status ?? ''),
-                'assigned_at'    => $r->assigned_at ?? null,
+                'id'              => $r->assignment_id ? (int) $r->assignment_id : null,
+                'uuid'            => (string) ($r->assignment_uuid ?? ''),
+                'assignment_code' => (string) ($r->assignment_code ?? ''),
+                'status'          => (string) ($r->assignment_status ?? ''),
+                'assigned_at'     => $r->assigned_at ?? null,
             ],
+
             'attempt' => [
-                'status' => 'submitted', // you don't store attempt_status in schema
+                'status' => 'submitted',
             ],
+
             'result' => [
-                'id'               => (int) ($r->result_id ?? 0),
-                'uuid'             => (string) ($r->result_uuid ?? ''),
-                'attempt_no'       => (int) ($r->attempt_no ?? 0),
-                'score'            => $score,
-                'accuracy'         => $accuracy, // computed
-                'created_at'       => $r->result_created_at ?? null,
-                'updated_at'       => $r->result_updated_at ?? null,
-                'user_answer_json' => $answers,
+                'id'                => (int) ($r->result_id ?? 0),
+                'uuid'              => (string) ($r->result_uuid ?? ''),
+                'attempt_no'        => (int) ($r->attempt_no ?? 0),
+                'score'             => $score,
+                'accuracy'          => $accuracy,
+                'publish_to_student'=> (int) ($r->publish_to_student ?? 0), // ✅ NEW
+                'created_at'        => $r->result_created_at ?? null,
+                'updated_at'        => $r->result_updated_at ?? null,
+                'user_answer_json'  => $answers,
             ],
         ];
     })->values();
 }
+
 public function submit(Request $request)
 {
     // ✅ actor() is token-safe (CheckRole middleware fills these)
@@ -423,7 +491,7 @@ public function submit(Request $request)
                 'attempt_no'       => (int) $nextAttempt,
                 'user_answer_json' => json_encode($normalized, JSON_UNESCAPED_UNICODE),
                 'score'            => (int) $score,
-
+                'publish_to_student' => 0,
                 'created_at'       => now(),
                 'updated_at'       => now(),
                 'created_at_ip'    => $request->ip(),
@@ -450,6 +518,13 @@ public function submit(Request $request)
             'error'   => $e->getMessage()
         ], 500);
     }
+}
+private function boolToTiny($v): int
+{
+    if (is_bool($v)) return $v ? 1 : 0;
+    if (is_numeric($v)) return ((int)$v) ? 1 : 0;
+    $s = strtolower(trim((string)$v));
+    return in_array($s, ['1','true','yes','on'], true) ? 1 : 0;
 }
 
 
@@ -1733,5 +1808,156 @@ public function export(Request $request, string $resultKey)
         'Content-Disposition' => 'attachment; filename="'.$safeName.'.html"',
     ]);
 }
+
+  // ✅ NEW: Publish / Unpublish (single)
+    public function setPublishToStudent(Request $request, string $resultKey)
+    {
+        if ($resp = $this->requireRole($request, ['admin','super_admin','instructor','examiner'])) return $resp;
+
+        $validator = Validator::make($request->all(), [
+            'publish_to_student' => ['required'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $publish = $this->boolToTiny($request->input('publish_to_student'));
+
+        $q = DB::table('bubble_game_results')->whereNull('deleted_at');
+        $this->applyIdOrUuidWhere($q, 'id', 'uuid', $resultKey);
+
+        $row = $q->first();
+        if (!$row) {
+            return response()->json(['success'=>false,'message'=>'Result not found'], 404);
+        }
+
+        DB::table('bubble_game_results')
+            ->where('id', (int)$row->id)
+            ->update([
+                'publish_to_student' => $publish,
+                'updated_at' => now(),
+                'updated_at_ip' => $request->ip(),
+            ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => $publish ? 'Published to student' : 'Unpublished from student',
+            'data' => [
+                'result_id' => (int)$row->id,
+                'result_uuid' => (string)$row->uuid,
+                'publish_to_student' => $publish,
+            ]
+        ], 200);
+    }
+
+    public function publishResultToStudent(Request $request, string $idOrUuid)
+{
+    $request->validate([
+        'publish_to_student' => ['required'],
+    ]);
+
+    $pub = $this->boolToTiny($request->input('publish_to_student'));
+
+    // ✅ Find result by ID OR UUID
+    $row = DB::table('bubble_game_results')
+        ->where('id', $idOrUuid)
+        ->orWhere('uuid', $idOrUuid)
+        ->first();
+
+    if (!$row) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Result not found',
+        ], 404);
+    }
+
+    // ✅ Update publish_to_student
+    DB::table('bubble_game_results')
+        ->where('id', $row->id)
+        ->update([
+            'publish_to_student' => $pub,
+            'updated_at' => now(),
+        ]);
+
+    return response()->json([
+        'success' => true,
+        'message' => $pub ? 'Published to student' : 'Unpublished from student',
+        'data' => [
+            'id' => $row->id,
+            'uuid' => $row->uuid,
+            'publish_to_student' => $pub,
+        ]
+    ]);
+}
+
+    public function unpublishResultFromStudent(Request $request, string $resultKey)
+    {
+        $request->merge(['publish_to_student' => 0]);
+        return $this->setPublishToStudent($request, $resultKey);
+    }
+
+    // ✅ NEW: Bulk publish/unpublish
+    public function bulkSetPublishToStudent(Request $request)
+    {
+        if ($resp = $this->requireRole($request, ['admin','super_admin','instructor','examiner'])) return $resp;
+
+        $validator = Validator::make($request->all(), [
+            'result_keys' => ['required','array','min:1'],
+            'result_keys.*' => ['required','string'],
+            'publish_to_student' => ['required'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $publish = $this->boolToTiny($request->input('publish_to_student'));
+        $keys = $request->input('result_keys', []);
+
+        $updated = 0;
+        $notFound = [];
+
+        DB::transaction(function () use ($keys, $publish, $request, &$updated, &$notFound) {
+            foreach ($keys as $k) {
+                $q = DB::table('bubble_game_results')->whereNull('deleted_at');
+                $this->applyIdOrUuidWhere($q, 'id', 'uuid', (string)$k);
+                $row = $q->first();
+
+                if (!$row) {
+                    $notFound[] = (string)$k;
+                    continue;
+                }
+
+                DB::table('bubble_game_results')
+                    ->where('id', (int)$row->id)
+                    ->update([
+                        'publish_to_student' => $publish,
+                        'updated_at' => now(),
+                        'updated_at_ip' => $request->ip(),
+                    ]);
+
+                $updated++;
+            }
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => $publish ? 'Bulk published to student' : 'Bulk unpublished from student',
+            'data' => [
+                'updated' => $updated,
+                'not_found' => $notFound,
+                'publish_to_student' => $publish,
+            ]
+        ], 200);
+    }
 
 }

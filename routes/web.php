@@ -215,3 +215,7 @@ Route::get('/user-folders/manage', fn () => view('pages.users.pages.userFolder.m
 Route::get('/user-folders/create', fn () => view('pages.users.pages.userFolder.createUserFolder'));
 
 
+
+Route::get('/my/result', function () {
+    return view('modules.result.myResult');
+});

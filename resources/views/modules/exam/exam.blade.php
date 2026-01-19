@@ -743,7 +743,7 @@ async function doSubmit(auto){
     const role = sessionStorage.getItem('role') || 'student';
 
     // ✅ redirect after clearing
-    window.location.replace(`/${role}/dashboard`);
+    window.location.replace(`/dashboard`);
 
   }catch(e){
     console.error(e);

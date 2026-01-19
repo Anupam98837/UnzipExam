@@ -31,75 +31,171 @@ private function normalizeRole(?string $role): string
     ]);
 
     try {
-        // Base query
+        // ✅ token-safe actor
+        $actor  = $this->actor($request);
+        $role   = $this->normalizeRole($actor['role'] ?? '');
+        $userId = (int)($actor['id'] ?? 0);
+
+        // ✅ publish column safe
+        $hasPublish = false;
+        try {
+            $hasPublish = Schema::hasColumn('door_game_results', 'publish_to_student');
+        } catch (\Throwable $e) {
+            $hasPublish = false;
+        }
+
+        // ✅ folder table safe
+        $hasFolderTable = false;
+        try {
+            $hasFolderTable = Schema::hasTable('user_folders');
+        } catch (\Throwable $e) {
+            $hasFolderTable = false;
+        }
+
+        // ✅ Base query
         $q = DB::table('door_game_results as dgr')
             ->join('door_game as dg', 'dgr.door_game_id', '=', 'dg.id')
             ->join('users as u', 'dgr.user_id', '=', 'u.id')
             ->whereNull('dgr.deleted_at')
-            ->whereNull('dg.deleted_at')
-            ->select([
-                'dgr.id as result_id',
-                'dgr.uuid as result_uuid',
-                'dgr.door_game_id',
-                'dgr.user_id',
-                'dgr.attempt_no',
-                'dgr.score',
-                'dgr.time_taken_ms',
-                'dgr.status as attempt_status',
-                'dgr.created_at as result_created_at',
+            ->whereNull('dg.deleted_at');
 
-                'dg.id as game_id',
-                'dg.uuid as game_uuid',
-                'dg.title as game_title',
+        // ✅ JOIN folder if exists
+        if ($hasFolderTable) {
+            $q->leftJoin('user_folders as uf', function ($j) {
+                $j->on('uf.id', '=', 'u.user_folder_id');
+                // soft delete safe
+                try {
+                    if (Schema::hasColumn('user_folders', 'deleted_at')) {
+                        $j->whereNull('uf.deleted_at');
+                    }
+                } catch (\Throwable $e) {}
+            });
+        }
 
-                'u.uuid as student_uuid',
-                'u.name as student_name',
-                'u.email as student_email',
-            ]);
+        // ✅ SELECT columns
+        $select = [
+            // result
+            'dgr.id as result_id',
+            'dgr.uuid as result_uuid',
+            'dgr.door_game_id',
+            'dgr.user_id',
+            'dgr.attempt_no',
+            'dgr.score',
+            'dgr.time_taken_ms',
+            'dgr.status as attempt_status',
+            'dgr.created_at as result_created_at',
 
-        // ✅ Filter: door_game_id (id or uuid supported)
+            // game
+            'dg.id as game_id',
+            'dg.uuid as game_uuid',
+            'dg.title as game_title',
+            'dg.status as game_status',
+
+            // student
+            'u.id as student_id',
+            'u.uuid as student_uuid',
+            'u.name as student_name',
+            'u.email as student_email',
+            'u.user_folder_id as user_folder_id',
+        ];
+
+        // ✅ publish column safe
+        if ($hasPublish) {
+            $select[] = 'dgr.publish_to_student';
+        } else {
+            $select[] = DB::raw('0 as publish_to_student');
+        }
+
+        // ✅ folder title safe
+        if ($hasFolderTable) {
+            $select[] = 'uf.id as folder_id';
+            $select[] = 'uf.title as folder_title';
+        } else {
+            $select[] = DB::raw('NULL as folder_id');
+            $select[] = DB::raw('NULL as folder_title');
+        }
+
+        $q->select($select);
+
+        /*
+        |----------------------------------------------------------
+        | ✅ Student visibility rule:
+        | student sees ONLY own results + only published
+        |----------------------------------------------------------
+        */
+        if ($role === 'student') {
+            $q->where('dgr.user_id', $userId);
+            if ($hasPublish) {
+                $q->where('dgr.publish_to_student', 1);
+            }
+        }
+
+        /*
+        |----------------------------------------------------------
+        | ✅ Filters
+        |----------------------------------------------------------
+        */
+
+        // door_game_id (id or uuid supported)
         if ($request->filled('door_game_id')) {
             $v = (string) $request->input('door_game_id');
             $q->where(function($w) use ($v){
                 if (is_numeric($v)) $w->where('dg.id', (int)$v);
                 else $w->where('dg.uuid', $v)->orWhere('dg.id', $v);
             });
-            Log::info('DoorGameResult.index: filter door_game_id', ['door_game_id' => $v]);
         }
 
-        // ✅ Filter: game_uuid (your modal has this)
+        // game_uuid
         if ($request->filled('game_uuid')) {
-            $v = (string) $request->input('game_uuid');
-            $q->where('dg.uuid', $v);
-            Log::info('DoorGameResult.index: filter game_uuid', ['game_uuid' => $v]);
+            $q->where('dg.uuid', (string)$request->input('game_uuid'));
         }
 
-        // ✅ Filter: student_email (your modal has this)
+        // student_email
         if ($request->filled('student_email')) {
             $email = trim((string)$request->input('student_email'));
             $q->where('u.email', 'like', "%{$email}%");
-            Log::info('DoorGameResult.index: filter student_email', ['student_email' => $email]);
         }
 
-        // ✅ Search "q" (your toolbar uses this)
-        if ($request->filled('q')) {
-            $txt = trim((string)$request->input('q'));
+        // ✅ folder dropdown filter (value = folder_id)
+        if ($request->filled('user_folder_id')) {
+            $q->where('u.user_folder_id', (int)$request->input('user_folder_id'));
+        }
+
+        // ✅ folder title filter (optional if you want)
+        if ($request->filled('folder_title')) {
+            $ft = trim((string)$request->input('folder_title'));
+            if ($ft !== '' && $hasFolderTable) {
+                $q->where('uf.title', 'like', "%{$ft}%");
+            }
+        }
+
+        // search q
+        $txt = trim((string) $request->input('q', ''));
+        if ($txt !== '') {
             $q->where(function($w) use ($txt){
                 $w->where('u.name', 'like', "%{$txt}%")
                   ->orWhere('u.email', 'like', "%{$txt}%")
-                  ->orWhere('dg.title', 'like', "%{$txt}%");
+                  ->orWhere('dg.title', 'like', "%{$txt}%")
+                  ->orWhere('dgr.uuid', 'like', "%{$txt}%");
             });
-            Log::info('DoorGameResult.index: search q', ['q' => $txt]);
         }
 
-        // ✅ Filter: attempt_status (your modal uses this)
+        // attempt_status
         if ($request->filled('attempt_status')) {
-            $st = (string)$request->input('attempt_status');
-            $q->where('dgr.status', $st);
-            Log::info('DoorGameResult.index: filter attempt_status', ['attempt_status' => $st]);
+            $q->where('dgr.status', (string)$request->input('attempt_status'));
         }
 
-        // ✅ Date filters (your modal uses from/to)
+        // attempt_no
+        if ($request->filled('attempt_no')) {
+            $q->where('dgr.attempt_no', (int)$request->input('attempt_no'));
+        }
+
+        // publish_to_student filter (admin/instructor only)
+        if ($hasPublish && $role !== 'student' && $request->filled('publish_to_student')) {
+            $q->where('dgr.publish_to_student', (int)$request->input('publish_to_student'));
+        }
+
+        // date range
         if ($request->filled('from')) {
             $q->whereDate('dgr.created_at', '>=', $request->input('from'));
         }
@@ -107,102 +203,98 @@ private function normalizeRole(?string $role): string
             $q->whereDate('dgr.created_at', '<=', $request->input('to'));
         }
 
-        // ✅ % filters (optional; your UI has min/max %)
-        // Door game doesn't have "total points" in DB; so we treat score as 0..1
-        // If your door game score is 0/1, accuracy = score*100.
+        // min/max percentage (DoorGame score=0/1 => accuracy=score*100)
         if ($request->filled('min_percentage')) {
-            $minPct = (float)$request->input('min_percentage');
-            $q->whereRaw('(dgr.score * 100) >= ?', [$minPct]);
+            $q->whereRaw('(dgr.score * 100) >= ?', [(float)$request->input('min_percentage')]);
         }
         if ($request->filled('max_percentage')) {
-            $maxPct = (float)$request->input('max_percentage');
-            $q->whereRaw('(dgr.score * 100) <= ?', [$maxPct]);
+            $q->whereRaw('(dgr.score * 100) <= ?', [(float)$request->input('max_percentage')]);
         }
 
-        // ✅ Tab filter (published/unpublished) — keep compatible even if you don't store it
-        // If you don't have publish_to_student column, we just ignore filter safely.
-        // (Front-end shows Published/Not published using result.publish_to_student)
-        $hasPublish = false;
-        try { $hasPublish = \Illuminate\Support\Facades\Schema::hasColumn('door_game_results', 'publish_to_student'); }
-        catch (\Throwable $e) { $hasPublish = false; }
+        /*
+        |----------------------------------------------------------
+        | ✅ Sorting
+        |----------------------------------------------------------
+        */
+        $sort = (string)$request->input('sort', '-result_created_at');
+        $dir  = str_starts_with($sort, '-') ? 'desc' : 'asc';
+        $key  = ltrim($sort, '-');
 
-        if ($hasPublish && $request->filled('publish_to_student')) {
-            $q->where('dgr.publish_to_student', (int)$request->input('publish_to_student'));
-        }
-
-        // ✅ Sorting (your UI sends sort = -result_created_at etc.)
-        $sort = (string) $request->input('sort', '-result_created_at');
         $sortMap = [
-            'student_name'       => 'u.name',
-            'game_title'         => 'dg.title',
-            'score'              => 'dgr.score',
-            'accuracy'           => DB::raw('(dgr.score * 100)'),
-            'result_created_at'  => 'dgr.created_at',
+            'student_name'      => 'u.name',
+            'student_email'     => 'u.email',
+            'game_title'        => 'dg.title',
+            'score'             => 'dgr.score',
+            'accuracy'          => DB::raw('(dgr.score * 100)'),
+            'attempt_no'        => 'dgr.attempt_no',
+            'result_created_at' => 'dgr.created_at',
+            'publish_to_student'=> $hasPublish ? 'dgr.publish_to_student' : 'dgr.created_at',
+            'folder_title'      => $hasFolderTable ? 'uf.title' : 'u.name',
         ];
 
-        $dir = 'asc';
-        $col = $sort;
-        if (str_starts_with($sort, '-')) {
-            $dir = 'desc';
-            $col = substr($sort, 1);
-        }
+        $orderCol = $sortMap[$key] ?? 'dgr.created_at';
+        $q->orderBy($orderCol, $dir);
 
-        if (isset($sortMap[$col])) {
-            $q->orderBy($sortMap[$col], $dir);
-        } else {
-            $q->orderBy('dgr.created_at', 'desc');
-        }
-
-        // ✅ Pagination
+        /*
+        |----------------------------------------------------------
+        | ✅ Pagination
+        |----------------------------------------------------------
+        */
         $perPage = max(1, min(100, (int)$request->input('per_page', 20)));
         $page    = max(1, (int)$request->input('page', 1));
+        $total   = (clone $q)->count();
+        $rows    = $q->forPage($page, $perPage)->get();
 
-        $total = (clone $q)->count();
-        $rows  = $q->forPage($page, $perPage)->get();
-
-        // ✅ Normalize to Bubble-style shape (THIS fixes your UI)
-        $items = $rows->map(function($r) use ($hasPublish) {
+        /*
+        |----------------------------------------------------------
+        | ✅ Transform for frontend (Bubble-style compatible)
+        |----------------------------------------------------------
+        */
+        $items = collect($rows)->map(function($r) use ($hasPublish) {
             $accuracy = ($r->score !== null) ? round(((float)$r->score) * 100, 2) : null;
 
             return [
                 'student' => [
-                    'id'    => (int)$r->user_id,
+                    'id'    => (int)($r->student_id ?? 0),
                     'uuid'  => (string)($r->student_uuid ?? ''),
                     'name'  => (string)($r->student_name ?? ''),
                     'email' => (string)($r->student_email ?? ''),
+
+                    // ✅ folder fields (for dropdown + display)
+                    'user_folder_id'   => $r->user_folder_id ?? null,
+                    'folder_id'        => $r->folder_id ?? null,
+                    'folder_title'     => $r->folder_title ?? null,
+                    'user_folder_name' => $r->folder_title ?? null,
                 ],
+
                 'game' => [
-                    'id'    => (int)$r->game_id,
-                    'uuid'  => (string)($r->game_uuid ?? ''),
-                    'title' => (string)($r->game_title ?? ''),
+                    'id'     => (int)($r->game_id ?? 0),
+                    'uuid'   => (string)($r->game_uuid ?? ''),
+                    'title'  => (string)($r->game_title ?? ''),
+                    'status' => (string)($r->game_status ?? ''),
                 ],
+
                 'attempt' => [
                     'status' => (string)($r->attempt_status ?? ''),
                 ],
+
                 'result' => [
-                    'id'                => (int)$r->result_id,
+                    'id'                => (int)($r->result_id ?? 0),
                     'uuid'              => (string)($r->result_uuid ?? ''),
                     'attempt_no'        => (int)($r->attempt_no ?? 0),
                     'score'             => (int)($r->score ?? 0),
                     'accuracy'          => $accuracy,
                     'publish_to_student'=> $hasPublish ? (int)($r->publish_to_student ?? 0) : 0,
-                    'result_created_at' => $r->result_created_at
-                        ? \Carbon\Carbon::parse($r->result_created_at)->toDateTimeString()
-                        : null,
+
+                    // ✅ both keys to avoid UI breaking
+                    'created_at'        => $r->result_created_at ? Carbon::parse($r->result_created_at)->toDateTimeString() : null,
+                    'result_created_at' => $r->result_created_at ? Carbon::parse($r->result_created_at)->toDateTimeString() : null,
                 ],
             ];
         })->values();
 
         $lastPage = (int) ceil($total / max($perPage, 1));
 
-        Log::info('DoorGameResult.index: success', [
-            'total' => $total,
-            'returned' => $items->count(),
-            'last_page' => $lastPage,
-        ]);
-
-        // ✅ IMPORTANT: return exactly what your JS can read:
-        // json.data (array) + json.pagination (object)
         return response()->json([
             'success' => true,
             'data' => $items,
@@ -224,6 +316,30 @@ private function normalizeRole(?string $role): string
         return response()->json([
             'success' => false,
             'message' => 'Server error while fetching results',
+        ], 500);
+    }
+}
+public function folderOptions(Request $request)
+{
+    try {
+        if (!Schema::hasTable('user_folders')) {
+            return response()->json(['success'=>true,'data'=>[]]);
+        }
+
+        $rows = DB::table('user_folders')
+            ->when(Schema::hasColumn('user_folders','deleted_at'), fn($q)=>$q->whereNull('deleted_at'))
+            ->orderBy('title','asc')
+            ->get(['id','title']);
+
+        return response()->json([
+            'success' => true,
+            'data' => $rows
+        ], 200);
+
+    } catch (\Throwable $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to load folder options'
         ], 500);
     }
 }
@@ -1480,6 +1596,7 @@ public function assignedResultsForGame(Request $request, string $gameKey)
         return response()->json(['success'=>false,'message'=>'Door game not found'], 404);
     }
 
+    // examiner/instructor must be assigned to this game
     if (in_array($role, ['instructor','examiner'], true)) {
         if (!$this->userAssignedToDoorGame($userId, (int)$game->id)) {
             return response()->json(['success'=>false,'message'=>'You are not assigned to this door game'], 403);
@@ -1487,22 +1604,27 @@ public function assignedResultsForGame(Request $request, string $gameKey)
     }
 
     // ==========================
-    // Assigned students
+    // Assigned Students (ONLY students)
     // ==========================
     $assignedUsersQ = DB::table('user_door_game_assignments as a')
         ->join('users as u', 'u.id', '=', 'a.user_id')
         ->where('a.door_game_id', (int)$game->id);
 
-    // Soft delete safe
+    // soft delete safe + status safe
     try {
         if (\Illuminate\Support\Facades\Schema::hasColumn('user_door_game_assignments', 'deleted_at')) {
             $assignedUsersQ->whereNull('a.deleted_at');
         }
+
+        // ✅ do not hard-force status='active' because many DBs store: assigned/enabled/1 etc
         if (\Illuminate\Support\Facades\Schema::hasColumn('user_door_game_assignments', 'status')) {
-            $assignedUsersQ->where('a.status', 'active');
+            $assignedUsersQ->where(function($w){
+                $w->whereNull('a.status')
+                  ->orWhereIn('a.status', ['active','assigned','enabled',1,'1']);
+            });
         }
 
-        // Student filter safe (different projects keep role column different)
+        // student filter safe
         if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'role')) {
             $assignedUsersQ->whereRaw("LOWER(u.role) = 'student'");
         } elseif (\Illuminate\Support\Facades\Schema::hasColumn('users', 'role_short_form')) {
@@ -1516,24 +1638,35 @@ public function assignedResultsForGame(Request $request, string $gameKey)
     $totalAssignedStudents = count($assignedStudentIds);
 
     // ==========================
-    // Attempts (results)
+    // Attempts (results) - ONLY students
     // ==========================
     $attemptsQ = DB::table('door_game_results as r')
         ->join('users as u', 'u.id', '=', 'r.user_id')
         ->where('r.door_game_id', (int)$game->id);
 
-    // Soft delete safe for results table
+    // soft delete safe
     try {
         if (\Illuminate\Support\Facades\Schema::hasColumn('door_game_results', 'deleted_at')) {
             $attemptsQ->whereNull('r.deleted_at');
         }
-    } catch (\Throwable $e) {
-        // ignore
+    } catch (\Throwable $e) {}
+
+    // ✅ only role==student results
+    try {
+        if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'role')) {
+            $attemptsQ->whereRaw("LOWER(u.role) = 'student'");
+        } elseif (\Illuminate\Support\Facades\Schema::hasColumn('users', 'role_short_form')) {
+            $attemptsQ->whereRaw("LOWER(u.role_short_form) = 'student'");
+        }
+    } catch (\Throwable $e) {}
+
+    // ✅ if assignment list exists, restrict to assigned users
+    // ✅ if assignment list empty, DO NOT force 1=0 (because results still exist)
+    if ($totalAssignedStudents > 0) {
+        $attemptsQ->whereIn('r.user_id', $assignedStudentIds);
     }
 
-    if ($totalAssignedStudents > 0) $attemptsQ->whereIn('r.user_id', $assignedStudentIds);
-    else $attemptsQ->whereRaw('1=0');
-
+    // search (name/email)
     $qText = trim((string)$request->query('q', ''));
     if ($qText !== '') {
         $attemptsQ->where(function($w) use ($qText){
@@ -1542,7 +1675,7 @@ public function assignedResultsForGame(Request $request, string $gameKey)
         });
     }
 
-    // Order safe
+    // order safe
     try {
         if (\Illuminate\Support\Facades\Schema::hasColumn('door_game_results', 'created_at')) {
             $attemptsQ->orderByDesc('r.created_at');
@@ -1552,6 +1685,13 @@ public function assignedResultsForGame(Request $request, string $gameKey)
     } catch (\Throwable $e) {
         $attemptsQ->orderByDesc('r.id');
     }
+
+    // ✅ user_answer_json safe select
+    $answerCol = \Illuminate\Support\Facades\Schema::hasColumn('door_game_results', 'user_answer_json')
+        ? 'r.user_answer_json'
+        : (\Illuminate\Support\Facades\Schema::hasColumn('door_game_results', 'user_answer')
+            ? 'r.user_answer'
+            : DB::raw("'' as user_answer_json"));
 
     $attempts = $attemptsQ->select([
             'r.id as result_id',
@@ -1563,10 +1703,22 @@ public function assignedResultsForGame(Request $request, string $gameKey)
             'r.score',
             'r.time_taken_ms',
             'r.status',
+            $answerCol,
             'r.created_at as result_created_at',
         ])
         ->get()
         ->map(function($a){
+            $raw = (string)($a->user_answer_json ?? '');
+
+            // ✅ decoded json for UI
+            $decoded = [];
+            try {
+                $decoded = json_decode($raw, true);
+                if (!is_array($decoded)) $decoded = [];
+            } catch (\Throwable $e) {
+                $decoded = [];
+            }
+
             return [
                 'result_id'         => (int)$a->result_id,
                 'result_uuid'       => (string)($a->result_uuid ?? ''),
@@ -1575,9 +1727,14 @@ public function assignedResultsForGame(Request $request, string $gameKey)
                 'student_email'     => (string)($a->student_email ?? ''),
                 'attempt_no'        => (int)($a->attempt_no ?? 1),
                 'score'             => (int)($a->score ?? 0),
+                'percentage'        => (int)($a->score ?? 0) * 100,
                 'time_taken_ms'     => (int)($a->time_taken_ms ?? 0),
                 'status'            => (string)($a->status ?? ''),
-                'accuracy'          => null,
+
+                // ✅ send both (your UI can use any)
+                'user_answer_json'  => $raw,
+                'user_answer'       => $decoded,
+
                 'result_created_at' => $a->result_created_at
                     ? \Carbon\Carbon::parse($a->result_created_at)->toDateTimeString()
                     : null,
@@ -1587,6 +1744,11 @@ public function assignedResultsForGame(Request $request, string $gameKey)
 
     $totalAttempts   = $attempts->count();
     $uniqueAttempted = $attempts->pluck('student_id')->unique()->count();
+
+    // ✅ fallback for metric if assignment table has issues
+    if ($totalAssignedStudents <= 0) {
+        $totalAssignedStudents = $uniqueAttempted;
+    }
 
     return response()->json([
         'success' => true,
@@ -1663,7 +1825,7 @@ private function doorGameByKey(string $key)
 }
 private function userAssignedToDoorGame(int $userId, int $doorGameId): bool
 {
-    if ($userId <= 0 || $doorGameId <= 0) return false;
+    if ($userId <= 0 || $doorGameId <= 0) return false;    
 
     try {
         $q = DB::table('user_door_game_assignments')
@@ -1734,4 +1896,211 @@ private function jsonSafe($val, $default = null)
         return $default;
     }
 }
+/* ============================================================
+| Publish helpers (DB based, Bubble-style)
+|============================================================ */
+
+private function boolToTiny($v): int
+{
+    if (is_bool($v)) return $v ? 1 : 0;
+    if (is_numeric($v)) return ((int)$v) ? 1 : 0;
+    $s = strtolower(trim((string)$v));
+    return in_array($s, ['1','true','yes','y','on'], true) ? 1 : 0;
+}
+
+/**
+ * ✅ Find result by uuid or numeric id (soft-delete safe)
+ */
+private function doorResultByKey(string $key)
+{
+    $q = DB::table('door_game_results')
+        ->whereNull('deleted_at');
+
+    if (ctype_digit($key)) {
+        $q->where('id', (int)$key);
+    } else {
+        $q->where('uuid', $key);
+    }
+
+    return $q->first();
+}
+
+/**
+ * ✅ Common publish/unpublish handler (single result)
+ */
+private function setPublishToStudent(Request $request, string $resultKey, int $to)
+{
+    $actor  = $this->actor($request);
+    $role   = $this->normalizeRole($actor['role'] ?? '');
+    $userId = (int)($actor['id'] ?? 0);
+
+    // ✅ only admin/examiner/instructor can publish
+    if (!in_array($role, ['admin','superadmin','super_admin','director','examiner','instructor'], true)) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Unauthorized'
+        ], 403);
+    }
+
+    // ✅ must exist column
+    if (!Schema::hasColumn('door_game_results', 'publish_to_student')) {
+        return response()->json([
+            'success' => false,
+            'message' => 'publish_to_student column missing in DB'
+        ], 500);
+    }
+
+    $row = $this->doorResultByKey($resultKey);
+
+    if (!$row) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Result not found'
+        ], 404);
+    }
+
+    // ✅ examiner/instructor can publish only if assigned to that game
+    if (in_array($role, ['examiner','instructor'], true)) {
+        if (!$this->userAssignedToDoorGame($userId, (int)$row->door_game_id)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You are not assigned to this door game'
+            ], 403);
+        }
+    }
+
+    $to = (int)$to;
+
+    DB::table('door_game_results')
+        ->where('id', (int)$row->id)
+        ->update([
+            'publish_to_student' => $to,
+            'updated_at'         => now(),
+            'updated_at_ip'      => $request->ip(),
+        ]);
+
+    return response()->json([
+        'success' => true,
+        'message' => $to ? 'Published to student' : 'Unpublished from student',
+        'data' => [
+            'result_id'          => (int)$row->id,
+            'result_uuid'        => (string)$row->uuid,
+            'publish_to_student' => $to,
+        ]
+    ], 200);
+}
+
+/**
+ * ✅ Single publish
+ */
+public function publishResultToStudent(Request $request, string $resultKey)
+{
+    return $this->setPublishToStudent($request, $resultKey, 1);
+}
+
+/**
+ * ✅ Single unpublish
+ */
+public function unpublishResultToStudent(Request $request, string $resultKey)
+{
+    return $this->setPublishToStudent($request, $resultKey, 0);
+}
+
+/**
+ * ✅ Bulk publish/unpublish (one API for both)
+ * Payload:
+ * {
+ *   "result_uuids": ["uuid1","uuid2"],
+ *   "publish_to_student": 1
+ * }
+ */
+public function bulkPublishAny(Request $request)
+{
+    $actor  = $this->actor($request);
+    $role   = $this->normalizeRole($actor['role'] ?? '');
+    $userId = (int)($actor['id'] ?? 0);
+
+    if (!in_array($role, ['admin','superadmin','super_admin','director','examiner','instructor'], true)) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Unauthorized'
+        ], 403);
+    }
+
+    if (!Schema::hasColumn('door_game_results', 'publish_to_student')) {
+        return response()->json([
+            'success' => false,
+            'message' => 'publish_to_student column missing in DB'
+        ], 500);
+    }
+
+    $validator = Validator::make($request->all(), [
+        'result_uuids'        => ['required','array','min:1'],
+        'result_uuids.*'      => ['required','string'],
+        'publish_to_student'  => ['required'],
+    ]);
+
+    if ($validator->fails()) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Validation failed',
+            'errors'  => $validator->errors(),
+        ], 422);
+    }
+
+    $uuids = array_values(array_filter((array)$request->input('result_uuids', [])));
+    $to    = $this->boolToTiny($request->input('publish_to_student'));
+
+    // ✅ base query
+    $q = DB::table('door_game_results')
+        ->whereNull('deleted_at')
+        ->whereIn('uuid', $uuids);
+
+    // ✅ examiner/instructor restrictions
+    if (in_array($role, ['examiner','instructor'], true)) {
+        $assignedGameIds = DB::table('user_door_game_assignments')
+            ->where('user_id', $userId)
+            ->when(Schema::hasColumn('user_door_game_assignments','deleted_at'), fn($x)=>$x->whereNull('deleted_at'))
+            ->pluck('door_game_id')
+            ->map(fn($x)=>(int)$x)
+            ->values()
+            ->all();
+
+        if (!empty($assignedGameIds)) {
+            $q->whereIn('door_game_id', $assignedGameIds);
+        } else {
+            // no assignments => block
+            return response()->json([
+                'success' => false,
+                'message' => 'You are not assigned to any door games'
+            ], 403);
+        }
+    }
+
+    $affected = $q->update([
+        'publish_to_student' => $to,
+        'updated_at'         => now(),
+        'updated_at_ip'      => $request->ip(),
+    ]);
+
+    // return updated rows for UI
+    $updated = DB::table('door_game_results')
+        ->whereIn('uuid', $uuids)
+        ->whereNull('deleted_at')
+        ->get(['id','uuid','publish_to_student','updated_at'])
+        ->map(fn($r)=>[
+            'result_id'          => (int)$r->id,
+            'result_uuid'        => (string)$r->uuid,
+            'publish_to_student' => (int)$r->publish_to_student,
+            'updated_at'         => $r->updated_at ? Carbon::parse($r->updated_at)->toDateTimeString() : null,
+        ])->values();
+
+    return response()->json([
+        'success'  => true,
+        'message'  => $to ? 'Bulk published to students' : 'Bulk unpublished from students',
+        'affected' => (int)$affected,
+        'data'     => $updated,
+    ], 200);
+}
+
 }

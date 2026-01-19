@@ -49,6 +49,15 @@ td .fw-semibold{color:var(--ink)}
 .sortable.asc .caret::after{content:"▲";font-size:.7rem}
 .sortable.desc .caret::after{content:"▼";font-size:.7rem}
 
+/* Checkbox cell */
+.chkcell{width:44px}
+.chkcell .form-check-input{cursor:pointer}
+
+/* ✅ Bulk mode: hide checkboxes by default, show only after bulk-filter apply */
+.qr-wrap .bulk-col{display:none !important;}
+.qr-wrap.bulk-mode .bulk-col{display:table-cell !important;}
+.qr-wrap.bulk-mode .bulk-col .form-check-input{display:inline-block !important;}
+
 /* Dropdowns inside table */
 .table-wrap .dropdown{position:relative;z-index:6}
 .table-wrap .dd-toggle{position:relative;z-index:7}
@@ -74,6 +83,10 @@ td .fw-semibold{color:var(--ink)}
 .form-control,.form-select{border-radius:12px;border:1px solid var(--line-strong);background:#fff}
 html.theme-dark .form-control,html.theme-dark .form-select{background:#0f172a;color:#e5e7eb;border-color:var(--line-strong)}
 
+/* Switch tweak */
+.form-switch .form-check-input{width:46px;height:24px}
+.form-switch .form-check-input:focus{box-shadow:0 0 0 4px color-mix(in oklab, var(--primary-color) 22%, transparent);border-color:var(--primary-color)}
+
 /* Dark tweaks */
 html.theme-dark .panel,
 html.theme-dark .table-wrap.card,
@@ -85,7 +98,7 @@ html.theme-dark .dropdown-menu{background:#0f172a;border-color:var(--line-strong
 @endpush
 
 @section('content')
-<div class="qr-wrap">
+<div class="qr-wrap" id="qrWrap">
 
   {{-- ================= Tabs ================= --}}
   <ul class="nav nav-tabs mb-3" role="tablist">
@@ -132,12 +145,16 @@ html.theme-dark .dropdown-menu{background:#0f172a;border-color:var(--line-strong
           <button id="btnFilter" class="btn btn-primary ms-1" data-bs-toggle="modal" data-bs-target="#filterModal">
             <i class="fa fa-filter me-1"></i>Filter
           </button>
+
+          {{-- ✅ This button will transform into Publish/Unpublish in bulk-selection mode --}}
+          <button id="btnBulkPublish" class="btn btn-primary">
+            <i class="fa fa-bullhorn me-1"></i>Bulk Publish
+          </button>
+
           <button id="btnReset" class="btn btn-primary">
             <i class="fa fa-rotate-left me-1"></i>Reset
           </button>
         </div>
-
-        {{-- 已移除统计芯片区域 --}}
       </div>
 
       {{-- Table --}}
@@ -147,11 +164,19 @@ html.theme-dark .dropdown-menu{background:#0f172a;border-color:var(--line-strong
             <table class="table table-hover table-borderless align-middle mb-0">
               <thead class="sticky-top">
                 <tr>
+                  <th class="chkcell bulk-col">
+                    <input id="chkAll-results" class="form-check-input" type="checkbox" title="Select all on this page">
+                  </th>
                   <th class="sortable" data-col="student_name">STUDENT <span class="caret"></span></th>
+                  <th style="width:170px;">FOLDER</th>
                   <th class="sortable" data-col="quiz_name">QUIZ <span class="caret"></span></th>
                   <th style="width:110px;">ATTEMPT</th>
                   <th class="sortable" data-col="marks_obtained" style="width:140px;">MARKS <span class="caret"></span></th>
                   <th class="sortable" data-col="percentage" style="width:120px;">% <span class="caret"></span></th>
+
+                  {{-- ✅ NEW COLUMN --}}
+                  <th style="width:140px;">PUBLISH STATUS</th>
+
                   <th style="width:150px;">STATUS</th>
                   <th class="sortable" data-col="result_created_at" style="width:170px;">SUBMITTED <span class="caret"></span></th>
                   <th class="text-end" style="width:112px;">ACTIONS</th>
@@ -159,7 +184,7 @@ html.theme-dark .dropdown-menu{background:#0f172a;border-color:var(--line-strong
               </thead>
               <tbody id="rows-results">
                 <tr id="loaderRow-results" style="display:none;">
-                  <td colspan="8" class="p-0">
+                  <td colspan="11" class="p-0">
                     <div class="p-4">
                       <div class="placeholder-wave">
                         <div class="placeholder col-12 mb-2" style="height:18px;"></div>
@@ -195,18 +220,26 @@ html.theme-dark .dropdown-menu{background:#0f172a;border-color:var(--line-strong
             <table class="table table-hover table-borderless align-middle mb-0">
               <thead class="sticky-top">
                 <tr>
+                  <th class="chkcell bulk-col">
+                    <input id="chkAll-published" class="form-check-input" type="checkbox" title="Select all on this page">
+                  </th>
                   <th>STUDENT</th>
+                  <th style="width:170px;">FOLDER</th>
                   <th>QUIZ</th>
                   <th style="width:110px;">ATTEMPT</th>
                   <th style="width:140px;">MARKS</th>
                   <th style="width:120px;">%</th>
+
+                  {{-- ✅ NEW COLUMN --}}
+                  <th style="width:140px;">PUBLISH STATUS</th>
+
                   <th style="width:170px;">SUBMITTED</th>
                   <th class="text-end" style="width:112px;">ACTIONS</th>
                 </tr>
               </thead>
               <tbody id="rows-published">
                 <tr id="loaderRow-published" style="display:none;">
-                  <td colspan="7" class="p-0">
+                  <td colspan="10" class="p-0">
                     <div class="p-4">
                       <div class="placeholder-wave">
                         <div class="placeholder col-12 mb-2" style="height:18px;"></div>
@@ -240,18 +273,26 @@ html.theme-dark .dropdown-menu{background:#0f172a;border-color:var(--line-strong
             <table class="table table-hover table-borderless align-middle mb-0">
               <thead class="sticky-top">
                 <tr>
+                  <th class="chkcell bulk-col">
+                    <input id="chkAll-unpublished" class="form-check-input" type="checkbox" title="Select all on this page">
+                  </th>
                   <th>STUDENT</th>
+                  <th style="width:170px;">FOLDER</th>
                   <th>QUIZ</th>
                   <th style="width:110px;">ATTEMPT</th>
                   <th style="width:140px;">MARKS</th>
                   <th style="width:120px;">%</th>
+
+                  {{-- ✅ NEW COLUMN --}}
+                  <th style="width:140px;">PUBLISH STATUS</th>
+
                   <th style="width:170px;">SUBMITTED</th>
                   <th class="text-end" style="width:112px;">ACTIONS</th>
                 </tr>
               </thead>
               <tbody id="rows-unpublished">
                 <tr id="loaderRow-unpublished" style="display:none;">
-                  <td colspan="7" class="p-0">
+                  <td colspan="10" class="p-0">
                     <div class="p-4">
                       <div class="placeholder-wave">
                         <div class="placeholder col-12 mb-2" style="height:18px;"></div>
@@ -293,14 +334,22 @@ html.theme-dark .dropdown-menu{background:#0f172a;border-color:var(--line-strong
 
         <div class="row g-2">
           <div class="col-12">
-            <label class="form-label">Quiz (Select)</label>
+            <label class="form-label">Quiz / Game (Select)</label>
             <select id="fQuizId" class="form-select">
-              <option value="">All quizzes</option>
+              <option value="">All</option>
               {{-- Quizzes will be loaded dynamically --}}
             </select>
           </div>
 
           <div class="col-12">
+            <label class="form-label">User Folder Group</label>
+            <select id="fFolderGroup" class="form-select">
+              <option value="">All folders</option>
+              {{-- Folders will be loaded dynamically --}}
+            </select>
+          </div>
+
+          <div class="col-12 d-none">
             <label class="form-label">Attempt status</label>
             <select id="fAttemptStatus" class="form-select">
               <option value="">All</option>
@@ -354,6 +403,165 @@ html.theme-dark .dropdown-menu{background:#0f172a;border-color:var(--line-strong
         <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
         <button id="btnApplyFilters" type="button" class="btn btn-primary">
           <i class="fa fa-check me-1"></i>Apply Filters
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{{-- ✅ Individual Publish Modal --}}
+<div class="modal fade" id="publishModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="fa fa-eye me-2"></i>Publish Result to Student
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body">
+        <div class="small text-muted">Result UUID</div>
+        <div class="fw-semibold mb-2" id="pm_uuid">—</div>
+
+        <div class="row g-2">
+          <div class="col-12">
+            <div class="small text-muted">Student</div>
+            <div class="fw-semibold" id="pm_student">—</div>
+            <div class="text-muted small" id="pm_email">—</div>
+          </div>
+
+          <div class="col-12">
+            <div class="small text-muted">Quiz</div>
+            <div class="fw-semibold" id="pm_quiz">—</div>
+          </div>
+
+          <div class="col-6">
+            <div class="small text-muted">Attempt</div>
+            <div class="fw-semibold" id="pm_attempt">—</div>
+          </div>
+
+          <div class="col-6">
+            <div class="small text-muted">Marks</div>
+            <div class="fw-semibold" id="pm_marks">—</div>
+          </div>
+
+          <div class="col-12 mt-2">
+            <div class="d-flex align-items-center justify-content-between gap-2 p-2 rounded-3"
+                 style="border:1px solid var(--line-strong);background:color-mix(in oklab,var(--muted-color) 8%,transparent);">
+              <div>
+                <div class="fw-semibold">Publish to student</div>
+                <div class="text-muted small">If ON, student can view this result.</div>
+              </div>
+              <div class="form-check form-switch m-0">
+                <input id="pm_toggle" class="form-check-input" type="checkbox">
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <input type="hidden" id="pm_result_id" value="">
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+        <button id="pm_save" class="btn btn-primary">
+          <i class="fa fa-check me-1"></i>Save
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{{-- ✅ Bulk Publish Modal (Now works like filter modal) --}}
+<div class="modal fade" id="bulkPublishModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header align-items-start">
+        <div>
+          <h5 class="modal-title">
+            <i class="fa fa-bullhorn me-2"></i>Bulk Publish (Select Students)
+          </h5>
+          <div class="text-muted small">
+            Apply filters → table will show checkboxes → select students → click Publish/Unpublish.
+          </div>
+        </div>
+        <button type="button" class="btn-close ms-auto" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body">
+        <div class="row g-2">
+
+          <div class="col-12">
+            <label class="form-label">Quiz / Game</label>
+            <select id="bQuizId" class="form-select">
+              <option value="">Select quiz/game</option>
+            </select>
+          </div>
+
+          <div class="col-12">
+            <label class="form-label">User Folder Group</label>
+            <select id="bFolderGroup" class="form-select">
+              <option value="">All folders</option>
+            </select>
+          </div>
+
+          <div class="col-12">
+            <label class="form-label">Attempt status</label>
+            <select id="bAttemptStatus" class="form-select">
+              <option value="">All</option>
+              <option value="submitted">Submitted</option>
+              <option value="auto_submitted">Auto submitted</option>
+              <option value="in_progress">In progress</option>
+            </select>
+          </div>
+
+          {{-- ✅ NEW: Bulk Publish Status filter (Yes/No) --}}
+          <div class="col-12">
+            <label class="form-label">Published to student</label>
+            <select id="bPublish" class="form-select">
+              <option value="">All</option>
+              <option value="1">Yes (Published)</option>
+              <option value="0">No (Not published)</option>
+            </select>
+          </div>
+
+          <div class="col-6">
+            <label class="form-label">From</label>
+            <input id="bFrom" type="date" class="form-control">
+          </div>
+          <div class="col-6">
+            <label class="form-label">To</label>
+            <input id="bTo" type="date" class="form-control">
+          </div>
+
+          <div class="col-12 mt-2">
+            <div class="p-3 rounded-3"
+                 style="border:1px solid var(--line-strong);background:color-mix(in oklab,var(--muted-color) 8%,transparent);">
+              <div class="d-flex align-items-center justify-content-between">
+                <div>
+                  <div class="fw-semibold">Matching Results Count</div>
+                  <div class="text-muted small">These results will be listed for selection.</div>
+                </div>
+                <div class="fw-semibold" style="font-size:20px;">
+                  <span id="bm_count">—</span>
+                </div>
+              </div>
+              <div class="text-muted small mt-2">
+                <i class="fa fa-circle-info me-1"></i>
+                For safety, please select at least one: <b>Quiz/Game</b> or <b>Date Range</b> or <b>Attempt status</b> or <b>Publish status</b>.
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+        <button id="bm_run" class="btn btn-primary">
+          <i class="fa fa-check me-1"></i>Apply Bulk Filters
         </button>
       </div>
     </div>
@@ -477,12 +685,16 @@ document.addEventListener('click', (e) => {
   const err = (m)=>{ document.getElementById('errMsg').textContent = m||'Something went wrong'; errToast.show(); };
 
   /* ========= DOM ========= */
+  const wrapEl = document.getElementById('qrWrap');
+
   const q = document.getElementById('q');
   const perPageSel = document.getElementById('per_page');
   const btnReset = document.getElementById('btnReset');
   const btnApplyFilters = document.getElementById('btnApplyFilters');
+  const btnBulkPublish = document.getElementById('btnBulkPublish');
 
   const fQuizId = document.getElementById('fQuizId');
+  const fFolderGroup = document.getElementById('fFolderGroup');
   const fAttemptStatus = document.getElementById('fAttemptStatus');
   const fPublish = document.getElementById('fPublish');
   const fMinPct = document.getElementById('fMinPct');
@@ -491,6 +703,33 @@ document.addEventListener('click', (e) => {
   const fTo = document.getElementById('fTo');
   const fQuizUuid = document.getElementById('fQuizUuid');
   const fStudentEmail = document.getElementById('fStudentEmail');
+
+  // Publish modal
+  const pm = {
+    el: document.getElementById('publishModal'),
+    uuid: document.getElementById('pm_uuid'),
+    student: document.getElementById('pm_student'),
+    email: document.getElementById('pm_email'),
+    quiz: document.getElementById('pm_quiz'),
+    attempt: document.getElementById('pm_attempt'),
+    marks: document.getElementById('pm_marks'),
+    toggle: document.getElementById('pm_toggle'),
+    id: document.getElementById('pm_result_id'),
+    save: document.getElementById('pm_save'),
+  };
+
+  // Bulk modal (now filter-only)
+  const bm = {
+    el: document.getElementById('bulkPublishModal'),
+    quiz: document.getElementById('bQuizId'),
+    folder: document.getElementById('bFolderGroup'),
+    status: document.getElementById('bAttemptStatus'),
+    publish: document.getElementById('bPublish'), // ✅ NEW
+    from: document.getElementById('bFrom'),
+    to: document.getElementById('bTo'),
+    count: document.getElementById('bm_count'),
+    run: document.getElementById('bm_run'),
+  };
 
   const tabs = {
     results:     { rows:'#rows-results',     loader:'#loaderRow-results',     empty:'#empty-results',     meta:'#metaTxt-results',     pager:'#pager-results',     extra:{} },
@@ -515,9 +754,48 @@ document.addEventListener('click', (e) => {
     return `<span class="badge badge-secondary text-uppercase">${esc(s||'-')}</span>`;
   }
 
-  function actionMenu(r){
-    const rid = r?.result?.uuid ?? '';
+  // ✅ NEW: publish status badge (YES / NO)
+  function publishStatusBadge(isPub){
+    const yes = Number(isPub||0) === 1;
+    return yes
+      ? `<span class="badge badge-success text-uppercase">Yes</span>`
+      : `<span class="badge badge-danger text-uppercase">No</span>`;
+  }
+
+  function folderBadge(item){
+    const student = item?.student || {};
+
+    // ✅ FIX: ensure folder name always uses your backend key "user_folder_name"
+    const name =
+      student.user_folder_name ||
+      student.folder_title ||
+      student.folder_name ||
+      student.folder_group_name ||
+      student.folder_group ||
+      student.folder ||
+      student.user_folder?.title ||
+      student.user_folder?.name ||
+      '';
+
+     if (!name) return `<span class="text-muted small">—</span>`;
+
+  // ✅ simple text only (NOT badge-pill)
+  return `<span class="small">${esc(name)}</span>`;
+  }
+
+  function actionMenu(item){
+    const result = item?.result || {};
+    const student = item?.student || {};
+    const quiz = item?.quiz || {};
+
+    const rid = result?.uuid ?? '';
+    const ridId = result?.id ?? '';
+    const isPub = Number(result?.publish_to_student||0) === 1;
+
     const viewUrl = rid ? `/exam/results/${encodeURIComponent(rid)}/view` : '#';
+    const pubTxt = isPub ? 'Unpublish from Student' : 'Publish to Student';
+    const pubIcon = isPub ? 'fa-eye-slash' : 'fa-eye';
+
     return `
       <div class="dropdown text-end" data-bs-display="static">
         <button type="button" class="btn btn-light btn-sm dd-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" title="Actions">
@@ -528,6 +806,21 @@ document.addEventListener('click', (e) => {
             <a class="dropdown-item" href="${viewUrl}">
               <i class="fa fa-eye"></i> View Result
             </a>
+          </li>
+          <li>
+            <button class="dropdown-item"
+              data-act="publish"
+              data-result-id="${esc(ridId)}"
+              data-result-uuid="${esc(rid)}"
+              data-publish="${isPub ? '1' : '0'}"
+              data-student="${esc(student?.name||'-')}"
+              data-email="${esc(student?.email||'-')}"
+              data-quiz="${esc(quiz?.name||quiz?.quiz_name||'-')}"
+              data-attempt="${esc(result?.attempt_number ?? 0)}"
+              data-marks="${esc((result?.marks_obtained ?? 0) + '/' + (result?.total_marks ?? 0))}"
+            >
+              <i class="fa ${pubIcon}"></i> ${pubTxt}
+            </button>
           </li>
           <li>
             <button class="dropdown-item" data-act="copy" data-id="${esc(rid)}">
@@ -546,64 +839,310 @@ document.addEventListener('click', (e) => {
     const attempt = r.attempt || {};
     const result = r.result || {};
 
+    const isPub = Number(result.publish_to_student||0) === 1;
+
     const tr = document.createElement('tr');
+
+    // ✅ Checkbox always exists in DOM, but shown only in bulk-mode via CSS
     tr.innerHTML = `
+      <td class="chkcell bulk-col">
+        <input class="form-check-input chk-row" type="checkbox"
+          data-scope="${esc(scope)}"
+          data-id="${esc(result.id||'')}"
+          data-uuid="${esc(result.uuid||'')}"
+          data-pub="${isPub ? '1' : '0'}"
+        >
+      </td>
       <td>
         <div class="fw-semibold">${esc(student.name||'-')}</div>
         <div class="text-muted small">${esc(student.email||'-')}</div>
       </td>
-      <td>
-        <div class="fw-semibold">${esc(quiz.name||'-')}</div>
-      </td>
-      <td>
-        <span class="badge-pill"><i class="fa fa-repeat"></i> #${Number(result.attempt_number||0)}</span>
-      </td>
+      <td>${folderBadge(r)}</td>
+      <td><div class="fw-semibold">${esc(quiz.name||quiz.quiz_name||'-')}</div></td>
+      <td><span class="badge-pill"><i class="fa fa-repeat"></i> #${Number(result.attempt_number||0)}</span></td>
       <td>
         <div class="fw-semibold">${fmtMark(result.marks_obtained, result.total_marks)}</div>
-        <div class="text-muted small">Total: ${Number(result.total_marks||0)}</div>
+        ${scope==='results' ? `<div class="text-muted small">Total: ${Number(result.total_marks||0)}</div>` : ``}
       </td>
       <td>
         <div class="fw-semibold">${fmtPct(result.percentage)}</div>
-        <div class="text-muted small">${(Number(result.publish_to_student||0)===1) ? 'Published' : 'Not published'}</div>
       </td>
-      <td>${statusBadge(attempt.status)}</td>
+
+      {{-- ✅ NEW CELL: Publish Status --}}
+      <td>${publishStatusBadge(result.publish_to_student)}</td>
+
+      ${scope==='results' ? `<td>${statusBadge(attempt.status)}</td>` : ``}
       <td>${fmtDate(result.created_at)}</td>
       <td class="text-end">${actionMenu(r)}</td>
     `;
+
     return tr;
   }
 
   /* ========= State ========= */
   let sort = '-result_created_at';
   const state = { results:{page:1}, published:{page:1}, unpublished:{page:1} };
+  const loadedOnce = { results:false, published:false, unpublished:false };
+
+  // ✅ Results endpoint fallback (supports your existing /all)
+  let RESULT_LIST_ENDPOINT = '/api/quizz/result/all'; // primary
+  const fallbackResultEndpoint = '/api/quizz/result'; // fallback
+
+  function getActiveScope(){
+    const active = document.querySelector('.tab-pane.active');
+    if (!active) return 'results';
+    if (active.id === 'tab-published') return 'published';
+    if (active.id === 'tab-unpublished') return 'unpublished';
+    return 'results';
+  }
+
+  async function fetchJson(url, opts = {}){
+    const res = await fetch(url, {
+      ...opts,
+      headers: {
+        'Authorization': 'Bearer ' + TOKEN,
+        'Accept': 'application/json',
+        ...(opts.headers || {})
+      }
+    });
+    const json = await res.json().catch(()=> ({}));
+    return { res, json };
+  }
+
+  /* ============================================================
+   * ✅ BULK SELECTION MODE (YOUR REQUIRED FEATURE)
+   * - default: checkboxes hidden
+   * - after bulk-filter apply: checkboxes visible + button becomes Publish/Unpublish
+   * ============================================================ */
+  const bulk = {
+    mode: false,
+    filtersActive: false,
+    filters: { quiz_id:'', folder_id:'', attempt_status:'', publish:'', from:'', to:'' }, // ✅ NEW publish
+    selected: new Map(), // id -> {pub, uuid}
+  };
+
+  function setBulkMode(on){
+    bulk.mode = !!on;
+    wrapEl.classList.toggle('bulk-mode', bulk.mode);
+
+    // Reset header checkboxes visuals
+    ['results','published','unpublished'].forEach(sc=>{
+      const h = document.getElementById(`chkAll-${sc}`);
+      if (h){
+        h.checked = false;
+        h.indeterminate = false;
+      }
+    });
+
+    updateBulkButton();
+  }
+
+  function computeBulkButtonState(){
+    if (!bulk.mode) {
+      return { label:'Bulk Publish', icon:'fa-bullhorn' };
+    }
+    if (bulk.selected.size === 0){
+      return { label:'Publish', icon:'fa-eye' };
+    }
+    const vals = Array.from(bulk.selected.values()).map(v => Number(v?.pub||0));
+    const allPublished = vals.length>0 && vals.every(v => v===1);
+    if (allPublished) return { label:'Unpublish', icon:'fa-eye-slash' };
+    return { label:'Publish', icon:'fa-eye' };
+  }
+
+  function updateBulkButton(){
+    const st = computeBulkButtonState();
+    btnBulkPublish.innerHTML = `<i class="fa ${st.icon} me-1"></i>${st.label}`;
+  }
+
+  function clearBulkSelection(){
+    bulk.selected.clear();
+    updateBulkButton();
+
+    // uncheck all visible row checkboxes
+    document.querySelectorAll('input.chk-row').forEach(c => c.checked = false);
+    ['results','published','unpublished'].forEach(sc=>{
+      const h = document.getElementById(`chkAll-${sc}`);
+      if (h){
+        h.checked = false;
+        h.indeterminate = false;
+      }
+    });
+  }
+
+  function syncHeaderCheckbox(scope){
+    const header = document.getElementById(`chkAll-${scope}`);
+    if (!header) return;
+
+    const rows = Array.from(document.querySelectorAll(`input.chk-row[data-scope="${scope}"]`));
+    if (!rows.length){
+      header.checked = false;
+      header.indeterminate = false;
+      return;
+    }
+    const checkedCount = rows.filter(r => r.checked).length;
+    header.checked = checkedCount === rows.length;
+    header.indeterminate = checkedCount > 0 && checkedCount < rows.length;
+  }
+
+  function applyBulkCheckedOnRender(scope){
+    if (!bulk.mode) return;
+
+    const rows = document.querySelectorAll(`input.chk-row[data-scope="${scope}"]`);
+    rows.forEach(chk=>{
+      const id = chk.dataset.id || '';
+      chk.checked = bulk.selected.has(id);
+    });
+    syncHeaderCheckbox(scope);
+    updateBulkButton();
+  }
+
+  async function patchPublishAny(resultId, resultUuid, publishVal){
+    const payload = { publish_to_student: Number(publishVal) };
+    const urlById = `/api/exam/result/${encodeURIComponent(resultId)}/publish`;
+
+    let { res, json } = await fetchJson(urlById, {
+      method:'PATCH',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    // UUID fallback (only if your backend supports it later)
+    if (res.status === 404 && resultUuid){
+      const urlByUuid = `/api/exam/result/${encodeURIComponent(resultUuid)}/publish`;
+      ({ res, json } = await fetchJson(urlByUuid, {
+        method:'PATCH',
+        headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify(payload),
+      }));
+    }
+
+    if (!res.ok) throw new Error(json?.message || 'Publish update failed');
+    return json;
+  }
+
+  async function runBulkAction(){
+    if (!bulk.mode){
+      return;
+    }
+    if (bulk.selected.size === 0){
+      err('Select at least 1 student result');
+      return;
+    }
+
+    // If ALL selected are already published => action becomes UNPUBLISH
+    const vals = Array.from(bulk.selected.values()).map(v => Number(v?.pub||0));
+    const allPublished = vals.length>0 && vals.every(v => v===1);
+    const publishVal = allPublished ? 0 : 1;
+
+    const ids = Array.from(bulk.selected.keys());
+    btnBulkPublish.disabled = true;
+
+    let success = 0, failed = 0;
+
+    // small concurrency limiter
+    const limit = 6;
+    let idx = 0;
+    const workers = Array.from({length: limit}).map(async ()=>{
+      while (idx < ids.length){
+        const my = ids[idx++];
+        const meta = bulk.selected.get(my) || {};
+        try{
+          await patchPublishAny(my, meta.uuid || '', publishVal);
+          success++;
+        }catch(e){
+          failed++;
+          console.error(e);
+        }
+      }
+    });
+
+    try{
+      await Promise.all(workers);
+
+      ok(publishVal ? `Published ${success}/${ids.length}` : `Unpublished ${success}/${ids.length}`);
+      if (failed>0) err(`${failed} failed (check console)`);
+
+      // ✅ refresh tables
+      await load(getActiveScope());
+      if (loadedOnce.published) await load('published');
+      if (loadedOnce.unpublished) await load('unpublished');
+
+      // ✅ NOW EXIT BULK MODE COMPLETELY (your requirement)
+      bulk.filtersActive = false;
+      bulk.filters = { quiz_id:'', folder_id:'', attempt_status:'', publish:'', from:'', to:'' };
+
+      clearBulkSelection();
+      setBulkMode(false);
+
+    }finally{
+      btnBulkPublish.disabled = false;
+      updateBulkButton();
+    }
+  }
 
   /* ========= Load quizzes for dropdown ========= */
   async function loadQuizzesForFilter() {
     try {
-      const res = await fetch('/api/quizz?per_page=100&status=active', {
-        headers: { 'Authorization':'Bearer '+TOKEN, 'Accept':'application/json' }
-      });
-      const json = await res.json().catch(() => ({}));
+      const { res, json } = await fetchJson('/api/quizz?per_page=200', {});
       if (!res.ok) throw new Error(json?.message || 'Failed to load quizzes');
-      
+
       const quizzes = json?.data || [];
-      const quizSelect = fQuizId;
-      
-      // Clear existing options except the first one
-      while (quizSelect.options.length > 1) {
-        quizSelect.remove(1);
-      }
-      
-      // Add quiz options
-      quizzes.forEach(quiz => {
-        const option = document.createElement('option');
-        option.value = quiz.id || quiz.uuid || '';
-        option.textContent = esc(quiz.quiz_name || 'Unnamed Quiz') + ' (' + (quiz.question_count || 0) + ' Qs)';
-        quizSelect.appendChild(option);
-      });
+      const fill = (sel) => {
+        if (!sel) return;
+        while (sel.options.length > 1) sel.remove(1);
+        quizzes.forEach(quiz => {
+          const opt = document.createElement('option');
+          opt.value = quiz.id ?? '';
+          opt.dataset.uuid = quiz.uuid ?? '';
+          opt.textContent = (quiz.quiz_name || quiz.name || 'Unnamed Quiz') + ' (' + (quiz.question_count || 0) + ' Qs)';
+          sel.appendChild(opt);
+        });
+      };
+
+      fill(fQuizId);
+      fill(bm.quiz);
+
     } catch(e) {
       console.error('Failed to load quizzes:', e);
     }
+  }
+
+  /* ========= Load user folders (best-effort) ========= */
+  async function loadFoldersForFilter(){
+    const endpoints = [
+      '/api/user-folders?per_page=200',
+      '/api/user-folders/all',
+      '/api/user-folder?per_page=200',
+      '/api/user-folder/all',
+      '/api/folders?per_page=200',
+    ];
+
+    let data = [];
+    for (const ep of endpoints){
+      try{
+        const { res, json } = await fetchJson(ep);
+        if (!res.ok) continue;
+
+        data = json?.data || json?.items || json?.folders || [];
+        if (Array.isArray(data) && data.length) break;
+      }catch(e){}
+    }
+
+    const fill = (sel) => {
+      if (!sel) return;
+      while (sel.options.length > 1) sel.remove(1);
+      (data||[]).forEach(f => {
+        const opt = document.createElement('option');
+        opt.value = f.id ?? (f.uuid ?? '');
+        opt.dataset.uuid = f.uuid ?? '';
+        opt.textContent = f.name || f.folder_name || f.title || 'Folder';
+        sel.appendChild(opt);
+      });
+    };
+
+    fill(fFolderGroup);
+    fill(bm.folder);
   }
 
   function buildParams(scope){
@@ -613,10 +1152,13 @@ document.addEventListener('click', (e) => {
     usp.set('sort', sort);
 
     if (q && q.value.trim()) usp.set('q', q.value.trim());
-    
-    // Quiz ID filter (new)
+
+    // Normal filters
     if (fQuizId && fQuizId.value) usp.set('quiz_id', fQuizId.value);
-    
+    if (fFolderGroup && fFolderGroup.value) {
+      usp.set('user_folder_id', fFolderGroup.value);
+      usp.set('folder_id', fFolderGroup.value);
+    }
     if (fAttemptStatus && fAttemptStatus.value) usp.set('attempt_status', fAttemptStatus.value);
     if (fPublish && fPublish.value !== '') usp.set('publish_to_student', fPublish.value);
 
@@ -629,6 +1171,24 @@ document.addEventListener('click', (e) => {
     if (fQuizUuid && fQuizUuid.value.trim()) usp.set('quiz_uuid', fQuizUuid.value.trim());
     if (fStudentEmail && fStudentEmail.value.trim()) usp.set('student_email', fStudentEmail.value.trim());
 
+    // ✅ Bulk filters override (only after applying bulk filters)
+    if (bulk.mode && bulk.filtersActive){
+      if (bulk.filters.quiz_id) usp.set('quiz_id', bulk.filters.quiz_id);
+
+      if (bulk.filters.folder_id){
+        usp.set('user_folder_id', bulk.filters.folder_id);
+        usp.set('folder_id', bulk.filters.folder_id);
+      }
+
+      if (bulk.filters.attempt_status) usp.set('attempt_status', bulk.filters.attempt_status);
+
+      // ✅ NEW: bulk publish status filter
+      if (bulk.filters.publish !== '') usp.set('publish_to_student', bulk.filters.publish);
+
+      if (bulk.filters.from) usp.set('from', bulk.filters.from);
+      if (bulk.filters.to) usp.set('to', bulk.filters.to);
+    }
+
     // tab-specific
     const extra = tabs[scope].extra || {};
     Object.keys(extra).forEach(k => usp.set(k, extra[k]));
@@ -637,7 +1197,7 @@ document.addEventListener('click', (e) => {
   }
 
   function urlFor(scope){
-    return `/api/quizz/result/all?${buildParams(scope)}`;
+    return `${RESULT_LIST_ENDPOINT}?${buildParams(scope)}`;
   }
 
   async function load(scope){
@@ -654,14 +1214,17 @@ document.addEventListener('click', (e) => {
     showLoader(scope, true);
 
     try{
-      const res = await fetch(urlFor(scope), {
-        headers:{ 'Authorization':'Bearer '+TOKEN, 'Accept':'application/json' }
-      });
-      const json = await res.json().catch(()=> ({}));
+      let { res, json } = await fetchJson(urlFor(scope));
+      if (res.status === 404 && RESULT_LIST_ENDPOINT.endsWith('/all')) {
+        RESULT_LIST_ENDPOINT = fallbackResultEndpoint;
+        ({ res, json } = await fetchJson(urlFor(scope)));
+      }
       if (!res.ok) throw new Error(json?.message || 'Load failed');
 
       const items = json?.data || [];
       const pagination = json?.pagination || {page:1, per_page:20, total:items.length, total_pages:1};
+
+      loadedOnce[scope] = true;
 
       if (items.length===0) empty.style.display='';
 
@@ -706,6 +1269,10 @@ document.addEventListener('click', (e) => {
       });
 
       meta.textContent = `Showing page ${current} of ${totalPages} — ${total} result(s)`;
+
+      // ✅ keep selections checked after pagination reload
+      applyBulkCheckedOnRender(scope);
+
     }catch(e){
       console.error(e);
       empty.style.display='';
@@ -750,10 +1317,12 @@ document.addEventListener('click', (e) => {
     load('results');
   });
 
+  // ✅ Reset also exits bulk-selection mode (checkboxes hidden again)
   btnReset?.addEventListener('click', ()=>{
     if (q) q.value='';
     if (perPageSel) perPageSel.value='20';
     if (fQuizId) fQuizId.value='';
+    if (fFolderGroup) fFolderGroup.value='';
     if (fAttemptStatus) fAttemptStatus.value='';
     if (fPublish) fPublish.value='';
     if (fMinPct) fMinPct.value='';
@@ -763,6 +1332,13 @@ document.addEventListener('click', (e) => {
     if (fQuizUuid) fQuizUuid.value='';
     if (fStudentEmail) fStudentEmail.value='';
     sort='-result_created_at';
+
+    // exit bulk mode
+    bulk.filtersActive = false;
+    bulk.filters = { quiz_id:'', folder_id:'', attempt_status:'', publish:'', from:'', to:'' };
+    clearBulkSelection();
+    setBulkMode(false);
+
     Object.keys(state).forEach(k => state[k].page = 1);
     load('results');
   });
@@ -785,17 +1361,265 @@ document.addEventListener('click', (e) => {
     if(!id) return;
     try{
       await navigator.clipboard.writeText(id);
-      ok('Copied result id');
+      ok('Copied result uuid');
     }catch{
       ok('Copy: '+id);
     }
   });
 
-  /* ========= Initial load ========= */
-  // Load quizzes for filter dropdown first, then load results
-  loadQuizzesForFilter().then(() => {
-    load('results');
+  /* ========= Page Select All (bulk-mode only) ========= */
+  function wireSelectAll(scope){
+    const header = document.getElementById(`chkAll-${scope}`);
+    if (!header) return;
+
+    header.addEventListener('change', ()=>{
+      if (!bulk.mode) {
+        header.checked = false;
+        header.indeterminate = false;
+        return;
+      }
+
+      const checked = header.checked;
+      document.querySelectorAll(`input.chk-row[data-scope="${scope}"]`).forEach(chk=>{
+        chk.checked = checked;
+
+        const id = chk.dataset.id || '';
+        const uuid = chk.dataset.uuid || '';
+        const pub = Number(chk.dataset.pub||0);
+
+        if (!id) return;
+        if (checked) bulk.selected.set(id, {pub, uuid});
+        else bulk.selected.delete(id);
+      });
+
+      syncHeaderCheckbox(scope);
+      updateBulkButton();
+    });
+  }
+  wireSelectAll('results');
+  wireSelectAll('published');
+  wireSelectAll('unpublished');
+
+  /* ========= Row checkbox selection (bulk-mode only) ========= */
+  document.addEventListener('change', (e)=>{
+    const chk = e.target.closest('input.chk-row');
+    if (!chk) return;
+
+    if (!bulk.mode){
+      chk.checked = false;
+      return;
+    }
+
+    const id = chk.dataset.id || '';
+    const uuid = chk.dataset.uuid || '';
+    const pub = Number(chk.dataset.pub||0);
+
+    if (!id) return;
+
+    if (chk.checked) bulk.selected.set(id, {pub, uuid});
+    else bulk.selected.delete(id);
+
+    syncHeaderCheckbox(chk.dataset.scope || 'results');
+    updateBulkButton();
   });
+
+  /* ========= Individual Publish Modal ========= */
+  const publishModal = new bootstrap.Modal(pm.el);
+
+  function openPublishModal(ds){
+    pm.uuid.textContent = ds.resultUuid || '—';
+    pm.student.textContent = ds.student || '—';
+    pm.email.textContent = ds.email || '—';
+    pm.quiz.textContent = ds.quiz || '—';
+    pm.attempt.textContent = '#' + (ds.attempt || '0');
+    pm.marks.textContent = ds.marks || '0/0';
+    pm.toggle.checked = String(ds.publish||'0') === '1';
+    pm.id.value = ds.resultId || '';
+    publishModal.show();
+  }
+
+  document.addEventListener('click', (e)=>{
+    const btn = e.target.closest('button.dropdown-item[data-act="publish"]');
+    if(!btn) return;
+
+    openPublishModal({
+      resultId: btn.dataset.resultId || '',
+      resultUuid: btn.dataset.resultUuid || '',
+      publish: btn.dataset.publish || '0',
+      student: btn.dataset.student || '',
+      email: btn.dataset.email || '',
+      quiz: btn.dataset.quiz || '',
+      attempt: btn.dataset.attempt || '0',
+      marks: btn.dataset.marks || '',
+    });
+  });
+
+  pm.save?.addEventListener('click', async ()=>{
+    const rid = pm.id.value || '';
+    if (!rid){
+      err('Result id missing');
+      return;
+    }
+    const publishVal = pm.toggle.checked ? 1 : 0;
+
+    try{
+      pm.save.disabled = true;
+      await patchPublishAny(rid, pm.uuid.textContent?.trim() || '', publishVal);
+
+      ok(publishVal ? 'Published to student' : 'Unpublished from student');
+      publishModal.hide();
+
+      await load(getActiveScope());
+      if (loadedOnce.published) await load('published');
+      if (loadedOnce.unpublished) await load('unpublished');
+
+    }catch(e){
+      console.error(e);
+      err(e.message || 'Failed');
+    }finally{
+      pm.save.disabled = false;
+    }
+  });
+
+  /* ========= Bulk Publish Modal (filter-only now) ========= */
+  const bulkModal = new bootstrap.Modal(bm.el);
+
+  function buildBulkCountParams(){
+    const usp = new URLSearchParams();
+    usp.set('page','1');
+    usp.set('per_page','1');
+    usp.set('sort','-result_created_at');
+
+    if (bm.quiz?.value) usp.set('quiz_id', bm.quiz.value);
+
+    if (bm.folder?.value) {
+      usp.set('user_folder_id', bm.folder.value);
+      usp.set('folder_id', bm.folder.value);
+    }
+
+    if (bm.status?.value) usp.set('attempt_status', bm.status.value);
+
+    // ✅ NEW: bulk publish filter in count
+    if (bm.publish?.value !== '') usp.set('publish_to_student', bm.publish.value);
+
+    if (bm.from?.value) usp.set('from', bm.from.value);
+    if (bm.to?.value) usp.set('to', bm.to.value);
+
+    if (q && q.value.trim()) usp.set('q', q.value.trim());
+
+    return usp.toString();
+  }
+
+  async function refreshBulkCount(){
+    bm.count.textContent = '…';
+
+    const hasSafe = !!(bm.quiz?.value || bm.status?.value || bm.publish?.value || bm.from?.value || bm.to?.value);
+    if (!hasSafe){
+      bm.count.textContent = '—';
+      return;
+    }
+
+    try{
+      let url = `${RESULT_LIST_ENDPOINT}?${buildBulkCountParams()}`;
+      let { res, json } = await fetchJson(url);
+
+      if (res.status === 404 && RESULT_LIST_ENDPOINT.endsWith('/all')) {
+        RESULT_LIST_ENDPOINT = fallbackResultEndpoint;
+        url = `${RESULT_LIST_ENDPOINT}?${buildBulkCountParams()}`;
+        ({ res, json } = await fetchJson(url));
+      }
+
+      if (!res.ok) throw new Error(json?.message || 'Count failed');
+
+      const total = Number(json?.pagination?.total ?? 0);
+      bm.count.textContent = String(total);
+    }catch(e){
+      console.error(e);
+      bm.count.textContent = '—';
+    }
+  }
+
+  let bulkCountTimer = null;
+  function scheduleBulkCount(){
+    clearTimeout(bulkCountTimer);
+    bulkCountTimer = setTimeout(refreshBulkCount, 250);
+  }
+
+  // ✅ Toolbar bulk button behavior:
+  // - default: open bulk filter modal
+  // - after bulk filter applied: becomes Publish/Unpublish action button
+  btnBulkPublish?.addEventListener('click', ()=>{
+    if (!bulk.mode){
+      // prefill bulk filter from main filter selections
+      if (bm.quiz && fQuizId) bm.quiz.value = fQuizId.value || '';
+      if (bm.folder && fFolderGroup) bm.folder.value = fFolderGroup.value || '';
+      if (bm.status && fAttemptStatus) bm.status.value = fAttemptStatus.value || '';
+      if (bm.publish && fPublish) bm.publish.value = (fPublish.value ?? ''); // ✅ NEW
+      if (bm.from && fFrom) bm.from.value = fFrom.value || '';
+      if (bm.to && fTo) bm.to.value = fTo.value || '';
+
+      bm.count.textContent = '—';
+      bulkModal.show();
+      scheduleBulkCount();
+      return;
+    }
+
+    // bulk-mode: run Publish/Unpublish for selected rows
+    runBulkAction();
+  });
+
+  [bm.quiz, bm.folder, bm.status, bm.publish, bm.from, bm.to].forEach(el=>{
+    if (!el) return;
+    el.addEventListener('change', scheduleBulkCount);
+    el.addEventListener('input', scheduleBulkCount);
+  });
+
+  // ✅ Apply bulk filters => show checkboxes + convert toolbar bulk button to Publish/Unpublish
+  bm.run?.addEventListener('click', async ()=>{
+    const hasSafe = !!(bm.quiz?.value || bm.status?.value || bm.publish?.value || bm.from?.value || bm.to?.value);
+    if (!hasSafe){
+      err('Please select at least Quiz/Game OR Date Range OR Attempt status OR Publish status.');
+      return;
+    }
+
+    bulk.filtersActive = true;
+    bulk.filters = {
+      quiz_id: bm.quiz?.value || '',
+      folder_id: bm.folder?.value || '',
+      attempt_status: bm.status?.value || '',
+      publish: (bm.publish?.value ?? ''), // ✅ NEW
+      from: bm.from?.value || '',
+      to: bm.to?.value || '',
+    };
+
+    clearBulkSelection();
+    setBulkMode(true);
+
+    // close modal
+    bulkModal.hide();
+
+    // move to Results tab (so user selects students from full list)
+    const tabResults = document.querySelector('a[href="#tab-results"]');
+    if (tabResults){
+      bootstrap.Tab.getOrCreateInstance(tabResults).show();
+    }
+
+    Object.keys(state).forEach(k => state[k].page = 1);
+
+    await load('results');
+    if (loadedOnce.published) await load('published');
+    if (loadedOnce.unpublished) await load('unpublished');
+
+    ok('Bulk selection enabled — select students & click Publish/Unpublish');
+  });
+
+  /* ========= Initial load ========= */
+  setBulkMode(false); // ✅ default: no checkboxes
+  Promise.all([
+    loadQuizzesForFilter(),
+    loadFoldersForFilter(),
+  ]).finally(() => load('results'));
+
 })();
 </script>
 @endpush

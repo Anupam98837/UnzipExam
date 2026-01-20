@@ -438,7 +438,7 @@
             <th style="min-width:50px;">Duration</th>
 
             {{-- ✅ NEW COLUMN --}}
-            <th style="min-width:170px;">Assigned At</th>
+            <th style="display:none;min-width:170px;">Assigned At</th>
 
             <th style="min-width:50px;">Instructions</th>
             <th style="min-width:50px;">Status</th>
@@ -904,7 +904,7 @@ document.addEventListener('DOMContentLoaded', function () {
         <td class="qz-num">${sanitize(durationText)}</td>
 
         {{-- ✅ NEW COLUMN CELL --}}
-        <td class="qz-num">${sanitize(assignedText)}</td>
+        <td class="qz-num d-none">${sanitize(assignedText)}</td>
 
         <td>
           <button type="button"

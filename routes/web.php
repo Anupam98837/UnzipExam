@@ -168,6 +168,7 @@ Route::get('/bubble-games/questions/manage', function () {
 
 Route::get('/tests/play', function () {
     return view('modules.bubbleGame.playBubbleGame');
+
 })->name('bubble-games.play');
 
 Route::get('/graphical-test/results', function () {
@@ -217,6 +218,10 @@ Route::get('/decision-making-test/result/manage', function () {
 
 Route::get('/user-folders/manage', fn () => view('pages.users.pages.userFolder.manageUserFolder'));
 Route::get('/user-folders/create', fn () => view('pages.users.pages.userFolder.createUserFolder'));
+
+Route::get('/results', function () {
+    return view('modules.result.masterResultPage');
+});
 
 
 

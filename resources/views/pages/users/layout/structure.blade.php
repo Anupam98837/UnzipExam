@@ -467,7 +467,7 @@
     </div>
 
     {{-- 3) NO ACCESS MESSAGE (shown only if tree is empty) --}}
-    <div id="noAcademicAccess" style="display:none">
+    <div id="noAcademicAccess d-none" style="display:none;">
       <div class="px-2 pt-2">
         <div class="alert alert-warning small mb-0">
           <i class="fa-solid fa-lock me-2"></i>

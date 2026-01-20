@@ -572,7 +572,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (status === 'in_progress') {
       return '<span class="qz-chip qz-chip-primary"><i class="fa-solid fa-play"></i>In progress</span>';
     }
-    return '<span class="qz-chip"><i class="fa-regular fa-clock"></i>Upcoming</span>';
+    return '<span class="qz-chip"><i class="fa-regular fa-clock"></i>Pending</span>';
   }
 
   function itemStatusBadge(status) {
@@ -636,20 +636,35 @@ document.addEventListener('DOMContentLoaded', function () {
     const n = parseInt(v, 10);
     return (isNaN(n) || n <= 0) ? 1 : n;
   }
+function pickUsedAttempts(item) {
+  // Try numeric counters first (if API provides)
+  const candidates = [
+    item.my_attempts,
+    item.attempts_used,
+    item.attempts_taken,
+    item.attempt_count,
+    item.latest_attempt_no,
+    item.used_attempts,
+    (item.result && item.result.attempt_no ? item.result.attempt_no : null),
+  ];
 
-  function pickUsedAttempts(item) {
-    const v =
-      item.my_attempts ??
-      item.attempts_used ??
-      item.attempts_taken ??
-      item.attempt_count ??
-      item.latest_attempt_no ??
-      (item.result && item.result.attempt_no ? item.result.attempt_no : null) ??
-      item.used_attempts ??
-      0;
-    const n = parseInt(v, 10);
-    return isNaN(n) ? 0 : n;
+  for (const v of candidates) {
+    if (v !== undefined && v !== null && v !== '') {
+      const n = parseInt(v, 10);
+      if (!isNaN(n)) return n;
+    }
   }
+
+  // ✅ QUIZ fallback: your quiz API uses `attempt` / `result` / `my_status`
+  if (item.type === 'quiz') {
+    if (item.my_status === 'completed') return 1;
+    if (item.attempt && (item.attempt.id || item.attempt.status)) return 1;
+    if (item.result && item.result.id) return 1;
+  }
+
+  return 0;
+}
+
 
   function computeRemainingAttempts(item, allowed, used) {
     if (item.remaining_attempts !== undefined && item.remaining_attempts !== null) {
@@ -661,7 +676,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // ✅ "No Attempts left" ONLY for Games & Door (NOT quizzes)
   function computeActionMeta(type, item) {
-    const myStatus = item.my_status || 'upcoming';
+    const myStatus = item.my_status || 'Pending';
     const status   = item.status || 'active';
 
     const allowed = pickAllowedAttempts(item);
@@ -956,39 +971,46 @@ const enforceAttemptLimit = (type === 'quiz' || type === 'game' || type === 'doo
   }
 
   function normalizeItem(item, type) {
-    return {
-      type: type, // quiz | game | door
-      uuid: item.uuid || item.id || null,
-      title: item.title || item.name || 'Item',
-      instructions: pickInstructions(item),
-      excerpt: item.excerpt || '',
-      description: item.description || '',
-      status: item.status || 'active',
-      my_status: item.my_status || item.myStatus || 'upcoming',
-      is_public: item.is_public ?? item.public ?? 0,
+  return {
+    type: type, // quiz | game | door
+    uuid: item.uuid || item.id || null,
+    title: item.title || item.name || 'Item',
+    instructions: pickInstructions(item),
+    excerpt: item.excerpt || '',
+    description: item.description || '',
+    status: item.status || 'active',
+    my_status: item.my_status || item.myStatus || 'Pending',
+    is_public: item.is_public ?? item.public ?? 0,
 
-      total_time: item.total_time ?? item.total_time_minutes ?? item.duration ?? null,
+    total_time: item.total_time ?? item.total_time_minutes ?? item.duration ?? null,
 
-      max_attempts_allowed: item.max_attempts_allowed,
-      max_attempts: item.max_attempts,
-      max_attempt: item.max_attempt,
-      attempts_allowed: item.attempts_allowed,
-      total_attempts_allowed: item.total_attempts_allowed,
+    // ✅ keep raw attempt + result for quiz logic
+    attempt: item.attempt ?? null,
+    result: item.result ?? null,
 
-      my_attempts: item.my_attempts,
-      attempts_used: item.attempts_used,
-      attempts_taken: item.attempts_taken,
-      attempt_count: item.attempt_count,
-      latest_attempt_no: item.latest_attempt_no,
-      used_attempts: item.used_attempts,
-      remaining_attempts: item.remaining_attempts,
+    // ✅ quizzes use total_attempts in API response
+    total_attempts: item.total_attempts ?? null,
 
-      max_attempt_reached: item.max_attempt_reached,
-      can_attempt: item.can_attempt,
+    max_attempts_allowed: item.max_attempts_allowed,
+    max_attempts: item.max_attempts,
+    max_attempt: item.max_attempt,
+    attempts_allowed: item.attempts_allowed,
+    total_attempts_allowed: item.total_attempts_allowed,
 
-      created_at: item.created_at || null
-    };
-  }
+    my_attempts: item.my_attempts,
+    attempts_used: item.attempts_used,
+    attempts_taken: item.attempts_taken,
+    attempt_count: item.attempt_count,
+    latest_attempt_no: item.latest_attempt_no,
+    used_attempts: item.used_attempts,
+    remaining_attempts: item.remaining_attempts,
+
+    max_attempt_reached: item.max_attempt_reached,
+    can_attempt: item.can_attempt,
+
+    created_at: item.created_at || null
+  };
+}
 
   async function fetchAll() {
     const token = requireAuthToken();

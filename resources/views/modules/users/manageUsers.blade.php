@@ -739,9 +739,12 @@ html.theme-dark .badge-code{
                 <i class="fa fa-folder-open me-1"></i> Browse Files
               </button>
               <div class="csv-help mt-3">
-                <div><strong>CSV Format:</strong> name, email, password, role</div>
+                <div><strong>CSV Format:</strong> name, email, password, role, folder_uuid</div>
+                <div class="mt-1 text-muted">
+                  folder_uuid is optional (UUID of user_folders). It will be converted to folder_id automatically.
+                </div>
                 <div class="mt-1">First row must contain header. Max file size: 10MB</div>
-              </div>
+              </div>              
             </div>
 
             {{-- File Info --}}
@@ -1225,7 +1228,7 @@ document.addEventListener('DOMContentLoaded', function(){
 
   // Filter modal
   const filterModalEl   = document.getElementById('filterModal');
-  const filterModal     = new bootstrap.Modal(filterModalEl);
+const filterModal = bootstrap.Modal.getOrCreateInstance(filterModalEl);
   const modalStatus     = document.getElementById('modal_status');
   const modalRole       = document.getElementById('modal_role');
   const modalSort       = document.getElementById('modal_sort');
@@ -1338,6 +1341,22 @@ document.addEventListener('DOMContentLoaded', function(){
     const x = String(r || '').toLowerCase();
     return x === 'admin' || x === 'super_admin';
   }
+function cleanupModalBackdrops(){
+  // wait for fade animation to finish
+  setTimeout(() => {
+    // if NO modal is open, backdrop must not exist
+    const anyOpenModal = document.querySelector('.modal.show');
+    if (!anyOpenModal){
+      document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
+      document.body.classList.remove('modal-open');
+      document.body.style.removeProperty('padding-right');
+      document.body.style.removeProperty('overflow');
+    }
+  }, 250);
+}
+
+// ✅ auto-clean on filter modal hide
+filterModalEl.addEventListener('hidden.bs.modal', cleanupModalBackdrops);
 
   async function fetchAllUsersForBulk(){
     const all = [];
@@ -1922,11 +1941,17 @@ document.addEventListener('DOMContentLoaded', function(){
 
   /* =================== CSV IMPORT FEATURE =================== */
   downloadTemplateBtn.addEventListener('click', function() {
-    const csvContent = "name,email,password,role\n" +
-                      "John Doe,john.doe@example.com,Pass@123,student\n" +
-                      "Jane Smith,jane.smith@example.com,Pass@456,examiner\n" +
-                      "Bob Wilson,bob@example.com,Pass@999,admin\n" +
-                      "Alice Johnson,alice@example.com,Pass@789,student";
+
+    // ✅ Example folder UUID (replace with your real folder UUIDs)
+    const FOLDER_UUID_1 = "58f1040d-c0b3-4076-88c8-2edb5a5792f2";
+    const FOLDER_UUID_2 = "b2f9a812-1f90-4e67-9c11-48c1c2e0d9aa";
+
+    const csvContent =
+      "name,email,password,role,folder_uuid\n" +
+      `John Doe,john.doe@example.com,Pass@123,student,${FOLDER_UUID_1}\n` +
+      `Jane Smith,jane.smith@example.com,Pass@456,examiner,${FOLDER_UUID_1}\n` +
+      `Bob Wilson,bob@example.com,Pass@999,admin,\n` + // ✅ folder_uuid optional
+      `Alice Johnson,alice@example.com,Pass@789,student,${FOLDER_UUID_2}\n`;
 
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
@@ -1939,7 +1964,8 @@ document.addEventListener('DOMContentLoaded', function(){
     document.body.removeChild(a);
 
     ok('Template downloaded');
-  });
+    });
+
 
   csvBrowseBtn.addEventListener('click', () => csvFileInput.click());
 
@@ -2419,14 +2445,21 @@ return `
   });
 
   btnApplyFilters.addEventListener('click', function(){
-    statusFilter = modalStatus.value;
-    roleFilter   = modalRole.value;
-    sort         = modalSort.value;
-    folderFilter = modalFolder?.value || '';
-    page         = 1;
-    filterModal.hide();
-    loadUsers().catch(ex => err(ex.message || 'Load failed'));
-  });
+  statusFilter = modalStatus.value;
+  roleFilter   = modalRole.value;
+  sort         = modalSort.value;
+  folderFilter = modalFolder?.value || '';
+  page         = 1;
+
+  // ✅ Always hide the correct live modal instance (prevents backdrop stuck)
+  (bootstrap.Modal.getInstance(filterModalEl) || bootstrap.Modal.getOrCreateInstance(filterModalEl)).hide();
+
+  // ✅ cleanup (extra safety)
+  cleanupModalBackdrops();
+
+  loadUsers().catch(ex => err(ex.message || 'Load failed'));
+});
+
 
   btnReset.addEventListener('click', function(){
     statusFilter = 'all';

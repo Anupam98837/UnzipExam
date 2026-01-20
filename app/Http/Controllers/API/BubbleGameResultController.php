@@ -2004,46 +2004,6 @@ public function export(Request $request, string $resultKey)
         ], 200);
     }
 
-    public function publishResultToStudent(Request $request, string $idOrUuid)
-{
-    $request->validate([
-        'publish_to_student' => ['required'],
-    ]);
-
-    $pub = $this->boolToTiny($request->input('publish_to_student'));
-
-    // ✅ Find result by ID OR UUID
-    $row = DB::table('bubble_game_results')
-        ->where('id', $idOrUuid)
-        ->orWhere('uuid', $idOrUuid)
-        ->first();
-
-    if (!$row) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Result not found',
-        ], 404);
-    }
-
-    // ✅ Update publish_to_student
-    DB::table('bubble_game_results')
-        ->where('id', $row->id)
-        ->update([
-            'publish_to_student' => $pub,
-            'updated_at' => now(),
-        ]);
-
-    return response()->json([
-        'success' => true,
-        'message' => $pub ? 'Published to student' : 'Unpublished from student',
-        'data' => [
-            'id' => $row->id,
-            'uuid' => $row->uuid,
-            'publish_to_student' => $pub,
-        ]
-    ]);
-}
-
     public function unpublishResultFromStudent(Request $request, string $resultKey)
     {
         $request->merge(['publish_to_student' => 0]);

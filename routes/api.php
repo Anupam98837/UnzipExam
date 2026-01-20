@@ -20,6 +20,7 @@ use App\Http\Controllers\API\DoorGameResultController;
 use App\Http\Controllers\API\UserFolderController;
 use App\Http\Controllers\API\StudentResultController;
 use App\Http\Controllers\API\InterviewRegistrationCampaignController;
+use App\Http\Controllers\API\MasterResultController;
 
 
 
@@ -547,5 +548,10 @@ Route::prefix('student-results')
         Route::post('/',       [InterviewRegistrationCampaignController::class, 'store']);
         Route::put('/{id}',    [InterviewRegistrationCampaignController::class, 'update']);
         Route::delete('/{id}', [InterviewRegistrationCampaignController::class, 'destroy']);
-    
     });
+
+
+Route::middleware('checkRole')->group(function () {
+    Route::get('/reports/master-results', [MasterResultController::class, 'index']);
+    Route::get('/reports/master-results/{student_uuid}', [MasterResultController::class, 'showStudent']);
+});

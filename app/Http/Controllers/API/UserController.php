@@ -1302,18 +1302,22 @@ protected function publicImageUrl(?string $value): string
         ]);
     }
 
-    /**
+/**
  * POST /api/users/import-csv
  * multipart/form-data:
  *  - file: CSV (required)
  *  - default_password: optional (used when password column is empty)
  *  - default_role: optional (used when role column is empty)
  *
- * CSV header required:
- *  name,email,password,role
+ * ✅ CSV header required:
+ *  name,email,password,role,folder_uuid
+ *
+ * ✅ folder_uuid is optional per row:
+ *  - If provided: it is converted into user_folder_id (int FK)
+ *  - If missing/blank: user_folder_id remains NULL
  *
  * Example row:
- *  John Doe,john@gmail.com,Pass@123,student
+ *  John Doe,john@gmail.com,Pass@123,student,58f1040d-c0b3-4076-88c8-2edb5a5792f2
  */
 public function importUsersCsv(Request $request)
 {
@@ -1343,21 +1347,21 @@ public function importUsersCsv(Request $request)
         return response()->json(['status'=>'error','message'=>'Unable to read CSV'], 422);
     }
 
-    // Read header
+    // ✅ Read header
     $header = fgetcsv($handle);
     if (!$header || !is_array($header)) {
         fclose($handle);
         return response()->json(['status'=>'error','message'=>'CSV header missing'], 422);
     }
 
-    // Normalize header keys
+    // ✅ Normalize header keys (spaces -> underscore, lowercase)
     $header = array_map(function ($h) {
         $h = strtolower(trim((string)$h));
         $h = preg_replace('/\s+/', '_', $h);
         return $h;
     }, $header);
 
-    $required = ['name','email','password','role'];
+    // ✅ Required columns (minimum)
     foreach (['name','email'] as $req) {
         if (!in_array($req, $header, true)) {
             fclose($handle);
@@ -1366,6 +1370,24 @@ public function importUsersCsv(Request $request)
                 'message' => "CSV must contain '{$req}' column in header",
             ], 422);
         }
+    }
+
+    // ✅ Detect folder uuid column name (support both variants)
+    $folderCol = null;
+    if (in_array('folder_uuid', $header, true)) {
+        $folderCol = 'folder_uuid';
+    } elseif (in_array('user_folder_uuid', $header, true)) {
+        $folderCol = 'user_folder_uuid';
+    }
+
+    // ✅ Preload folder_uuid => id map (fast lookup)
+    // only non-deleted folders
+    $folderMap = [];
+    if ($folderCol) {
+        $folderMap = DB::table('user_folders')
+            ->whereNull('deleted_at')
+            ->pluck('id', 'uuid')  // [uuid => id]
+            ->toArray();
     }
 
     $actorId = $this->currentUserId($request);
@@ -1378,17 +1400,17 @@ public function importUsersCsv(Request $request)
     DB::beginTransaction();
 
     try {
-        $rowIndex = 1; // header is row 1
+        $rowIndex = 1; // header = row 1
 
         while (($data = fgetcsv($handle)) !== false) {
             $rowIndex++;
 
-            // skip blank lines
+            // ✅ skip blank lines
             if (!is_array($data) || count(array_filter($data, fn($x)=>trim((string)$x)!=='')) === 0) {
                 continue;
             }
 
-            // map row => associative by header
+            // ✅ map row => associative by header
             $row = [];
             foreach ($header as $i => $key) {
                 $row[$key] = $data[$i] ?? null;
@@ -1398,6 +1420,19 @@ public function importUsersCsv(Request $request)
             $email    = trim((string)($row['email'] ?? ''));
             $password = (string)($row['password'] ?? '');
             $roleIn   = (string)($row['role'] ?? '');
+
+            // ✅ folder_uuid -> convert to folder id
+            $folderUuid = null;
+            $folderId   = null;
+
+            if ($folderCol) {
+                $folderUuid = trim((string)($row[$folderCol] ?? ''));
+
+                // normalize nullish values
+                if ($folderUuid === '' || in_array(strtolower($folderUuid), ['null','undefined','none'], true)) {
+                    $folderUuid = null;
+                }
+            }
 
             if ($name === '' || $email === '') {
                 $skipped++;
@@ -1411,16 +1446,42 @@ public function importUsersCsv(Request $request)
                 continue;
             }
 
-            // duplicate email
+            // ✅ duplicate email (ignore soft-deleted)
             if (DB::table('users')->where('email', $email)->whereNull('deleted_at')->exists()) {
                 $skipped++;
                 $errors[] = "Row {$rowIndex}: email already exists {$email}";
                 continue;
             }
 
+            // ✅ Resolve folder_uuid -> id (FK)
+            if ($folderUuid) {
+                // if someone mistakenly puts numeric id inside folder_uuid column, accept it
+                if (ctype_digit($folderUuid)) {
+                    $folderId = (int)$folderUuid;
+
+                    $exists = DB::table('user_folders')
+                        ->where('id', $folderId)
+                        ->whereNull('deleted_at')
+                        ->exists();
+
+                    if (!$exists) {
+                        $skipped++;
+                        $errors[] = "Row {$rowIndex}: folder id not found ({$folderUuid})";
+                        continue;
+                    }
+                } else {
+                    $folderId = $folderMap[$folderUuid] ?? null;
+                    if (!$folderId) {
+                        $skipped++;
+                        $errors[] = "Row {$rowIndex}: invalid folder_uuid ({$folderUuid})";
+                        continue;
+                    }
+                }
+            }
+
             $finalPassword = trim($password) !== '' ? $password : $defaultPassword;
 
-            // role
+            // ✅ role
             if (trim($roleIn) !== '') {
                 [$role, $roleShort] = $this->normalizeRole($roleIn, null);
             } else {
@@ -1428,7 +1489,7 @@ public function importUsersCsv(Request $request)
                 $roleShort = $defaultRoleShort;
             }
 
-            // uuid + slug
+            // ✅ uuid + slug
             do { $uuid = (string) Str::uuid(); }
             while (DB::table('users')->where('uuid', $uuid)->exists());
 
@@ -1441,6 +1502,10 @@ public function importUsersCsv(Request $request)
                 'name'            => $name,
                 'email'           => $email,
                 'password'        => Hash::make($finalPassword),
+
+                // ✅ HERE: folder_uuid converted to FK id
+                'user_folder_id'  => $folderId,
+
                 'role'            => $role,
                 'role_short_form' => $roleShort,
                 'slug'            => $slug,
@@ -1453,7 +1518,10 @@ public function importUsersCsv(Request $request)
                 'metadata'        => json_encode([
                     'timezone' => 'Asia/Kolkata',
                     'source'   => 'unzip_exam_api_import_csv',
-                    'import'   => ['row' => $rowIndex],
+                    'import'   => [
+                        'row'         => $rowIndex,
+                        'folder_uuid' => $folderUuid, // keeps audit info
+                    ],
                 ], JSON_UNESCAPED_UNICODE),
             ]);
 
@@ -1470,11 +1538,16 @@ public function importUsersCsv(Request $request)
                 'imported' => $imported,
                 'skipped'  => $skipped,
                 'errors'   => $errors,
+                'supports' => [
+                    'folder_uuid_column' => $folderCol ? true : false,
+                    'folder_uuid_to_id'  => true,
+                ],
             ],
         ]);
     } catch (\Throwable $e) {
         fclose($handle);
         DB::rollBack();
+
         Log::error('[UnzipExam Users Import CSV] failed', ['error' => $e->getMessage()]);
 
         return response()->json([
@@ -1483,6 +1556,7 @@ public function importUsersCsv(Request $request)
         ], 500);
     }
 }
+
 public function getProfile(Request $request)
 {
     $userId = $this->currentUserId($request);

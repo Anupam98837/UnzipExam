@@ -837,10 +837,20 @@ public function myQuizzes(Request $r)
     if ($resp = $this->requireRole($r, ['student','admin','super_admin'])) return $resp;
 
     $actor  = $this->actor($r);
+    $role   = (string) ($actor['role'] ?? '');
     $userId = (int) ($actor['id'] ?? 0);
 
     if (!$userId) {
         return response()->json(['error' => 'Unable to resolve user from token'], 403);
+    }
+
+    // ✅ for admin/super_admin: allow viewing assigned quizzes for a specific student using ?user_id=
+    $targetUserId = $userId;
+    if (in_array($role, ['admin', 'super_admin'], true)) {
+        $requestedUserId = (int) $r->query('user_id', 0);
+        if ($requestedUserId > 0) {
+            $targetUserId = $requestedUserId;
+        }
     }
 
     $page    = max(1, (int) $r->query('page', 1));
@@ -848,94 +858,40 @@ public function myQuizzes(Request $r)
     $search  = trim((string) $r->query('q', ''));
 
     /* ============================================================
-     | ✅ ONLY ASSIGNED QUIZZES
+     | ✅ Only ASSIGNED quizzes for this user
      |============================================================ */
 
-    // Try to resolve an assignment table automatically
-    $assignTable = null;
-    $candidates = [
-        'quizz_assignments',
-        'quiz_assignments',
-        'quizz_assigned_users',
-        'quiz_assigned_users',
-        'quizz_user_assignments',
-        'quiz_user_assignments',
-    ];
-
-    foreach ($candidates as $t) {
-        try {
-            if (\Illuminate\Support\Facades\Schema::hasTable($t)) {
-                $assignTable = $t;
-                break;
-            }
-        } catch (\Throwable $e) {
-            // ignore
-        }
-    }
-
-    // If there is no assignment table, then "only assigned" => nothing
-    if (!$assignTable) {
-        return response()->json([
-            'success'    => true,
-            'data'       => [],
-            'pagination' => [
-                'total'        => 0,
-                'per_page'     => $perPage,
-                'current_page' => $page,
-                'last_page'    => 0,
-            ],
-        ]);
-    }
-
-    // Detect common column names safely
-    $quizIdCol = \Illuminate\Support\Facades\Schema::hasColumn($assignTable, 'quiz_id')
-        ? 'quiz_id'
-        : (\Illuminate\Support\Facades\Schema::hasColumn($assignTable, 'quizz_id') ? 'quizz_id' : 'quiz_id');
-
-    $userIdCol = \Illuminate\Support\Facades\Schema::hasColumn($assignTable, 'user_id')
-        ? 'user_id'
-        : (\Illuminate\Support\Facades\Schema::hasColumn($assignTable, 'student_id') ? 'student_id' : 'user_id');
-
-    // Assigned quiz ids for this user (DISTINCT)
-    $assignedSub = DB::table($assignTable . ' as asg')
-        ->distinct()
-        ->select("asg.$quizIdCol as quiz_id")
-        ->where("asg.$userIdCol", $userId);
-
-    // optional safety filters (only apply if columns exist)
-    if (\Illuminate\Support\Facades\Schema::hasColumn($assignTable, 'deleted_at')) {
-        $assignedSub->whereNull('asg.deleted_at');
-    }
-    if (\Illuminate\Support\Facades\Schema::hasColumn($assignTable, 'status')) {
-        $assignedSub->where('asg.status', '=', 'active');
-    }
-    if (\Illuminate\Support\Facades\Schema::hasColumn($assignTable, 'is_active')) {
-        $assignedSub->whereIn('asg.is_active', [1, true, '1', 'yes']);
-    }
-    if (\Illuminate\Support\Facades\Schema::hasColumn($assignTable, 'publish_to_student')) {
-        $assignedSub->where(function ($w) {
-            $w->where('asg.publish_to_student', 1)
-              ->orWhere('asg.publish_to_student', true)
-              ->orWhere('asg.publish_to_student', 'yes');
-        });
-    }
+    $assignedSub = DB::table('user_quiz_assignments as uqa')
+        ->select('uqa.quiz_id')
+        ->where('uqa.user_id', $targetUserId)
+        ->where('uqa.status', 'active')
+        ->whereNull('uqa.deleted_at')
+        ->distinct();
 
     // ---- Subquery: latest attempt per quiz for this user ----
     $attemptSub = DB::table('quizz_attempts')
         ->select('quiz_id', DB::raw('MAX(id) as latest_id'))
-        ->where('user_id', $userId)
+        ->where('user_id', $targetUserId)
         ->groupBy('quiz_id');
 
     // ---- Subquery: latest result per quiz for this user ----
     $resultSub = DB::table('quizz_results')
         ->select('quiz_id', DB::raw('MAX(id) as latest_id'))
-        ->where('user_id', $userId)
+        ->where('user_id', $targetUserId)
         ->groupBy('quiz_id');
 
     $q = DB::table('quizz as q')
         // ✅ ONLY quizzes that are assigned to this user
         ->joinSub($assignedSub, 'asq', function ($join) {
             $join->on('asq.quiz_id', '=', 'q.id');
+        })
+
+        // ✅ join assignment row (to show code/date if needed)
+        ->join('user_quiz_assignments as uqa', function ($join) use ($targetUserId) {
+            $join->on('uqa.quiz_id', '=', 'q.id')
+                 ->where('uqa.user_id', '=', $targetUserId)
+                 ->where('uqa.status', '=', 'active')
+                 ->whereNull('uqa.deleted_at');
         })
 
         // join latest attempt
@@ -976,18 +932,26 @@ public function myQuizzes(Request $r)
         'q.status',
         'q.created_at',
 
+        // ✅ assignment details
+        'uqa.id              as assignment_id',
+        'uqa.uuid            as assignment_uuid',
+        'uqa.assignment_code as assignment_code',
+        'uqa.assigned_by     as assigned_by',
+        'uqa.assigned_at     as assigned_at',
+
         // latest attempt (for this user)
         'qa.id           as attempt_id',
         'qa.status       as attempt_status',
         'qa.started_at   as attempt_started_at',
         'qa.submitted_at as attempt_submitted_at',
 
-        // latest result (for this user) – no status column
+        // latest result (for this user)
         'qr.id           as result_id',
         'qr.created_at   as result_created_at',
     ];
 
     $paginator = $q->select($select)
+        ->orderBy('uqa.assigned_at', 'desc')   // ✅ better ordering = recently assigned first
         ->orderBy('q.created_at', 'desc')
         ->paginate($perPage, ['*'], 'page', $page);
 
@@ -1020,8 +984,19 @@ public function myQuizzes(Request $r)
                 ? \Carbon\Carbon::parse($row->created_at)->toDateTimeString()
                 : null,
 
-            // computed status from *this student's* perspective
-            'my_status'       => $myStatus, // upcoming | in_progress | completed
+            // ✅ assignment info
+            'assignment' => [
+                'id'              => (int) $row->assignment_id,
+                'uuid'            => $row->assignment_uuid,
+                'assignment_code' => $row->assignment_code,
+                'assigned_by'     => $row->assigned_by ? (int) $row->assigned_by : null,
+                'assigned_at'     => $row->assigned_at
+                    ? \Carbon\Carbon::parse($row->assigned_at)->toDateTimeString()
+                    : null,
+            ],
+
+            // computed status from this student's perspective
+            'my_status' => $myStatus, // upcoming | in_progress | completed
 
             'attempt' => $row->attempt_id ? [
                 'id'           => (int) $row->attempt_id,

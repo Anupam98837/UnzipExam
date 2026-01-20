@@ -430,12 +430,16 @@ function renderSafeHtmlOrText(raw){
 
   return `<div>${escapeHtml(s).replace(/\n/g,'<br>')}</div>`;
 }
-
 async function fetchQuizMeta(){
   try{
     const res = await api(`/api/exam/quizzes/${encodeURIComponent(QUIZ_KEY)}`, { method:'GET' });
-    return res.quiz || res.data || res;
-  }catch(_){
+
+    // ✅ Your API returns: { data: { quiz_description, instructions, quiz_name ... } }
+    const meta = res?.data || res?.quiz || res;
+
+    return meta && typeof meta === 'object' ? meta : null;
+  }catch(e){
+    console.error('fetchQuizMeta failed:', e);
     return null;
   }
 }
@@ -444,21 +448,46 @@ async function openIntroModal(){
   const el = document.getElementById('examIntroModal');
   const modal = new bootstrap.Modal(el, { backdrop:'static', keyboard:false });
 
-  // open modal first (skeleton visible)
+  // ✅ show modal first (skeleton / loading text)
   modal.show();
 
-  // fill data
+  // ✅ default placeholders while loading
+  document.getElementById('introQuizTitle').textContent = 'Loading…';
+  document.getElementById('introDesc').innerHTML  = `<div class="text-muted small">Loading description…</div>`;
+  document.getElementById('introInstr').innerHTML = `<div class="text-muted small">Loading instructions…</div>`;
+
+  // ✅ pull live from API
   const meta = await fetchQuizMeta();
 
-  const title = pickFirstNonEmpty(meta?.quiz_name, meta?.title, meta?.name, 'Exam');
-  const descRaw = pickFirstNonEmpty(meta?.description_html, meta?.description, meta?.quiz_description, meta?.desc);
-  const instRaw = pickFirstNonEmpty(meta?.instructions_html, meta?.instructions, meta?.instruction, meta?.rules);
+  // ✅ Title (quiz_name is your correct key)
+  const title = pickFirstNonEmpty(
+    meta?.quiz_name,
+    meta?.title,
+    meta?.name,
+    'Exam'
+  );
 
-  document.getElementById('introQuizTitle').textContent = title + ' • Instructions';
+  // ✅ Description (quiz_description is your correct key)
+  const descRaw = pickFirstNonEmpty(
+    meta?.quiz_description,
+    meta?.description_html,
+    meta?.description,
+    meta?.desc
+  );
+
+  // ✅ Instructions (instructions is your correct key)
+  const instRaw = pickFirstNonEmpty(
+    meta?.instructions,
+    meta?.instructions_html,
+    meta?.instruction,
+    meta?.rules
+  );
+
+  document.getElementById('introQuizTitle').textContent = `${title} • Instructions`;
   document.getElementById('introDesc').innerHTML  = renderSafeHtmlOrText(descRaw || 'No description provided.');
   document.getElementById('introInstr').innerHTML = renderSafeHtmlOrText(instRaw || 'No instructions provided.');
 
-  // buttons
+  // ✅ buttons
   document.getElementById('introBackBtn').onclick = () => {
     modal.hide();
     history.back();
@@ -467,9 +496,10 @@ async function openIntroModal(){
   document.getElementById('introStartBtn').onclick = async () => {
     modal.hide();
     EXAM_STARTED = true;
-    await bootExam(); // ✅ now start real exam flow
+    await bootExam();
   };
 }
+
 
 /* ================== Cache ================== */
 function cacheLoad(){
@@ -1006,6 +1036,5 @@ document.addEventListener('DOMContentLoaded', async () => {
   await openIntroModal(); // ✅ shows normal bootstrap modal first
 });
 </script>
-
 </body>
 </html>

@@ -396,7 +396,7 @@ public function index(Request $r)
      * ========================= */
     public function show(Request $r, string $key)
     {
-        if ($resp = $this->requireRole($r, ['examiner','admin','super_admin'])) return $resp;
+        // if ($resp = $this->requireRole($r, ['examiner','admin','super_admin'])) return $resp;
 
         $row = $this->findByKey($key);
         if (!$row) return response()->json(['error'=>'Quiz not found'], 404);

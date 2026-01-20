@@ -75,6 +75,7 @@ Route::middleware('checkRole:admin,super_admin,student,examiner')
  
     // ===== Quizzes list/create =====
     Route::get('/',   [QuizzController::class, 'index'])->name('index');
+
     Route::post('/',  [QuizzController::class, 'store'])->name('store');
     Route::get('/my', [QuizzController::class, 'myQuizzes'])->name('my');
     // ===== Questions (place BEFORE any /{key} routes) =====
@@ -116,6 +117,7 @@ Route::middleware(['checkRole:student,admin,examiner,super_admin'])
         Route::post('/attempts/{attempt}/submit',    [ExamController::class, 'submit']);
         Route::get ('/attempts/{attempt}/status',    [ExamController::class, 'status']);
         Route::post('/attempts/{attempt}/focus',     [ExamController::class, 'focus']);
+            Route::get('/quizzes/{quizKey}',   [QuizzController::class, 'show']);
 
         // student self-view
         Route::get('/quizzes/{quizKey}/my-attempts', [ExamController::class, 'myAttemptsForQuiz']);

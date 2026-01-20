@@ -15,23 +15,77 @@ class MasterResultController extends Controller
      * (Quiz is fixed = quizz_results)
      */
     private function detectTables(): array
-    {
-        $quiz = Schema::hasTable('quizz_results') ? 'quizz_results' : null;
+{
+    $quiz = Schema::hasTable('quizz_results') ? 'quizz_results' : null;
 
-        // Bubble candidates
-        $bubble = null;
-        foreach (['bubble_game_results', 'bubble_results'] as $t) {
-            if (Schema::hasTable($t)) { $bubble = $t; break; }
-        }
-
-        // Door candidates
-        $door = null;
-        foreach (['door_game_results', 'open_door_results', 'door_results'] as $t) {
-            if (Schema::hasTable($t)) { $door = $t; break; }
-        }
-
-        return compact('quiz', 'bubble', 'door');
+    // Bubble candidates
+    $bubble = null;
+    foreach ([
+        'bubble_game_results',
+        'bubble_results',
+        'bubble_game_attempts',
+        'bubble_attempt_results'
+    ] as $t) {
+        if (Schema::hasTable($t)) { $bubble = $t; break; }
     }
+
+    // ✅ Door candidates (ADD MORE NAMES)
+    $door = null;
+    foreach ([
+        'door_game_results',
+        'open_door_results',
+        'door_results',
+        'decision_making_test_results',
+        'decision_making_results',
+        'decision_test_results',
+        'dm_test_results'
+    ] as $t) {
+        if (Schema::hasTable($t)) { $door = $t; break; }
+    }
+
+    return compact('quiz', 'bubble', 'door');
+}
+
+private function firstExistingCol(string $table, array $candidates): ?string
+{
+    foreach ($candidates as $c) {
+        if (Schema::hasColumn($table, $c)) return $c;
+    }
+    return null;
+}
+
+private function detectUserFkCol(string $table): ?string
+{
+    // ✅ user reference column can vary
+    return $this->firstExistingCol($table, [
+        'user_id',
+        'student_id',
+        'candidate_id',
+        'user',
+        'uid',
+    ]);
+}
+
+private function detectTimeCol(string $table): ?string
+{
+    // ✅ attempt time can vary
+    return $this->firstExistingCol($table, [
+        'total_time',
+        'time_taken',
+        'time_sec',
+        'time_seconds',
+        'duration',
+        'duration_sec',
+    ]);
+}
+
+private function detectDoorEfficiencyCols(string $table): array
+{
+    return [
+        'time_eff'  => $this->firstExistingCol($table, ['time_efficiency', 'time_eff', 'time_eff_pct']),
+        'total_eff' => $this->firstExistingCol($table, ['total_efficiency', 'total_eff', 'efficiency', 'efficiency_pct']),
+    ];
+}
 
     /**
      * Build safe phone expression (prevents SQL error if column missing)

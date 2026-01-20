@@ -1135,6 +1135,44 @@ html.theme-dark .badge-code{
   </div>
 </div>
 
+{{-- ================= Upload CV Modal ================= --}}
+<div class="modal fade" id="uploadCvModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-md modal-dialog-centered">
+    <form class="modal-content" id="uploadCvForm" enctype="multipart/form-data">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="fa fa-file-arrow-up me-2"></i> Upload CV —
+          <span id="cv_user_name" class="fw-semibold">User</span>
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body">
+        <input type="hidden" id="cv_user_uuid">
+
+        <div class="mb-2">
+          <label class="form-label">Select CV File <span class="text-danger">*</span></label>
+          <input type="file" id="cvFileInput" class="form-control" accept=".pdf,.doc,.docx" required>
+          <div class="form-text">Allowed: PDF, DOC, DOCX • Max: 10MB</div>
+        </div>
+
+        <div class="alert alert-light small mb-0">
+          <i class="fa fa-circle-info me-1"></i>
+          This will replace the previous CV (if any).
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="cvUploadBtn">
+          <i class="fa fa-upload me-1"></i> Upload
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+
 {{-- ================= Toasts ================= --}}
 <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index:2100;">
   <div id="toastSuccess" class="toast align-items-center text-bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true">
@@ -1324,6 +1362,15 @@ const filterModal = bootstrap.Modal.getOrCreateInstance(filterModalEl);
   const baProgressBar  = document.getElementById('baProgressBar');
   const baProgressHint = document.getElementById('baProgressHint');
   const baFooterInfo   = document.getElementById('baFooterInfo');
+
+  // Upload CV modal
+  const uploadCvModalEl = document.getElementById('uploadCvModal');
+  const uploadCvModal   = new bootstrap.Modal(uploadCvModalEl);
+  const uploadCvForm    = document.getElementById('uploadCvForm');
+  const cvUserName      = document.getElementById('cv_user_name');
+  const cvUserUuidInput = document.getElementById('cv_user_uuid');
+  const cvFileInput     = document.getElementById('cvFileInput');
+  const cvUploadBtn     = document.getElementById('cvUploadBtn');
 
   let bulkUsersLoaded = false;
   let bulkUsers = [];
@@ -2266,126 +2313,158 @@ filterModalEl.addEventListener('hidden.bs.modal', cleanupModalBackdrops);
   }
 
   function renderUsers(rows){
-    if (!rows.length){
-      usersTbody.innerHTML =
-        `<tr><td colspan="7" class="empty-state">
-           <i class="fa fa-users mb-2" style="font-size:22px;opacity:.7;"></i>
-           <div>No users found.</div>
-         </td></tr>`;
-      return;
+  if (!rows.length){
+    usersTbody.innerHTML =
+      `<tr><td colspan="9" class="empty-state">
+         <i class="fa fa-users mb-2" style="font-size:22px;opacity:.7;"></i>
+         <div>No users found.</div>
+       </td></tr>`;
+    return;
+  }
+
+  usersTbody.innerHTML = rows.map(row => {
+    const active = (row.status || '').toLowerCase() === 'active';
+    const statusBadge = CAN_WRITE
+      ? `<div class="form-check form-switch m-0">
+           <input class="form-check-input js-toggle-status" type="checkbox" ${active?'checked':''} title="Toggle Active">
+         </div>`
+      : `<span class="badge ${active?'badge-soft-active':'badge-soft-inactive'}">${active?'Active':'Inactive'}</span>`;
+
+    const imgUrl = fixImageUrl(row.image_url || row.image);
+    const avatarHtml = `
+      <div style="position:relative;">
+        ${imgUrl ? `
+          <img src="${esc(imgUrl)}" alt="avatar" class="u-avatar"
+               loading="lazy"
+               onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+        ` : ''}
+        <div class="u-avatar-fallback" style="display:${imgUrl?'none':'flex'};">
+          <span>${esc((row.name||'').charAt(0) || '?')}</span>
+        </div>
+      </div>`;
+
+    const emailHtml = row.email
+      ? `<a href="mailto:${esc(row.email)}">${esc(row.email)}</a>`
+      : `<span class="text-muted">—</span>`;
+
+    const quizzesBtn = CAN_WRITE
+      ? `<button type="button" class="btn btn-light btn-sm js-manage-quizzes">
+           <i class="fa fa-question-circle me-1"></i>Manage
+         </button>`
+      : `<span class="text-muted small">—</span>`;
+
+    const bubbleBtn = CAN_WRITE
+      ? `<button type="button" class="btn btn-light btn-sm js-manage-bubble">
+           <i class="fa fa-gamepad me-1"></i>Manage
+         </button>`
+      : `<span class="text-muted small">—</span>`;
+
+    // ✅ CV View button (new column)
+    const cvUrl = (row.cv || '').trim();
+    const cvBtn = cvUrl
+      ? `<button type="button"
+            class="btn btn-light btn-sm js-open-cv"
+            data-cv="${esc(cvUrl)}"
+            title="Open CV in new tab">
+            <i class="fa fa-file-pdf me-1"></i>View
+         </button>`
+      : `<span class="text-muted small">NA</span>`;
+
+    let actions = `
+      <div class="dropdown text-end" data-bs-display="static">
+        <button type="button" class="btn btn-light btn-sm dd-toggle"
+                data-bs-toggle="dropdown" data-bs-auto-close="outside"
+                data-bs-boundary="viewport" aria-expanded="false"
+                title="Actions">
+          <i class="fa fa-ellipsis-vertical"></i>
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end">
+          <li>
+            <button type="button" class="dropdown-item" data-action="view">
+              <i class="fa fa-eye"></i> View
+            </button>
+          </li>`;
+
+    if (CAN_WRITE){
+      actions += `
+          <li>
+            <button type="button" class="dropdown-item" data-action="edit">
+              <i class="fa fa-pen-to-square"></i> Edit
+            </button>
+          </li>
+          <li>
+            <button type="button" class="dropdown-item" data-action="upload_cv">
+              <i class="fa fa-file-arrow-up"></i> Upload CV
+            </button>
+          </li>
+          <li>
+            <button type="button" class="dropdown-item" data-action="quizzes">
+              <i class="fa fa-question-circle"></i> Manage Quizzes
+            </button>
+          </li>
+          <li>
+            <button type="button" class="dropdown-item" data-action="bubble">
+              <i class="fa fa-gamepad"></i> Manage Bubble Games
+            </button>
+          </li>
+          <li>
+            <button type="button" class="dropdown-item" data-action="door">
+              <i class="fa fa-door-open"></i> Manage Door Games
+            </button>
+          </li>`;
     }
 
-    usersTbody.innerHTML = rows.map(row => {
-      const active = (row.status || '').toLowerCase() === 'active';
-      const statusBadge = CAN_WRITE
-        ? `<div class="form-check form-switch m-0">
-             <input class="form-check-input js-toggle-status" type="checkbox" ${active?'checked':''} title="Toggle Active">
-           </div>`
-        : `<span class="badge ${active?'badge-soft-active':'badge-soft-inactive'}">${active?'Active':'Inactive'}</span>`;
-
-      const imgUrl = fixImageUrl(row.image);
-      const avatarHtml = `
-        <div style="position:relative;">
-          ${imgUrl ? `
-            <img src="${esc(imgUrl)}" alt="avatar" class="u-avatar"
-                 loading="lazy"
-                 onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
-          ` : ''}
-          <div class="u-avatar-fallback" style="display:${imgUrl?'none':'flex'};">
-            <span>${esc((row.name||'').charAt(0) || '?')}</span>
-          </div>
-        </div>`;
-
-      const emailHtml = row.email
-        ? `<a href="mailto:${esc(row.email)}">${esc(row.email)}</a>`
-        : `<span class="text-muted">—</span>`;
-
-      const quizzesBtn = CAN_WRITE
-        ? `<button type="button" class="btn btn-light btn-sm js-manage-quizzes">
-             <i class="fa fa-question-circle me-1"></i>Manage
-           </button>`
-        : `<span class="text-muted small">—</span>`;
-
-      const bubbleBtn = CAN_WRITE
-        ? `<button type="button" class="btn btn-light btn-sm js-manage-bubble">
-             <i class="fa fa-gamepad me-1"></i>Manage
-           </button>`
-        : `<span class="text-muted small">—</span>`;
-
-      let actions = `
-        <div class="dropdown text-end" data-bs-display="static">
-          <button type="button" class="btn btn-light btn-sm dd-toggle"
-                  data-bs-toggle="dropdown" data-bs-auto-close="outside"
-                  data-bs-boundary="viewport" aria-expanded="false"
-                  title="Actions">
-            <i class="fa fa-ellipsis-vertical"></i>
-          </button>
-          <ul class="dropdown-menu dropdown-menu-end">
-            <li>
-              <button type="button" class="dropdown-item" data-action="view">
-                <i class="fa fa-eye"></i> View
-              </button>
-            </li>`;
-      if (CAN_WRITE){
-        actions += `
-            <li>
-              <button type="button" class="dropdown-item" data-action="edit">
-                <i class="fa fa-pen-to-square"></i> Edit
-              </button>
-            </li>
-            <li>
-              <button type="button" class="dropdown-item" data-action="quizzes">
-                <i class="fa fa-question-circle"></i> Manage Quizzes
-              </button>
-            </li>
-            <li>
-              <button type="button" class="dropdown-item" data-action="bubble">
-                <i class="fa fa-gamepad"></i> Manage Bubble Games
-              </button>
-            </li>
-            <li>
-  <button type="button" class="dropdown-item" data-action="door">
-    <i class="fa fa-door-open"></i> Manage Door Games
-  </button>
-</li>
-`;
-      }
-      if (CAN_DELETE){
-        actions += `
-            <li><hr class="dropdown-divider"></li>
-            <li>
-              <button type="button" class="dropdown-item text-danger" data-action="delete">
-                <i class="fa fa-trash"></i> Delete
-              </button>
-            </li>`;
-      }
+    if (CAN_DELETE){
       actions += `
-          </ul>
-        </div>`;
-      const folderNm = folderNameFromUserRow(row);
-const folderHtml = folderNm
-  ? `<span class="small">${esc(folderNm)}</span>`
-  : `<span class="text-muted small">—</span>`;
-return `
-  <tr data-id="${row.id}">
-    <td>${statusBadge}</td>
-    <td>${avatarHtml}</td>
-    <td class="fw-semibold">${esc(row.name || '')}</td>
-    <td>${emailHtml}</td>
-    <td>
-      <span class="badge badge-role">
-        <i class="fa fa-user-shield me-1"></i>${esc(roleLabel(row.role))}
-      </span>
-    </td>
+          <li><hr class="dropdown-divider"></li>
+          <li>
+            <button type="button" class="dropdown-item text-danger" data-action="delete">
+              <i class="fa fa-trash"></i> Delete
+            </button>
+          </li>`;
+    }
 
-    <td>${folderHtml}</td>
+    actions += `
+        </ul>
+      </div>`;
 
-    <td class="text-center">${quizzesBtn}</td>
-    <td class="text-end">${actions}</td>
-  </tr>`;
+    const folderNm = folderNameFromUserRow(row);
+    const folderHtml = folderNm
+      ? `<span class="small">${esc(folderNm)}</span>`
+      : `<span class="text-muted small">—</span>`;
 
-    }).join('');
-  }
+    return `
+<tr data-id="${row.id}" data-uuid="${esc(row.uuid || '')}">
+  <td>${statusBadge}</td>
+  <td>${avatarHtml}</td>
+  <td class="fw-semibold">${esc(row.name || '')}</td>
+  <td>${emailHtml}</td>
+  <td>
+    <span class="badge badge-role">
+      <i class="fa fa-user-shield me-1"></i>${esc(roleLabel(row.role))}
+    </span>
+  </td>
+
+  <td>${folderHtml}</td>
+
+  <!-- ✅ NEW: CV column -->
+  <td class="text-center">${cvBtn}</td>
+  <td class="text-end">${actions}</td>
+</tr>`;
+  }).join('');
+}
+
+// ✅ Add ONCE (outside renderUsers) - opens CV in new tab
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.js-open-cv');
+  if (!btn) return;
+
+  const url = (btn.getAttribute('data-cv') || '').trim();
+  if (!url) return;
+
+  window.open(url, '_blank', 'noopener');
+});
+
 
   function renderPager(){
     if (!totalPages || totalPages <= 1){
@@ -2755,7 +2834,13 @@ return `
         return;
       }
       openEditUser(id);
-    }else if (act === 'quizzes'){
+    }else if (act === 'upload_cv'){
+      if (!CAN_WRITE){ err('You do not have permission to upload CV'); return; }
+      const uuid = tr.dataset.uuid || '';
+      openUploadCvModal(id, uuid);
+
+    }
+    else if (act === 'quizzes'){
       if (!CAN_WRITE){
         err('You do not have permission to manage quizzes');
         return;
@@ -3350,6 +3435,88 @@ return `
       document.body.removeChild(tmp);
     }
   });
+
+
+function openUploadCvModal(userId, userUuid){
+  const row = usersCache.find(u => String(u.id) === String(userId));
+  const nm = row?.name || ('User #' + userId);
+
+  if (!userUuid){
+    Swal.fire('Missing UUID','User UUID not found in list API response. Ensure /api/users returns uuid field.','warning');
+    return;
+  }
+
+  cvUserName.textContent = nm;
+  cvUserUuidInput.value  = userUuid;
+  cvFileInput.value      = '';
+
+  uploadCvModal.show();
+}
+
+// Upload submit
+uploadCvForm.addEventListener('submit', async function(e){
+  e.preventDefault();
+
+  if (!CAN_WRITE){
+    err('You do not have permission to upload CV');
+    return;
+  }
+
+  const uuid = (cvUserUuidInput.value || '').trim();
+  const file = cvFileInput.files && cvFileInput.files[0];
+
+  if (!uuid){
+    err('Missing user UUID');
+    return;
+  }
+  if (!file){
+    err('Please select a CV file');
+    return;
+  }
+
+  // client-side validation (same as backend)
+  const maxSize = 10 * 1024 * 1024;
+  if (file.size > maxSize){
+    err('File size must be <= 10MB');
+    return;
+  }
+
+  const ext = (file.name.split('.').pop() || '').toLowerCase();
+  if (!['pdf','doc','docx'].includes(ext)){
+    err('Only PDF, DOC, DOCX allowed');
+    return;
+  }
+
+  const fd = new FormData();
+  fd.append('cv', file);
+
+  cvUploadBtn.disabled = true;
+  const old = cvUploadBtn.innerHTML;
+  cvUploadBtn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span>Uploading…`;
+
+  try{
+    const res = await fetch(`/api/users/${encodeURIComponent(uuid)}/cv`, {
+      method: 'POST',
+      headers: authHeaders({'Accept':'application/json'}), // ✅ don't set Content-Type for FormData
+      body: fd
+    });
+
+    const j = await res.json().catch(()=> ({}));
+    if (!res.ok) throw new Error(firstError(j) || j.message || 'Upload failed');
+
+    ok('CV uploaded successfully');
+    uploadCvModal.hide();
+
+    // optional: reload user list (if you later show cv column)
+    // loadUsers().catch(ex => err(ex.message || 'Reload failed'));
+  }catch(ex){
+    err(ex.message || 'Upload failed');
+  }finally{
+    cvUploadBtn.disabled = false;
+    cvUploadBtn.innerHTML = old;
+  }
+});
+
 
   /* =================== INITIAL LOAD =================== */
   loadFoldersDropdown().finally(() => {

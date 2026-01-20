@@ -555,3 +555,4 @@ Route::middleware('checkRole')->group(function () {
     Route::get('/reports/master-results', [MasterResultController::class, 'index']);
     Route::get('/reports/master-results/{student_uuid}', [MasterResultController::class, 'showStudent']);
 });
+Route::post('/users/import-csv',             [UserController::class, 'importUsersCsv']);

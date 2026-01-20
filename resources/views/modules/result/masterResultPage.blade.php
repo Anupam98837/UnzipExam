@@ -327,7 +327,6 @@
   </div>
 </div>
 @endsection
-
 @push('scripts')
 <script>
 (function(){
@@ -358,6 +357,8 @@
     }
     return data;
   }
+
+  function el(id){ return document.getElementById(id); }
 
   function safeText(s){
     return (s ?? '').toString().replace(/[<>&"']/g, (c) => ({
@@ -397,52 +398,96 @@
     return '';
   }
 
-  const el = (id)=>document.getElementById(id);
-
+  // =========================
+  // State
+  // =========================
   let page = 1;
   let lastPage = 1;
 
+  // =========================
+  // UI helpers
+  // =========================
   function showLoading(){
-    el('mrSkeleton').classList.remove('d-none');
-    el('mrTableWrap').classList.add('d-none');
-    el('mrEmpty').classList.add('d-none');
+    el('mrSkeleton')?.classList.remove('d-none');
+    el('mrTableWrap')?.classList.add('d-none');
+    el('mrEmpty')?.classList.add('d-none');
   }
+
   function showTable(){
-    el('mrSkeleton').classList.add('d-none');
-    el('mrTableWrap').classList.remove('d-none');
-    el('mrEmpty').classList.add('d-none');
+    el('mrSkeleton')?.classList.add('d-none');
+    el('mrTableWrap')?.classList.remove('d-none');
+    el('mrEmpty')?.classList.add('d-none');
   }
+
   function showEmpty(msg='Apply filters to load results.'){
-    el('mrSkeleton').classList.add('d-none');
-    el('mrTableWrap').classList.add('d-none');
-    el('mrEmpty').classList.remove('d-none');
-    el('mrEmptyText').textContent = msg;
+    el('mrSkeleton')?.classList.add('d-none');
+    el('mrTableWrap')?.classList.add('d-none');
+    el('mrEmpty')?.classList.remove('d-none');
+    if(el('mrEmptyText')) el('mrEmptyText').textContent = msg;
+  }
+
+  function setHint(text){
+    if(el('mrHint')) el('mrHint').textContent = text || '';
+  }
+
+  function setMeta(text){
+    if(el('mrMeta')) el('mrMeta').textContent = text || '';
+  }
+
+  function updatePagerButtons(){
+    const prev = el('mrPrevBtn');
+    const next = el('mrNextBtn');
+    if(prev) prev.disabled = (page <= 1);
+    if(next) next.disabled = (page >= lastPage);
   }
 
   function getAttemptMode(){
+    // ✅ expects radio buttons: name="mrAttemptMode" value="all|latest"
     return document.querySelector('input[name="mrAttemptMode"]:checked')?.value || 'all';
   }
 
-  // ✅ Folder required + at least one exam type
   function isFiltered(){
-    const folder = el('mrFolder').value || '';
+    // ✅ your rule: show only when filtered
+    const folder = el('mrFolder')?.value || '';
     if(!folder) return false;
 
     const incCount =
-      (el('mrIncQuiz').checked ? 1 : 0) +
-      (el('mrIncBubble').checked ? 1 : 0) +
-      (el('mrIncDoor').checked ? 1 : 0);
+      (el('mrIncQuiz')?.checked ? 1 : 0) +
+      (el('mrIncBubble')?.checked ? 1 : 0) +
+      (el('mrIncDoor')?.checked ? 1 : 0);
 
-    if(incCount <= 0) return false;
-
-    return true;
+    return incCount > 0;
   }
 
+  function toggleColumns(){
+    const q = !!el('mrIncQuiz')?.checked;
+    const b = !!el('mrIncBubble')?.checked;
+    const d = !!el('mrIncDoor')?.checked;
+
+    // Table headings
+    document.querySelectorAll('[data-col="quiz"]').forEach(x => x.classList.toggle('d-none', !q));
+    document.querySelectorAll('[data-col="bubble"]').forEach(x => x.classList.toggle('d-none', !b));
+    document.querySelectorAll('[data-col="door"]').forEach(x => x.classList.toggle('d-none', !d));
+
+    // Modal tabs (optional)
+    const quizTabBtn = document.querySelector('[data-bs-target="#mrTabQuiz"]');
+    const bubbleTabBtn = document.querySelector('[data-bs-target="#mrTabBubble"]');
+    const doorTabBtn = document.querySelector('[data-bs-target="#mrTabDoor"]');
+
+    if(quizTabBtn) quizTabBtn.closest('li')?.classList.toggle('d-none', !q);
+    if(bubbleTabBtn) bubbleTabBtn.closest('li')?.classList.toggle('d-none', !b);
+    if(doorTabBtn) doorTabBtn.closest('li')?.classList.toggle('d-none', !d);
+  }
+
+  // =========================
+  // Filters -> Query
+  // =========================
   async function loadFolders(){
     try{
       const res = await apiFetch(`${apiBase}/user-folders?role=student`);
       const items = (res.data || res || []);
       const select = el('mrFolder');
+      if(!select) return;
 
       items.forEach(f=>{
         const opt = document.createElement('option');
@@ -457,21 +502,21 @@
 
   function buildQuery(){
     const include = [];
-    if(el('mrIncQuiz').checked) include.push('quiz');
-    if(el('mrIncBubble').checked) include.push('bubble');
-    if(el('mrIncDoor').checked) include.push('door');
+    if(el('mrIncQuiz')?.checked) include.push('quiz');
+    if(el('mrIncBubble')?.checked) include.push('bubble');
+    if(el('mrIncDoor')?.checked) include.push('door');
 
     return {
-      folder_id: el('mrFolder').value || '',
-      search: el('mrSearch').value.trim(),
+      folder_id: el('mrFolder')?.value || '',
+      search: el('mrSearch')?.value?.trim() || '',
       include: include.join(','),
       attempt_mode: getAttemptMode(), // ✅ all | latest
-      date_from: el('mrFrom').value || '',
-      date_to: el('mrTo').value || '',
-      min_pct: el('mrMinPct').value || '',
-      max_pct: el('mrMaxPct').value || '',
-      sort: el('mrSort').value || 'overall_desc',
-      per_page: el('mrPerPage').value || 20,
+      date_from: el('mrFrom')?.value || '',
+      date_to: el('mrTo')?.value || '',
+      min_pct: el('mrMinPct')?.value || '',
+      max_pct: el('mrMaxPct')?.value || '',
+      sort: el('mrSort')?.value || 'overall_desc',
+      per_page: el('mrPerPage')?.value || 20,
       page: page
     };
   }
@@ -485,55 +530,76 @@
     return q.toString();
   }
 
+  // =========================
+  // Render
+  // =========================
   function overallCell(overall){
     const b = band(overall);
     return `
-      <span class="mr-band">
-        <span class="mr-dot"></span>
-        ${fmtPct(overall)} <span class="text-muted" style="font-weight:800">(${b.label})</span>
+      <span class="badge rounded-pill bg-light text-dark border fw-bold px-3 py-2">
+        <i class="fa-solid fa-circle text-danger me-2" style="font-size:8px"></i>
+        ${fmtPct(overall)}
+        <span class="text-muted ms-1">(${b.label})</span>
       </span>
     `;
   }
 
   function totalAttemptsCell(n){
     const val = Number(n || 0);
-    return `<span class="badge rounded-pill bg-light text-dark border fw-bold px-3 py-2">
-      <i class="fa-solid fa-hashtag text-muted me-1"></i>${val}
-    </span>`;
+    return `
+      <span class="badge rounded-pill bg-light text-dark border fw-bold px-3 py-2">
+        <i class="fa-solid fa-hashtag text-muted me-1"></i>${val}
+      </span>
+    `;
   }
 
   function metricCell(meta){
-    const {type, pct, attempts, timeValue, scoreText, timeEff, totalEff, userUuid, lastResultId} = meta;
+    const {
+      type, pct, attempts, timeValue,
+      scoreText, timeEff, totalEff,
+      userUuid, lastResultId
+    } = meta;
+
     const tries = Number(attempts || 0);
     const disabled = (tries <= 0);
 
     const pills = [];
-    pills.push(`<span class="badge rounded-pill bg-light text-dark border fw-bold">
-      <i class="fa-solid fa-repeat text-muted me-1"></i>${tries}
-    </span>`);
+    pills.push(`
+      <span class="badge rounded-pill bg-light text-dark border fw-bold">
+        <i class="fa-solid fa-repeat text-muted me-1"></i>${tries}
+      </span>
+    `);
 
     if(timeValue !== null && timeValue !== undefined && Number(timeValue) > 0){
-      pills.push(`<span class="badge rounded-pill bg-light text-dark border fw-bold">
-        <i class="fa-regular fa-clock text-muted me-1"></i>${safeText(fmtSeconds(timeValue))}
-      </span>`);
+      pills.push(`
+        <span class="badge rounded-pill bg-light text-dark border fw-bold">
+          <i class="fa-regular fa-clock text-muted me-1"></i>${safeText(fmtSeconds(timeValue))}
+        </span>
+      `);
     }
 
     if(scoreText){
-      pills.push(`<span class="badge rounded-pill bg-light text-dark border fw-bold">
-        <i class="fa-solid fa-chart-simple text-muted me-1"></i>${safeText(scoreText)}
-      </span>`);
+      pills.push(`
+        <span class="badge rounded-pill bg-light text-dark border fw-bold">
+          <i class="fa-solid fa-chart-simple text-muted me-1"></i>${safeText(scoreText)}
+        </span>
+      `);
     }
 
     if(type === 'door'){
       if(timeEff){
-        pills.push(`<span class="badge rounded-pill bg-light text-dark border fw-bold">
-          <i class="fa-solid fa-stopwatch text-muted me-1"></i>${safeText(timeEff)}
-        </span>`);
+        pills.push(`
+          <span class="badge rounded-pill bg-light text-dark border fw-bold">
+            <i class="fa-solid fa-stopwatch text-muted me-1"></i>${safeText(timeEff)}
+          </span>
+        `);
       }
       if(totalEff){
-        pills.push(`<span class="badge rounded-pill bg-light text-dark border fw-bold">
-          <i class="fa-solid fa-bolt text-muted me-1"></i>${safeText(totalEff)}
-        </span>`);
+        pills.push(`
+          <span class="badge rounded-pill bg-light text-dark border fw-bold">
+            <i class="fa-solid fa-bolt text-muted me-1"></i>${safeText(totalEff)}
+          </span>
+        `);
       }
     }
 
@@ -547,7 +613,7 @@
         </div>
 
         <div class="d-flex gap-1">
-          <button class="mr-mini-btn" title="See attempts list"
+          <button class="btn btn-light btn-sm border" title="See attempts list"
             ${disabled ? 'disabled' : ''}
             data-action="open_modal"
             data-type="${type}"
@@ -555,7 +621,7 @@
             <i class="fa-solid fa-eye"></i>
           </button>
 
-          <button class="mr-mini-btn" title="View latest result"
+          <button class="btn btn-light btn-sm border" title="View latest result"
             ${(!directUrl || disabled) ? 'disabled' : ''}
             data-action="view_latest"
             data-url="${safeText(directUrl)}">
@@ -568,9 +634,10 @@
 
   function renderRows(items){
     const tbody = el('mrTbody');
-    tbody.innerHTML = '';
+    if(!tbody) return;
 
-    const attemptMode = getAttemptMode(); // all | latest
+    tbody.innerHTML = '';
+    const mode = getAttemptMode(); // all | latest
 
     items.forEach(row=>{
       const name  = row.name || 'Unknown';
@@ -582,35 +649,36 @@
         ? new Date(row.last_activity_at).toLocaleString()
         : '—';
 
-      // ✅ pick values based on Attempt Mode
-      // ALL = AVG fields
-      // LATEST = LAST fields
-      const quizPct   = (attemptMode === 'latest') ? (row.quiz_last_pct ?? row.quiz_pct ?? row.quiz_avg_pct) : (row.quiz_avg_pct ?? row.quiz_pct);
+      // ✅ All = AVG values | Latest = LAST values
+      const quizPct   = (mode === 'latest') ? (row.quiz_last_pct ?? row.quiz_avg_pct) : (row.quiz_avg_pct ?? row.quiz_last_pct);
       const quizTry   = row.quiz_attempts ?? 0;
-      const quizTime  = (attemptMode === 'latest') ? (row.quiz_last_time ?? 0) : (row.quiz_total_time ?? 0);
-      const quizScore = (attemptMode === 'latest') ? (row.quiz_last_score_text ?? row.quiz_score_text ?? '') : (row.quiz_score_text ?? row.quiz_last_score_text ?? '');
+      const quizTime  = (mode === 'latest') ? (row.quiz_last_time ?? 0) : (row.quiz_total_time ?? 0);
+      const quizScore = (mode === 'latest') ? (row.quiz_last_score_text ?? '') : (row.quiz_score_text ?? '');
       const quizLastId = row.quiz_last_result_id ?? null;
 
-      const bubblePct   = (attemptMode === 'latest') ? (row.bubble_last_pct ?? row.bubble_pct ?? row.bubble_avg_pct) : (row.bubble_avg_pct ?? row.bubble_pct);
+      const bubblePct   = (mode === 'latest') ? (row.bubble_last_pct ?? row.bubble_avg_pct) : (row.bubble_avg_pct ?? row.bubble_last_pct);
       const bubbleTry   = row.bubble_attempts ?? 0;
-      const bubbleTime  = (attemptMode === 'latest') ? (row.bubble_last_time ?? 0) : (row.bubble_total_time ?? 0);
-      const bubbleScore = (attemptMode === 'latest') ? (row.bubble_last_score_text ?? row.bubble_score_text ?? '') : (row.bubble_score_text ?? row.bubble_last_score_text ?? '');
+      const bubbleTime  = (mode === 'latest') ? (row.bubble_last_time ?? 0) : (row.bubble_total_time ?? 0);
+      const bubbleScore = (mode === 'latest') ? (row.bubble_last_score_text ?? '') : (row.bubble_score_text ?? '');
       const bubbleLastId = row.bubble_last_result_id ?? null;
 
-      const doorPct   = (attemptMode === 'latest') ? (row.door_last_pct ?? row.door_pct ?? row.door_avg_pct) : (row.door_avg_pct ?? row.door_pct);
+      const doorPct   = (mode === 'latest') ? (row.door_last_pct ?? row.door_avg_pct) : (row.door_avg_pct ?? row.door_last_pct);
       const doorTry   = row.door_attempts ?? 0;
-      const doorTime  = (attemptMode === 'latest') ? (row.door_last_time ?? 0) : (row.door_total_time ?? 0);
+      const doorTime  = (mode === 'latest') ? (row.door_last_time ?? 0) : (row.door_total_time ?? 0);
       const doorTimeEff = row.door_time_eff ?? '';
       const doorTotalEff = row.door_total_eff ?? '';
       const doorLastId = row.door_last_result_id ?? null;
 
       const totalAttempts = row.total_attempts ?? (Number(quizTry||0) + Number(bubbleTry||0) + Number(doorTry||0));
 
-      // overall value: backend may return overall_pct OR overall_avg_pct or overall_last_pct
       const overall =
-        (attemptMode === 'latest')
-          ? (row.overall_last_pct ?? row.overall_pct ?? row.overall_avg_pct)
-          : (row.overall_avg_pct ?? row.overall_pct);
+        (mode === 'latest')
+          ? (row.overall_last_pct ?? row.overall_avg_pct)
+          : (row.overall_avg_pct ?? row.overall_last_pct);
+
+      const qOn = !!el('mrIncQuiz')?.checked;
+      const bOn = !!el('mrIncBubble')?.checked;
+      const dOn = !!el('mrIncDoor')?.checked;
 
       tbody.insertAdjacentHTML('beforeend', `
         <tr>
@@ -628,43 +696,49 @@
 
           <td>${safeText(folder)}</td>
 
-          <td>${metricCell({
-            type:'quiz',
-            pct: quizPct,
-            attempts: quizTry,
-            timeValue: quizTime,
-            scoreText: quizScore,
-            userUuid: row.user_uuid,
-            lastResultId: quizLastId
-          })}</td>
+          <td class="${qOn ? '' : 'd-none'}" data-col="quiz">
+            ${metricCell({
+              type:'quiz',
+              pct: quizPct,
+              attempts: quizTry,
+              timeValue: quizTime,
+              scoreText: quizScore,
+              userUuid: row.user_uuid,
+              lastResultId: quizLastId
+            })}
+          </td>
 
-          <td>${metricCell({
-            type:'bubble',
-            pct: bubblePct,
-            attempts: bubbleTry,
-            timeValue: bubbleTime,
-            scoreText: bubbleScore,
-            userUuid: row.user_uuid,
-            lastResultId: bubbleLastId
-          })}</td>
+          <td class="${bOn ? '' : 'd-none'}" data-col="bubble">
+            ${metricCell({
+              type:'bubble',
+              pct: bubblePct,
+              attempts: bubbleTry,
+              timeValue: bubbleTime,
+              scoreText: bubbleScore,
+              userUuid: row.user_uuid,
+              lastResultId: bubbleLastId
+            })}
+          </td>
 
-          <td>${metricCell({
-            type:'door',
-            pct: doorPct,
-            attempts: doorTry,
-            timeValue: doorTime,
-            timeEff: doorTimeEff,
-            totalEff: doorTotalEff,
-            userUuid: row.user_uuid,
-            lastResultId: doorLastId
-          })}</td>
+          <td class="${dOn ? '' : 'd-none'}" data-col="door">
+            ${metricCell({
+              type:'door',
+              pct: doorPct,
+              attempts: doorTry,
+              timeValue: doorTime,
+              timeEff: doorTimeEff,
+              totalEff: doorTotalEff,
+              userUuid: row.user_uuid,
+              lastResultId: doorLastId
+            })}
+          </td>
 
           <td>${totalAttemptsCell(totalAttempts)}</td>
           <td>${overallCell(overall)}</td>
           <td>${safeText(lastAt)}</td>
 
           <td class="text-end">
-            <button class="mr-mini-btn" title="View all details"
+            <button class="btn btn-light btn-sm border" title="View all details"
               data-action="open_modal"
               data-type="quiz"
               data-uuid="${safeText(row.user_uuid)}">
@@ -678,11 +752,13 @@
     tbody.querySelectorAll('[data-action]').forEach(btn=>{
       btn.addEventListener('click', async ()=>{
         const action = btn.dataset.action;
+
         if(action === 'view_latest'){
           const url = btn.dataset.url || '';
           if(url) window.open(url, '_blank');
           return;
         }
+
         const uuid = btn.dataset.uuid;
         const type = btn.dataset.type || 'quiz';
         await openStudentModal(uuid, type);
@@ -690,23 +766,29 @@
     });
   }
 
+  // =========================
+  // Data load
+  // =========================
   async function loadData(reset=false){
+    toggleColumns();
+
     if(reset) page = 1;
 
-    // ✅ Folder + exam types required for showing data
     if(!isFiltered()){
-      el('mrMeta').textContent = '';
-      el('mrHint').textContent = 'Select a folder and choose at least one exam type.';
-      showEmpty('Select a folder + exam types to load results.');
+      setMeta('');
+      setHint('Select a folder and choose at least one exam type.');
+      showEmpty('Select folder + exam type to load results.');
+      updatePagerButtons();
       return;
     }
 
     showLoading();
-    el('mrHint').textContent = 'Loading results for selected filters...';
+    setHint('Loading results for selected filters...');
 
     try{
       const query = buildQuery();
       const qs = toQueryString(query);
+
       const res = await apiFetch(`${apiBase}/reports/master-results?${qs}`);
       const payload = res.data || res;
 
@@ -716,9 +798,10 @@
       lastPage = meta.total_pages ?? meta.last_page ?? payload.total_pages ?? payload.last_page ?? 1;
 
       if(!items.length){
-        el('mrHint').textContent = 'No candidates found for selected filters.';
+        setHint('No candidates found for selected filters.');
         showEmpty('No candidates found for selected filters.');
-        el('mrMeta').textContent = '0 results';
+        setMeta('0 results');
+        updatePagerButtons();
         return;
       }
 
@@ -729,86 +812,106 @@
       const from  = ((page - 1) * Number(query.per_page)) + 1;
       const to    = Math.min(from + items.length - 1, total);
 
-      el('mrMeta').textContent = `Showing ${from}–${to} of ${total}`;
-      el('mrHint').textContent = `Showing results based on your filters (${getAttemptMode().toUpperCase()}).`;
+      setMeta(`Showing ${from}–${to} of ${total}`);
+      setHint(`Showing results (${getAttemptMode().toUpperCase()}).`);
+      updatePagerButtons();
     }catch(e){
       showEmpty('Failed to load results.');
-      el('mrMeta').textContent = 'Failed to load';
+      setMeta('Failed to load');
+      setHint('Something went wrong while loading results.');
+      updatePagerButtons();
       alert(e.message || 'Failed to load master results');
     }
   }
 
+  // =========================
+  // Modal (attempt lists)
+  // =========================
   async function openStudentModal(userUuid, openTab='quiz'){
     try{
       const res = await apiFetch(`${apiBase}/reports/master-results/${encodeURIComponent(userUuid)}`);
       const d = res.data || res;
 
-      el('mrModalTitle').textContent = `${d.student?.name || 'Student'} — Attempts`;
-      el('mrModalSub').textContent = `${d.student?.email || ''} ${d.student?.phone_number ? '• ' + d.student.phone_number : ''}`.trim();
+      if(el('mrModalTitle')) el('mrModalTitle').textContent = `${d.student?.name || 'Student'} — Attempts`;
+      if(el('mrModalSub')) el('mrModalSub').textContent =
+        `${d.student?.email || ''} ${d.student?.phone_number ? '• ' + d.student.phone_number : ''}`.trim();
 
       function viewBtn(type, resultId){
         const url = viewUrl(type, resultId);
-        if(!url) return `<button class="mr-mini-btn" disabled title="No Result ID"><i class="fa-solid fa-ban"></i></button>`;
-        return `<button class="mr-mini-btn" title="Open Result" onclick="window.open('${url}','_blank')"><i class="fa-solid fa-arrow-up-right-from-square"></i></button>`;
+        if(!url) return `<button class="btn btn-light btn-sm border" disabled title="No Result ID"><i class="fa-solid fa-ban"></i></button>`;
+        return `<button class="btn btn-light btn-sm border" title="Open Result" onclick="window.open('${url}','_blank')">
+          <i class="fa-solid fa-arrow-up-right-from-square"></i>
+        </button>`;
       }
 
+      // QUIZ
       const quizBody = el('mrQuizBody');
-      quizBody.innerHTML = '';
-      (d.quiz_attempts || []).forEach((a, idx)=>{
-        quizBody.insertAdjacentHTML('beforeend', `
-          <tr>
-            <td>${idx+1}</td>
-            <td>${safeText(a.title || 'Quiz')}</td>
-            <td><b>${fmtPct(a.percentage)}</b></td>
-            <td>${safeText(a.score_text || '—')}</td>
-            <td>${safeText(a.attempted_at || '—')}</td>
-            <td class="text-end">${viewBtn('quiz', a.result_id || a.id)}</td>
-          </tr>
-        `);
-      });
-      if(!(d.quiz_attempts||[]).length){
-        quizBody.innerHTML = `<tr><td colspan="6" class="text-muted text-center py-3">No quiz attempts</td></tr>`;
+      if(quizBody){
+        quizBody.innerHTML = '';
+        (d.quiz_attempts || []).forEach((a, idx)=>{
+          quizBody.insertAdjacentHTML('beforeend', `
+            <tr>
+              <td>${idx+1}</td>
+              <td>${safeText(a.title || 'Quiz')}</td>
+              <td><b>${fmtPct(a.percentage)}</b></td>
+              <td>${safeText(a.score_text || '—')}</td>
+              <td>${safeText(a.attempted_at || '—')}</td>
+              <td class="text-end">${viewBtn('quiz', a.result_id || a.id)}</td>
+            </tr>
+          `);
+        });
+        if(!(d.quiz_attempts||[]).length){
+          quizBody.innerHTML = `<tr><td colspan="6" class="text-muted text-center py-3">No quiz attempts</td></tr>`;
+        }
       }
 
+      // BUBBLE
       const bubbleBody = el('mrBubbleBody');
-      bubbleBody.innerHTML = '';
-      (d.bubble_attempts || []).forEach((a, idx)=>{
-        bubbleBody.insertAdjacentHTML('beforeend', `
-          <tr>
-            <td>${idx+1}</td>
-            <td>${safeText(a.title || 'Bubble Game')}</td>
-            <td><b>${fmtPct(a.percentage)}</b></td>
-            <td>${safeText(a.score_text || '—')}</td>
-            <td>${safeText(a.attempted_at || '—')}</td>
-            <td class="text-end">${viewBtn('bubble', a.result_id || a.id)}</td>
-          </tr>
-        `);
-      });
-      if(!(d.bubble_attempts||[]).length){
-        bubbleBody.innerHTML = `<tr><td colspan="6" class="text-muted text-center py-3">No bubble game attempts</td></tr>`;
+      if(bubbleBody){
+        bubbleBody.innerHTML = '';
+        (d.bubble_attempts || []).forEach((a, idx)=>{
+          bubbleBody.insertAdjacentHTML('beforeend', `
+            <tr>
+              <td>${idx+1}</td>
+              <td>${safeText(a.title || 'Bubble Game')}</td>
+              <td><b>${fmtPct(a.percentage)}</b></td>
+              <td>${safeText(a.score_text || '—')}</td>
+              <td>${safeText(a.attempted_at || '—')}</td>
+              <td class="text-end">${viewBtn('bubble', a.result_id || a.id)}</td>
+            </tr>
+          `);
+        });
+        if(!(d.bubble_attempts||[]).length){
+          bubbleBody.innerHTML = `<tr><td colspan="6" class="text-muted text-center py-3">No bubble game attempts</td></tr>`;
+        }
       }
 
+      // DOOR
       const doorBody = el('mrDoorBody');
-      doorBody.innerHTML = '';
-      (d.door_attempts || []).forEach((a, idx)=>{
-        doorBody.insertAdjacentHTML('beforeend', `
-          <tr>
-            <td>${idx+1}</td>
-            <td>${safeText(a.title || 'Door Game')}</td>
-            <td><b>${fmtPct(a.percentage)}</b></td>
-            <td>${safeText(a.score_text || '—')}</td>
-            <td>${safeText(a.attempted_at || '—')}</td>
-            <td class="text-end">${viewBtn('door', a.result_id || a.id)}</td>
-          </tr>
-        `);
-      });
-      if(!(d.door_attempts||[]).length){
-        doorBody.innerHTML = `<tr><td colspan="6" class="text-muted text-center py-3">No door game attempts</td></tr>`;
+      if(doorBody){
+        doorBody.innerHTML = '';
+        (d.door_attempts || []).forEach((a, idx)=>{
+          doorBody.insertAdjacentHTML('beforeend', `
+            <tr>
+              <td>${idx+1}</td>
+              <td>${safeText(a.title || 'Door Game')}</td>
+              <td><b>${fmtPct(a.percentage)}</b></td>
+              <td>${safeText(a.score_text || '—')}</td>
+              <td>${safeText(a.attempted_at || '—')}</td>
+              <td class="text-end">${viewBtn('door', a.result_id || a.id)}</td>
+            </tr>
+          `);
+        });
+        if(!(d.door_attempts||[]).length){
+          doorBody.innerHTML = `<tr><td colspan="6" class="text-muted text-center py-3">No door game attempts</td></tr>`;
+        }
       }
 
-      const modal = new bootstrap.Modal(document.getElementById('mrDetailModal'));
+      const modalEl = document.getElementById('mrDetailModal');
+      const modal = new bootstrap.Modal(modalEl);
       modal.show();
 
+      // switch tab
       const map = {quiz:'#mrTabQuiz', bubble:'#mrTabBubble', door:'#mrTabDoor'};
       const target = map[openTab] || '#mrTabQuiz';
       const btn = document.querySelector(`[data-bs-target="${target}"]`);
@@ -819,6 +922,9 @@
     }
   }
 
+  // =========================
+  // Export
+  // =========================
   async function exportCsv(){
     if(!isFiltered()){
       alert('Select a folder + exam types before exporting.');
@@ -852,28 +958,35 @@
     }
   }
 
+  // =========================
   // Events
-  el('mrRefreshBtn').addEventListener('click', ()=>loadData(true));
-  el('mrExportBtn').addEventListener('click', exportCsv);
+  // =========================
+  el('mrRefreshBtn')?.addEventListener('click', ()=>loadData(true));
+  el('mrExportBtn')?.addEventListener('click', exportCsv);
 
-  el('mrClearBtn').addEventListener('click', ()=>{
-    el('mrSearch').value='';
-    el('mrFolder').value='';
-    el('mrIncQuiz').checked=true;
-    el('mrIncBubble').checked=true;
-    el('mrIncDoor').checked=true;
-    document.getElementById('mrAttemptAll').checked = true;
-    el('mrFrom').value='';
-    el('mrTo').value='';
-    el('mrMinPct').value='';
-    el('mrMaxPct').value='';
-    el('mrSort').value='overall_desc';
-    el('mrPerPage').value='20';
+  el('mrClearBtn')?.addEventListener('click', ()=>{
+    if(el('mrSearch')) el('mrSearch').value = '';
+    if(el('mrFolder')) el('mrFolder').value = '';
+    if(el('mrIncQuiz')) el('mrIncQuiz').checked = true;
+    if(el('mrIncBubble')) el('mrIncBubble').checked = true;
+    if(el('mrIncDoor')) el('mrIncDoor').checked = true;
+
+    // attempt mode radio -> ALL default
+    const allRadio = document.getElementById('mrAttemptAll');
+    if(allRadio) allRadio.checked = true;
+
+    if(el('mrFrom')) el('mrFrom').value = '';
+    if(el('mrTo')) el('mrTo').value = '';
+    if(el('mrMinPct')) el('mrMinPct').value = '';
+    if(el('mrMaxPct')) el('mrMaxPct').value = '';
+    if(el('mrSort')) el('mrSort').value = 'overall_desc';
+    if(el('mrPerPage')) el('mrPerPage').value = '20';
+
     loadData(true);
   });
 
   let t = null;
-  el('mrSearch').addEventListener('input', ()=>{
+  el('mrSearch')?.addEventListener('input', ()=>{
     clearTimeout(t);
     t = setTimeout(()=>loadData(true), 350);
   });
@@ -883,7 +996,7 @@
     'mrFrom','mrTo','mrMinPct','mrMaxPct',
     'mrIncQuiz','mrIncBubble','mrIncDoor'
   ].forEach(id=>{
-    el(id).addEventListener('change', ()=>loadData(true));
+    el(id)?.addEventListener('change', ()=>loadData(true));
   });
 
   // attempt mode (radio click)
@@ -891,20 +1004,24 @@
     r.addEventListener('change', ()=>loadData(true));
   });
 
-  el('mrPrevBtn').addEventListener('click', ()=>{
+  el('mrPrevBtn')?.addEventListener('click', ()=>{
     if(page <= 1) return;
     page--;
     loadData(false);
   });
-  el('mrNextBtn').addEventListener('click', ()=>{
+
+  el('mrNextBtn')?.addEventListener('click', ()=>{
     if(page >= lastPage) return;
     page++;
     loadData(false);
   });
 
+  // =========================
   // Init
+  // =========================
   loadFolders();
   loadData(true);
+
 })();
 </script>
 @endpush

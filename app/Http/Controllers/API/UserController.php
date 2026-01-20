@@ -506,6 +506,131 @@ public function store(Request $request)
     }
 }
 
+    /**
+     * POST /api/users/{uuid}/cv
+     * multipart/form-data:
+     *   - cv (file)
+     *
+     * Uploads CV to: /public/assets/images/usercv
+     * Saves relative path in users.cv (e.g. /assets/images/usercv/cv_xxx.pdf)
+     */
+    public function uploadCvByUuid(Request $request, string $uuid)
+    {
+        // ✅ Validate file (CV)
+        $v = Validator::make($request->all(), [
+            'cv' => 'required|file|max:10240|mimes:pdf,doc,docx',
+        ]);
+
+        if ($v->fails()) {
+            return response()->json([
+                'status' => 'error',
+                'errors' => $v->errors(),
+            ], 422);
+        }
+
+        // ✅ Find user by UUID (ignore soft deleted)
+        $user = DB::table('users')
+            ->where('uuid', $uuid)
+            ->whereNull('deleted_at')
+            ->first();
+
+        if (!$user) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'User not found',
+            ], 404);
+        }
+
+        $file = $request->file('cv');
+        if (!$file || !$file->isValid()) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Invalid CV upload',
+            ], 422);
+        }
+
+        // ✅ Destination: public/assets/images/usercv
+        $destDir = public_path('assets/images/usercv');
+        if (!File::isDirectory($destDir)) {
+            File::makeDirectory($destDir, 0755, true);
+        }
+
+        $ext = strtolower($file->getClientOriginalExtension() ?: 'bin');
+        $filename = 'cv_' . date('Ymd_His') . '_' . Str::lower(Str::random(18)) . '.' . $ext;
+
+        try {
+            DB::beginTransaction();
+
+            // Lock row (avoid race conditions)
+            $locked = DB::table('users')
+                ->where('id', $user->id)
+                ->whereNull('deleted_at')
+                ->lockForUpdate()
+                ->first();
+
+            if (!$locked) {
+                DB::rollBack();
+                return response()->json([
+                    'status'  => 'error',
+                    'message' => 'User not found',
+                ], 404);
+            }
+
+            // ✅ Move file
+            $file->move($destDir, $filename);
+
+            // ✅ Store relative path in DB
+            $relativePath = '/assets/images/usercv/' . $filename;
+
+            // ✅ Delete old CV (if any) AFTER new file is saved
+            $oldCv = $locked->cv ?? null;
+
+            DB::table('users')->where('id', $locked->id)->update([
+                'cv'           => $relativePath,
+                'updated_at'   => now(),
+            ]);
+
+            DB::commit();
+
+            // ✅ Remove previous CV file if it's managed by us
+            if (!empty($oldCv)) {
+                $this->deleteManagedCv($oldCv);
+            }
+
+            $fresh = DB::table('users')->where('id', $locked->id)->first();
+
+            return response()->json([
+                'status'  => 'success',
+                'message' => 'CV uploaded successfully',
+                'data'    => [
+                    'user_id' => (int) $fresh->id,
+                    'uuid'    => (string) ($fresh->uuid ?? ''),
+                    'cv'      => $this->publicFileUrl($fresh->cv ?? null),
+                    'cv_path' => (string) ($fresh->cv ?? ''),
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            DB::rollBack();
+
+            // Cleanup uploaded file if it exists
+            $maybeAbs = $destDir . DIRECTORY_SEPARATOR . $filename;
+            if (File::exists($maybeAbs)) {
+                @File::delete($maybeAbs);
+            }
+
+            Log::error('[Upload CV] failed', [
+                'uuid'  => $uuid,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Failed to upload CV',
+            ], 500);
+        }
+    }
+
+
 
     /**
      * GET /api/users/all?q=&status=&limit=
@@ -564,7 +689,7 @@ public function store(Request $request)
         $total = (clone $base)->count();
         $rows  = $base->orderBy('name')
             ->offset(($page-1)*$pp)->limit($pp)
-            ->select('id','name','email','image','role','role_short_form','status','user_folder_id')
+            ->select('id','uuid','cv','name','email','image','role','role_short_form','status','user_folder_id')
             ->get();
 
         return response()->json([
@@ -2049,5 +2174,34 @@ public function userDoorGames(Request $request, int $id)
         'status' => 'success',
         'data'   => $data,
     ]);
+}
+
+/** Convert stored file path (absolute/relative) into current-host absolute URL. */
+protected function publicFileUrl(?string $value): string
+{
+    if (empty($value)) return '';
+
+    $path = parse_url($value, PHP_URL_PATH);
+    $path = $path ?: $value;
+    $path = '/' . ltrim($path, '/');
+
+    return url($path);
+}
+
+/** Delete a managed CV if it resides in /public/assets/images/usercv */
+protected function deleteManagedCv(?string $pathOrUrl): void
+{
+    if (empty($pathOrUrl)) return;
+
+    $path = parse_url($pathOrUrl, PHP_URL_PATH);
+    $path = $path ?: $pathOrUrl;
+    $path = '/' . ltrim($path, '/');
+
+    if (Str::startsWith($path, '/assets/images/usercv/')) {
+        $abs = public_path(ltrim($path, '/'));
+        if (File::exists($abs)) {
+            @File::delete($abs);
+        }
+    }
 }
 }

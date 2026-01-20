@@ -840,7 +840,7 @@ html.theme-dark .page-link:hover{ background-color: rgba(255,255,255,.1); }
         <td>
           <div class="fw-semibold">${title}</div>
           ${creator}
-          ${desc ? `<div class="text-muted small">${desc}</div>` : ``}
+
         </td>
         <td>${deleted}</td>
         <td class="text-end">${actionMenu(scope, r)}</td>
@@ -855,7 +855,7 @@ html.theme-dark .page-link:hover{ background-color: rgba(255,255,255,.1); }
             <a href="//tests/play?game=${encodeURIComponent(r.uuid || r.id)}" class="link-offset-2 link-underline-opacity-0">${title}</a>
           </div>
           ${creator}
-          ${desc ? `<div class="text-muted small">${desc}</div>` : ``}
+
         </td>
         <td>${Number(r.max_attempts ?? 1)} attempt(s)</td>
         <td>${Number(r.per_question_time_sec ?? 30)} sec</td>
@@ -873,7 +873,7 @@ html.theme-dark .page-link:hover{ background-color: rgba(255,255,255,.1); }
           <a href="/tests/play?game=${encodeURIComponent(r.uuid || r.id)}" class="link-offset-2 link-underline-opacity-0">${title}</a>
         </div>
         ${creator}
-        ${desc ? `<div class="text-muted small">${desc}</div>` : ``}
+
       </td>
       <td>${badgeStatus(r.status || '-')}</td>
       <td>${Number(r.max_attempts ?? 1)} attempt(s)</td>

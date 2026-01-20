@@ -844,7 +844,6 @@ function cleanupModalBackdrops(){
           <div class="fw-semibold">
             <a href="/door/tests/play?game=${encodeURIComponent(key)}" class="link-offset-2 link-underline-opacity-0">${title}</a>
           </div>
-          ${desc ? `<div class="text-muted small">${desc}</div>` : ``}
         </td>
         <td>${gridDim}x${gridDim}</td>
         <td>${maxAttempts} attempt(s)</td>
@@ -862,7 +861,7 @@ function cleanupModalBackdrops(){
         <div class="fw-semibold">
           <a href="/door/tests/play?game=${encodeURIComponent(key)}" class="link-offset-2 link-underline-opacity-0">${title}</a>
         </div>
-        ${desc ? `<div class="text-muted small">${desc}</div>` : ``}
+
       </td>
       <td>${badgeStatus(r.status || '-')}</td>
       <td>${gridDim}x${gridDim}</td>

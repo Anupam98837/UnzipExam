@@ -684,6 +684,23 @@ html.theme-dark .page-link:hover{ background-color: rgba(255,255,255,.1); }
   const qsa=(sel)=>document.querySelectorAll(sel);
   const showLoader=(scope, v)=>{ const el = qs(tabs[scope].loader); if (el) el.style.display = v ? '' : 'none'; };
 
+  /* ✅ MODAL BACKDROP FIX (Filter Modal) */
+const filterModalEl = document.getElementById('filterModal');
+const filterModalInst = filterModalEl ? bootstrap.Modal.getOrCreateInstance(filterModalEl) : null;
+
+let pendingFilterApply = false;
+
+function cleanupModalBackdrops(){
+  setTimeout(()=>{
+    if (!document.querySelector('.modal.show')) {
+      document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
+      document.body.classList.remove('modal-open');
+      document.body.style.removeProperty('overflow');
+      document.body.style.removeProperty('padding-right');
+    }
+  }, 60);
+}
+
   function paramsBase(scope){
     const usp = new URLSearchParams();
     const p  = state[scope].page || 1;
@@ -1012,13 +1029,26 @@ html.theme-dark .page-link:hover{ background-color: rgba(255,255,255,.1); }
     state.games.page=1;
     load('games');
   });
+btnApplyFilters?.addEventListener('click', (e)=>{
+  e.preventDefault();
+  e.stopPropagation();
+  pendingFilterApply = true;
+  filterModalInst?.hide(); // ✅ close modal first
+});
 
-  btnApplyFilters?.addEventListener('click', ()=>{
-    const m = bootstrap.Modal.getInstance(document.getElementById('filterModal'));
-    m?.hide();
-    state.games.page = 1;
-    load('games');
-  });
+/* ✅ AFTER modal fully closes -> apply + load */
+filterModalEl?.addEventListener('hidden.bs.modal', ()=>{
+  if (!pendingFilterApply){
+    cleanupModalBackdrops();
+    return;
+  }
+  pendingFilterApply = false;
+
+  state.games.page = 1;
+  load('games');
+
+  cleanupModalBackdrops(); // ✅ failsafe
+});
 
   btnReset?.addEventListener('click', ()=>{
     if (q) q.value = '';

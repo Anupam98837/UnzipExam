@@ -532,3 +532,7 @@ Route::prefix('student-results')
 
         Route::post('/', [StudentResultController::class, 'store']);
     });
+
+    Route::get('/quizz/result/export', [QuizzResultController::class, 'export']);
+    Route::get('/door-game/result/export', [DoorGameResultController::class, 'export']);
+    Route::get('/bubble-game/result/export', [BubbleGameResultController::class, 'exportResults']);

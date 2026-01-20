@@ -260,7 +260,7 @@
       gap: 5px;
       justify-content: center;
       align-content: center;
-      padding: 30px 30px; /* tighter because arrows are around user tile now */
+      padding: 30px 30px;
       background: rgba(255,255,255,.18);
       border: 1px solid rgba(255,255,255,.22);
       border-radius: 18px;
@@ -285,7 +285,7 @@
       align-items:center;
       justify-content:center;
       transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease, background .12s ease;
-      overflow: visible; /* allow arrows to sit around user tile */
+      overflow: visible;
     }
     html.theme-dark .dgx-cell{
       background: #0f172a;
@@ -313,28 +313,22 @@
       z-index: 2;
     }
 
-    /* ✅ Player default */
     .dgx-ico.user{
       color: color-mix(in srgb, var(--dgx-ink) 78%, #000);
       opacity: .92;
     }
     html.theme-dark .dgx-ico.user{ color: #cbd5e1; opacity:.95; }
 
-    /* ✅ Player after key: PURPLE (professional glow) */
     .dgx-playerPowered .dgx-ico.user{
-      /* color: var(--dgx-purple); */
       opacity: 1;
-      /* filter:
-        drop-shadow(0 16px 22px color-mix(in srgb, var(--dgx-purple) 35%, transparent))
-        drop-shadow(0 10px 16px rgba(2,6,23,.18)); */
     }
 
     .dgx-ico.key{ color: #f59e0b; filter: drop-shadow(0 14px 18px rgba(245,158,11,.22)); }
 
-    /* ✅ Door color BLACK (with outline for visibility) */
     .dgx-ico.doorClosed,
     .dgx-ico.doorOpen{
-color: #8B5A2B !important; /* brown */      text-shadow:
+      color: #8B5A2B !important;
+      text-shadow:
         0 0 0 rgba(0,0,0,0),
         0 1px 0 rgba(255,255,255,.45),
         0 0 12px rgba(255,255,255,.20);
@@ -349,139 +343,111 @@ color: #8B5A2B !important; /* brown */      text-shadow:
         0 0 14px rgba(255,255,255,.22);
     }
 
-    /* ✅ current position pulse */
     .dgx-cell.is-current{
-  outline: 3px solid color-mix(in srgb, var(--dgx-brand2) 38%, transparent);
-  border-color: color-mix(in srgb, var(--dgx-brand2) 50%, rgba(2,6,23,.12));
-  box-shadow: 0 16px 34px rgba(2,6,23,.16);
-  animation: dgxPulse 1.35s ease-in-out infinite;
-
-  /* ✅ CRITICAL: keep current tile above all others (so arrows don't hide) */
-  z-index: 999 !important;
-
-  /* ✅ CRITICAL: allow arrows to overflow without clipping */
-  overflow: visible !important;
-
-  /* ✅ stabilize stacking / */
-  transform: translateZ(0);
-}
+      outline: 3px solid color-mix(in srgb, var(--dgx-brand2) 38%, transparent);
+      border-color: color-mix(in srgb, var(--dgx-brand2) 50%, rgba(2,6,23,.12));
+      box-shadow: 0 16px 34px rgba(2,6,23,.16);
+      animation: dgxPulse 1.35s ease-in-out infinite;
+      z-index: 999 !important;
+      overflow: visible !important;
+      transform: translateZ(0);
+    }
 
     @keyframes dgxPulse{
       0%{ transform: translateY(0); }
       50%{ transform: translateY(-1px); }
       100%{ transform: translateY(0); }
     }
-/* ✅ Do NOT move the current cell on hover/active
-   because arrows are positioned relative to it */
-.dgx-cell.is-current:hover,
-.dgx-cell.is-current:active{
-  transform: none !important;
-}
+    .dgx-cell.is-current:hover,
+    .dgx-cell.is-current:active{
+      transform: none !important;
+    }
 
-    /* ✅ reachable neighbor */
     .dgx-cell.is-next{
       outline: 2px dashed color-mix(in srgb, #22c55e 40%, transparent);
       border-color: color-mix(in srgb, #22c55e 45%, rgba(2,6,23,.12));
     }
 
-    /* ✅ visited path highlighting */
-    /* ✅ visited path highlighting (WHITE tint) */
-/* ✅ visited cells: white card + dashed inset border (like sample) */
-.dgx-cell.is-visited{
-  background: #ffffff !important;
-  border: 2px solid rgba(255,255,255,.98) !important;
+    .dgx-cell.is-visited{
+      background: #ffffff !important;
+      border: 2px solid rgba(255,255,255,.98) !important;
+      outline: 2px dashed rgba(45, 212, 191, .95) !important;
+      outline-offset: -8px !important;
+      box-shadow: 0 10px 22px rgba(2,6,23,.10) !important;
+    }
+    html.theme-dark .dgx-cell.is-visited{
+      background: rgba(255,255,255,.10) !important;
+      border: 2px solid rgba(255,255,255,.20) !important;
+      outline: 2px dashed rgba(45, 212, 191, .85) !important;
+      outline-offset: -8px !important;
+    }
 
-  /* dashed inset ring */
-  outline: 2px dashed rgba(45, 212, 191, .95) !important; /* teal */
-  outline-offset: -8px !important;
-
-  box-shadow: 0 10px 22px rgba(2,6,23,.10) !important;
-}
-
-html.theme-dark .dgx-cell.is-visited{
-  background: rgba(255,255,255,.10) !important;
-  border: 2px solid rgba(255,255,255,.20) !important;
-  outline: 2px dashed rgba(45, 212, 191, .85) !important;
-  outline-offset: -8px !important;
-}
-
-
-
-    /* ===== Barriers (HIDDEN visuals, logic still works) ===== */
     .dgx-bar{ display:none !important; }
 
-    /* ===== User-surrounding arrows (inside user cell) ===== */
     .dgx-uArrows{
       position:absolute;
       inset:0;
       z-index: 1025;
       pointer-events:none;
-        transform: translateZ(0);
-
+      transform: translateZ(0);
     }
     .dgx-uArrow{
-  pointer-events:auto;
-  position:absolute;
-  width: 24px;
-  height: 24px;
-  border-radius: 14px;
-  display:flex;
-  align-items:center;
-  justify-content:center;
+      pointer-events:auto;
+      position:absolute;
+      width: 24px;
+      height: 24px;
+      border-radius: 14px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      border: 1px solid rgba(255,255,255,.22);
+      background: rgba(15,23,42,.55);
+      color: #fff;
+      z-index:1160;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 12px 26px rgba(2,6,23,.18);
+      transition: background .12s ease, opacity .12s ease, filter .12s ease, transform .12s ease;
+      user-select:none;
+      --tx: 0px;
+      --ty: 0px;
+      transform: translate3d(var(--tx), var(--ty), 0);
+    }
+    html.theme-dark .dgx-uArrow{
+      background: rgba(148,163,184,.14);
+      border-color: rgba(148,163,184,.22);
+      color:#e5e7eb;
+      box-shadow: 0 16px 34px rgba(0,0,0,.55);
+    }
 
-  border: 1px solid rgba(255,255,255,.22);
-  background: rgba(15,23,42,.55);
-  color: #fff;
+    .dgx-uArrow.up{    top:-18px; left:50%;   --tx:-50%; --ty:0px; }
+    .dgx-uArrow.down{  bottom:-18px; left:50%;--tx:-50%; --ty:0px; }
+    .dgx-uArrow.left{  left:-18px; top:50%;   --tx:0px;  --ty:-50%; }
+    .dgx-uArrow.right{ right:-18px; top:50%;  --tx:0px;  --ty:-50%; }
 
-  z-index:1160;
-  backdrop-filter: blur(10px);
-  box-shadow: 0 12px 26px rgba(2,6,23,.18);
-  transition: background .12s ease, opacity .12s ease, filter .12s ease, transform .12s ease;
-  user-select:none;
+    .dgx-uArrow:hover{
+      transform: translate3d(var(--tx), calc(var(--ty) - 1px), 0);
+    }
+    .dgx-uArrow:active{
+      transform: translate3d(var(--tx), var(--ty), 0) scale(.98);
+    }
 
-  /* ✅ direction transform base (never overwritten) */
-  --tx: 0px;
-  --ty: 0px;
-  transform: translate3d(var(--tx), var(--ty), 0);
-}
-html.theme-dark .dgx-uArrow{
-  background: rgba(148,163,184,.14);
-  border-color: rgba(148,163,184,.22);
-  color:#e5e7eb;
-  box-shadow: 0 16px 34px rgba(0,0,0,.55);
-}
-
-/* ✅ Direction anchors (use vars so disabled never breaks alignment) */
-.dgx-uArrow.up{    top:-18px; left:50%;   --tx:-50%; --ty:0px; }
-.dgx-uArrow.down{  bottom:-18px; left:50%;--tx:-50%; --ty:0px; }
-.dgx-uArrow.left{  left:-18px; top:50%;   --tx:0px;  --ty:-50%; }
-.dgx-uArrow.right{ right:-18px; top:50%;  --tx:0px;  --ty:-50%; }
-    /* ✅ Hover/active KEEP direction transform */
-.dgx-uArrow:hover{
-  transform: translate3d(var(--tx), calc(var(--ty) - 1px), 0);
-}
-.dgx-uArrow:active{
-  transform: translate3d(var(--tx), var(--ty), 0) scale(.98);
-}
-    /* blocked or visited => RED */
     .dgx-uArrow.blocked{
       background: rgba(239,68,68,.70);
       border-color: rgba(239,68,68,.35);
       color:#fff;
     }
-    /* disabled */
-   .dgx-uArrow.disabled{
-  opacity: .48;
-  cursor:not-allowed;
-  box-shadow:none;
-  filter: saturate(.95);
-}
-.dgx-uArrow.disabled:hover,
-.dgx-uArrow.disabled:active{
-  transform: translate3d(var(--tx), var(--ty), 0);
-}
 
-    /* ===== FX: shake + sparkle + win confetti ===== */
+    .dgx-uArrow.disabled{
+      opacity: .48;
+      cursor:not-allowed;
+      box-shadow:none;
+      filter: saturate(.95);
+    }
+    .dgx-uArrow.disabled:hover,
+    .dgx-uArrow.disabled:active{
+      transform: translate3d(var(--tx), var(--ty), 0);
+    }
+
     .dgx-cell.fx-shake{ animation: dgxShake .35s ease; }
     @keyframes dgxShake{
       0%{ transform: translateX(0); }
@@ -534,7 +500,6 @@ html.theme-dark .dgx-uArrow{
       overflow: visible;
     }
 
-    /* ===== Sidebar ===== */
     .dgx-side{
       position: sticky;
       top: 86px;
@@ -599,6 +564,48 @@ html.theme-dark .dgx-uArrow{
     html.theme-dark .dgx-keypill{ background: rgba(148,163,184,.08); }
 
     .dgx-footnote{ text-align:center; color: var(--dgx-muted); font-size: 12px; font-weight: 850; padding: 2px 0 10px; }
+
+    /* ✅ Intro Modal Cards (Bubble Game style) */
+    .dgx-introCard{
+      border: 1px solid var(--dgx-line);
+      background: rgba(2,6,23,.02);
+      border-radius: 16px;
+      padding: 12px 14px;
+    }
+    html.theme-dark .dgx-introCard{ background: rgba(148,163,184,.06); }
+    .dgx-introTitle{
+      display:flex; align-items:center; gap:10px;
+      font-weight: 950; font-size: 13px;
+      margin-bottom: 6px;
+      color: color-mix(in srgb, var(--dgx-brand2) 70%, var(--dgx-ink));
+      text-transform: uppercase;
+      letter-spacing: .35px;
+    }
+    .dgx-introBody{
+      color: var(--dgx-muted);
+      font-size: 14px;
+      font-weight: 800;
+      line-height: 1.5;
+      word-break: break-word;
+    }
+    .dgx-skel{
+      height: 14px;
+      border-radius: 10px;
+      background: rgba(2,6,23,.08);
+      position:relative;
+      overflow:hidden;
+    }
+    html.theme-dark .dgx-skel{ background: rgba(148,163,184,.10); }
+    .dgx-skel:after{
+      content:"";
+      position:absolute; inset:0;
+      transform:translateX(-100%);
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,.55), transparent);
+      animation: dgxShimmer 1.2s infinite;
+    }
+    @keyframes dgxShimmer{
+      100%{ transform:translateX(100%); }
+    }
   </style>
 </head>
 
@@ -773,6 +780,65 @@ html.theme-dark .dgx-uArrow{
   </div>
 </div>
 
+{{-- ✅ INTRO MODAL (Bubble Game Style) --}}
+<div class="modal fade" id="dgxIntroModal" tabindex="-1"
+     data-bs-backdrop="static" data-bs-keyboard="false" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content"
+         style="border-radius:18px;border:1px solid rgba(2,6,23,.12);box-shadow:0 18px 60px rgba(2,6,23,.24);overflow:hidden;">
+      <div class="modal-header"
+           style="background:linear-gradient(135deg, rgba(91,91,214,.12), rgba(155,77,255,.14));border-bottom:1px solid rgba(2,6,23,.10);">
+        <div class="d-flex align-items-center gap-2">
+          <div style="width:44px;height:44px;border-radius:14px;display:flex;align-items:center;justify-content:center;background:rgba(91,91,214,.18);border:1px solid rgba(91,91,214,.28);">
+            <i class="fa-solid fa-circle-info" style="color:var(--dgx-brand2,#9b4dff)"></i>
+          </div>
+          <div class="min-w-0">
+            <div id="dgxIntroTitle" style="font-weight:950;font-size:1.02rem;line-height:1.15;">Door Game • Instructions</div>
+            <div class="small text-muted">Read before starting</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-body" style="background:var(--dgx-card,#fff);">
+        <div class="dgx-introCard mb-3">
+          <div class="dgx-introTitle"><i class="fa-solid fa-align-left"></i> Description</div>
+          <div id="dgxIntroDesc" class="dgx-introBody">
+            <div class="dgx-skel mb-2" style="width:72%"></div>
+            <div class="dgx-skel mb-2" style="width:92%"></div>
+            <div class="dgx-skel" style="width:84%"></div>
+          </div>
+        </div>
+
+        <div class="dgx-introCard">
+          <div class="dgx-introTitle"><i class="fa-solid fa-book-open-reader"></i> Instructions</div>
+          <div id="dgxIntroInstr" class="dgx-introBody">
+            <div class="dgx-skel mb-2" style="width:82%"></div>
+            <div class="dgx-skel mb-2" style="width:94%"></div>
+            <div class="dgx-skel" style="width:75%"></div>
+          </div>
+        </div>
+
+        <div class="mt-3 small text-muted d-flex flex-wrap gap-2">
+          <span class="dgx-keypill"><i class="fa-solid fa-border-all"></i> <span id="dgxIntroDim">--×--</span></span>
+          <span class="dgx-keypill"><i class="fa-solid fa-key"></i> Keys: <span id="dgxIntroKeys">--</span></span>
+          <span class="dgx-keypill"><i class="fa-solid fa-clock"></i> Time: <span id="dgxIntroTime">--</span>s</span>
+          <span class="dgx-keypill"><i class="fa-solid fa-play"></i> Timer starts after Start</span>
+        </div>
+      </div>
+
+      <div class="modal-footer"
+           style="background:var(--dgx-card,#fff);border-top:1px solid rgba(2,6,23,.10);">
+        <button type="button" id="dgxIntroBack" class="btn btn-light" style="border-radius:14px;">
+          <i class="fa-solid fa-arrow-left me-2"></i>Back
+        </button>
+        <button type="button" id="dgxIntroStart" class="btn btn-primary" style="border-radius:14px;font-weight:900;">
+          <i class="fa-solid fa-play me-2"></i>Start Game
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
@@ -780,13 +846,10 @@ html.theme-dark .dgx-uArrow{
 (() => {
   /* =========================================================
     Door Game Play Script — UPDATED
-      - User-surround arrows
-      - Hidden barriers (logic blocks)
-      - Arrow red+disabled for barrier/boundary OR visited target
-      - No moving into visited cells (arrows + click)
-      - Purple powered player
-      - Door always black
-      - Game FX: shake, sparkles, confetti, camera follow, subtle sfx
+      ✅ Added:
+        - Bootstrap Intro Modal (Description + Instructions)
+        - Game & Timer start ONLY after clicking Start/Resume
+        - Prevent keyboard/cell movement before modal start
   ========================================================= */
 
   function getGameUuidFromUrl() {
@@ -839,6 +902,23 @@ html.theme-dark .dgx-uArrow{
   const elGiveUpBtn   = document.getElementById('dgxGiveUpBtn');
   const elCenterBtn   = document.getElementById('dgxCenterBtn');
 
+  // ✅ Intro modal refs
+  const introEl = document.getElementById('dgxIntroModal');
+  const introTitleEl = document.getElementById('dgxIntroTitle');
+  const introDescEl  = document.getElementById('dgxIntroDesc');
+  const introInstrEl = document.getElementById('dgxIntroInstr');
+  const introDimEl   = document.getElementById('dgxIntroDim');
+  const introKeysEl  = document.getElementById('dgxIntroKeys');
+  const introTimeEl  = document.getElementById('dgxIntroTime');
+  const introBackBtn = document.getElementById('dgxIntroBack');
+  const introStartBtn= document.getElementById('dgxIntroStart');
+
+  // ✅ start gating
+  let GAME_ACTIVE = false;
+  let introOpenedAt = Date.now();
+  let restoredFromCache = false;
+  let GAME_META = null;
+
   // state
   let state = {
     game: null,
@@ -848,15 +928,13 @@ html.theme-dark .dgx-uArrow{
     doorId: null,
     keys: new Set(),
     keysCollected: new Set(),
-
     visited: new Set(),
 
     keyEvent: null,
     doorEvent: null,
-
     doorUnlocked: false,
 
-    status: 'in_progress', // in_progress | win | fail | timeout
+    status: 'in_progress',
     moves: [],
     startedAtMs: 0,
     lastMoveAtMs: 0,
@@ -866,7 +944,6 @@ html.theme-dark .dgx-uArrow{
     suppressUnloadPrompt: false,
     isSubmitting: false,
     winPromptShown: false
-
   };
 
   function getToken() {
@@ -881,7 +958,81 @@ html.theme-dark .dgx-uArrow{
 
   function nowMs(){ return Math.round(performance.now()); }
 
-  // ===== Tiny SFX (no files, just WebAudio) =====
+  // ✅ Safe HTML rendering (allowlist)
+  function sanitizeHtmlAllowList(inputHtml){
+    const html = String(inputHtml ?? '').trim();
+    if(!html) return '';
+
+    const allowed = new Set([
+      'B','I','EM','STRONG','U','BR',
+      'P','DIV','SPAN','UL','OL','LI',
+      'A','CODE','PRE','HR','BLOCKQUOTE',
+      'SMALL','SUP','SUB','H1','H2','H3','H4','H5','H6'
+    ]);
+
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+
+    const cleanNode = (node) => {
+      if (node.nodeType === Node.COMMENT_NODE) { node.remove(); return; }
+
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        const tag = node.tagName;
+
+        if (!allowed.has(tag)) {
+          const parent = node.parentNode;
+          if (!parent) return;
+          while (node.firstChild) parent.insertBefore(node.firstChild, node);
+          parent.removeChild(node);
+          return;
+        }
+
+        [...node.attributes].forEach(attr => {
+          const name = attr.name.toLowerCase();
+          const val  = String(attr.value || '');
+
+          if (name.startsWith('on') || name === 'style') {
+            node.removeAttribute(attr.name); return;
+          }
+
+          if (tag === 'A') {
+            if (name === 'href') {
+              const href = val.trim();
+              const safe = /^https?:\/\//i.test(href) || /^mailto:/i.test(href) || href.startsWith('#');
+              if (!safe) node.removeAttribute('href');
+              return;
+            }
+            if (!['href','target','rel'].includes(name)) node.removeAttribute(attr.name);
+            return;
+          }
+
+          node.removeAttribute(attr.name);
+        });
+
+        if (tag === 'A') {
+          node.setAttribute('target','_blank');
+          node.setAttribute('rel','noopener noreferrer');
+        }
+      }
+
+      [...node.childNodes].forEach(cleanNode);
+    };
+
+    [...doc.body.childNodes].forEach(cleanNode);
+    return doc.body.innerHTML.trim();
+  }
+
+  function renderSafeHtmlOrText(raw){
+    const s = String(raw ?? '').trim();
+    if(!s) return '';
+    const looksHtml = /<\/?[a-z][\s\S]*>/i.test(s);
+    if(looksHtml){
+      const cleaned = sanitizeHtmlAllowList(s);
+      return cleaned || `<div>${escapeHtml(s)}</div>`;
+    }
+    return `<div>${escapeHtml(s).replace(/\n/g,'<br>')}</div>`;
+  }
+
+  // ===== Tiny SFX =====
   let audioCtx = null;
   function sfx(freq=440, dur=0.06, type='sine', gain=0.035){
     try{
@@ -1006,6 +1157,7 @@ html.theme-dark .dgx-uArrow{
     renderTimer();
 
     state.tick = setInterval(() => {
+      if(!GAME_ACTIVE) return;
       if(state.status !== 'in_progress') return;
 
       state.timeLeft = Math.max(0, Number(state.timeLeft || 0) - 1);
@@ -1073,7 +1225,6 @@ html.theme-dark .dgx-uArrow{
     return false;
   }
 
-  // ✅ direction helpers (for arrow logic)
   function nextIdByDir(fromId, dir){
     const { r, c } = idToRC(fromId);
     if(dir==='up')    return (r>0) ? rcToId(r-1,c) : null;
@@ -1085,8 +1236,8 @@ html.theme-dark .dgx-uArrow{
 
   function dirBlocked(fromId, dir){
     const toId = nextIdByDir(fromId, dir);
-    if(!toId) return true; // boundary
-    return !canMove(fromId, toId); // barrier or boundary
+    if(!toId) return true;
+    return !canMove(fromId, toId);
   }
 
   function updateSidebar(){
@@ -1107,16 +1258,12 @@ html.theme-dark .dgx-uArrow{
       if(state.status !== 'in_progress') return;
       if(Number(c.id) === Number(userId)) return;
 
-      // ✅ also don't hint already visited targets
-      // if(state.visited.has(Number(c.id))) return;
-
       if(isAdjacent(userId, c.id) && canMove(userId, c.id)){
         el.classList.add('is-next');
       }
     });
   }
 
-  // ===== FX helpers =====
   function floatText(cellEl, text){
     if(!cellEl) return;
     const t = document.createElement('div');
@@ -1245,6 +1392,7 @@ html.theme-dark .dgx-uArrow{
   }
 
   function onCellClick(targetId){
+    if(!GAME_ACTIVE) return;
     if(state.status !== 'in_progress') return;
     if(!state.userId) return;
 
@@ -1258,24 +1406,14 @@ html.theme-dark .dgx-uArrow{
       return;
     }
 
-    // ✅ do not allow moving into visited tiles
-    // if(state.visited.has(toId)){
-    //   onBlocked('Visited');
-    //   return;
-    // }
-
     if(!canMove(fromId,toId)){
       onBlocked('Blocked');
       return;
     }
 
-    // mark visited
-    // state.visited.add(Number(fromId));
     state.visited.add(Number(toId));
-
     state.userId = toId;
 
-    // key pickup
     let pickedKey = false;
     if(state.keys.has(toId) && !state.keysCollected.has(toId)){
       state.keysCollected.add(toId);
@@ -1308,7 +1446,6 @@ html.theme-dark .dgx-uArrow{
     renderBoard();
     centerOnCurrent();
 
-    // ✅ WIN check: keys collected AND reached door
     if(state.keysCollected.size === state.keys.size && Number(toId) === Number(state.doorId)){
       if(!state.doorEvent){
         const tRel = state.startedAtMs ? Math.max(0, nowMs() - state.startedAtMs) : 0;
@@ -1317,7 +1454,6 @@ html.theme-dark .dgx-uArrow{
 
       state.doorUnlocked = true;
 
-      // render first then effects
       updateSidebar();
       renderBoard();
 
@@ -1330,91 +1466,26 @@ html.theme-dark .dgx-uArrow{
 
       notify('success','Door unlocked ✅', 'You finished the game!');
 
-lockAfterWin();                 // stop timer + mark win + enable submit
-setTimeout(() => {
-  promptSubmitAfterWin();
-}, 2500); // ✅ 2.5s delay (adjust if you want)
-         // ✅ immediately ask for submit confirmation
-
-return;
-
+      lockAfterWin();
+      setTimeout(() => { promptSubmitAfterWin(); }, 2500);
+      return;
     }
   }
 
   function moveByArrow(dir){
+    if(!GAME_ACTIVE) return;
     if(state.status !== 'in_progress') return;
     if(!state.userId) return;
 
     const toId = nextIdByDir(state.userId, dir);
     if(!toId){ onBlocked('Edge'); return; }
-
-    // blocked by barrier or visited => same behavior
     if(dirBlocked(state.userId, dir)){ onBlocked('Blocked'); return; }
-    // if(state.visited.has(Number(toId))){ onBlocked('Visited'); return; }
 
     onCellClick(toId);
   }
-function userHasAnyKey(){
-  return state.keysCollected && state.keysCollected.size > 0;
-}
 
-  function findShortestPath(startId, goalId){
-    const q = [];
-    const prev = new Map();
-    q.push(startId);
-    prev.set(startId, null);
-
-    while(q.length){
-      const cur = q.shift();
-      if(cur === goalId) break;
-
-      const { r, c } = idToRC(cur);
-      const neighbors = [];
-      if(r>0) neighbors.push(rcToId(r-1,c));
-      if(r<state.N-1) neighbors.push(rcToId(r+1,c));
-      if(c>0) neighbors.push(rcToId(r,c-1));
-      if(c<state.N-1) neighbors.push(rcToId(r,c+1));
-
-      for(const nb of neighbors){
-        if(prev.has(nb)) continue;
-        if(!canMove(cur, nb)) continue;
-
-        // ✅ hint should not suggest stepping into visited tiles
-        // if(state.visited.has(Number(nb))) continue;
-
-        prev.set(nb, cur);
-        q.push(nb);
-      }
-    }
-
-    if(!prev.has(goalId)) return [];
-    const path = [];
-    let cur = goalId;
-    while(cur != null){
-      path.push(cur);
-      cur = prev.get(cur);
-    }
-    path.reverse();
-    return path;
-  }
-
-  function flashHint(path){
-    if(!Array.isArray(path) || path.length < 2){
-      notify('warning','Hint', 'No route found (barriers block).');
-      return;
-    }
-    const els = path.map(id => document.querySelector(`.dgx-cell[data-id="${id}"]`)).filter(Boolean);
-    els.forEach(el => {
-      el.style.transition = 'outline-color .15s ease, box-shadow .15s ease';
-      el.style.outline = '3px solid rgba(168,85,247,.55)';
-      el.style.boxShadow = '0 0 0 6px rgba(168,85,247,.16)';
-    });
-    setTimeout(() => {
-      els.forEach(el => {
-        el.style.outline = '';
-        el.style.boxShadow = '';
-      });
-    }, 900);
+  function userHasAnyKey(){
+    return state.keysCollected && state.keysCollected.size > 0;
   }
 
   async function postJson(url, payload){
@@ -1437,27 +1508,28 @@ function userHasAnyKey(){
 
     return json;
   }
-async function promptSubmitAfterWin(){
-  if(state.winPromptShown) return;
-  state.winPromptShown = true;
 
-  const r = await Swal.fire({
-    icon: 'warning',
-    title: 'Confirm Submit',
-    text: 'Confirm submit without it data will not be saved',
-    showCancelButton: true,
-    confirmButtonText: 'Submit Now',
-    cancelButtonText: 'Later',
-    confirmButtonColor: '#22c55e',
-  });
+  async function promptSubmitAfterWin(){
+    if(state.winPromptShown) return;
+    state.winPromptShown = true;
 
-  if(r.isConfirmed){
-    await submitAttempt(false);
-  }else{
-    notify('info', 'Not submitted', 'Press Submit anytime to save your data.');
-    elSubmitBtn.disabled = false; // keep enabled
+    const r = await Swal.fire({
+      icon: 'warning',
+      title: 'Confirm Submit',
+      text: 'Confirm submit without it data will not be saved',
+      showCancelButton: true,
+      confirmButtonText: 'Submit Now',
+      cancelButtonText: 'Later',
+      confirmButtonColor: '#22c55e',
+    });
+
+    if(r.isConfirmed){
+      await submitAttempt(false);
+    }else{
+      notify('info', 'Not submitted', 'Press Submit anytime to save your data.');
+      elSubmitBtn.disabled = false;
+    }
   }
-}
 
   async function submitAttempt(isAuto=false){
     if(state.isSubmitting) return;
@@ -1525,7 +1597,7 @@ async function promptSubmitAfterWin(){
       };
 
       Swal.fire({
-        title: isAuto ? 'Submitting…' : 'Submitting…',
+        title: 'Submitting…',
         text: 'Please wait',
         allowOutsideClick: false,
         allowEscapeKey: false,
@@ -1592,7 +1664,6 @@ async function promptSubmitAfterWin(){
     elBoard.style.setProperty('--n', String(state.N));
     elBoard.innerHTML = '';
 
-    // power state styling
     const powered = (state.keysCollected.size > 0);
     elBoard.classList.toggle('dgx-playerPowered', powered);
 
@@ -1614,29 +1685,27 @@ async function promptSubmitAfterWin(){
       ico.className = 'dgx-ico';
 
       if(Number(cell.id) === Number(state.userId)){
-  ico.classList.add('user');
+        ico.classList.add('user');
 
-  // ✅ after first key pickup: user stays purple AND shows key with user
-  if(userHasAnyKey()){
-    ico.innerHTML = `
-      <span style="position:relative; display:inline-block; line-height:1;">
-        <i class="fa-solid fa-user"></i>
-        <i class="fa-solid fa-key" style="
-          position:absolute;
-          right:-10px;
-          bottom:-8px;
-          font-size:14px;
-          color:#f59e0b;
-          filter: drop-shadow(0 10px 16px rgba(2,6,23,.18));
-        "></i>
-      </span>
-    `;
-  }else{
-    ico.innerHTML = '<i class="fa-solid fa-user"></i>';
-  }
-}
-else if(Number(cell.id) === Number(state.doorId)){
-        // ✅ door color stays black (closed/open icon changes only)
+        if(userHasAnyKey()){
+          ico.innerHTML = `
+            <span style="position:relative; display:inline-block; line-height:1;">
+              <i class="fa-solid fa-user"></i>
+              <i class="fa-solid fa-key" style="
+                position:absolute;
+                right:-10px;
+                bottom:-8px;
+                font-size:14px;
+                color:#f59e0b;
+                filter: drop-shadow(0 10px 16px rgba(2,6,23,.18));
+              "></i>
+            </span>
+          `;
+        }else{
+          ico.innerHTML = '<i class="fa-solid fa-user"></i>';
+        }
+      }
+      else if(Number(cell.id) === Number(state.doorId)){
         if(state.doorUnlocked){
           ico.classList.add('doorOpen');
           ico.innerHTML = '<i class="fa-solid fa-door-open"></i>';
@@ -1654,7 +1723,6 @@ else if(Number(cell.id) === Number(state.doorId)){
       div.appendChild(idx);
       div.appendChild(ico);
 
-      // ✅ arrows around USER (not board)
       if(Number(cell.id) === Number(state.userId)){
         const wrap = document.createElement('div');
         wrap.className = 'dgx-uArrows';
@@ -1667,13 +1735,11 @@ else if(Number(cell.id) === Number(state.doorId)){
           btn.className = `dgx-uArrow ${dir}`;
           btn.innerHTML = `<i class="fa-solid ${icon}"></i>`;
 
-          const toId = nextIdByDir(state.userId, dir);
           const blockedByBarrier = dirBlocked(state.userId, dir);
-const shouldDisable = ended || blockedByBarrier;
+          const shouldDisable = ended || blockedByBarrier || !GAME_ACTIVE;
 
-if(blockedByBarrier) btn.classList.add('blocked');
-if(shouldDisable) btn.classList.add('disabled');
-
+          if(blockedByBarrier) btn.classList.add('blocked');
+          if(shouldDisable) btn.classList.add('disabled');
 
           btn.addEventListener('click', (e) => {
             e.preventDefault();
@@ -1770,11 +1836,118 @@ if(shouldDisable) btn.classList.add('disabled');
     updateSidebar();
     saveCache();
 
-    // center initially
     setTimeout(()=> centerOnCurrent(), 150);
   }
 
-  async function init(){
+  // ✅ Intro Modal Flow
+  async function openIntroModal(){
+    introOpenedAt = Date.now();
+
+    const modal = new bootstrap.Modal(introEl, { backdrop:'static', keyboard:false });
+    modal.show();
+
+    introBackBtn.onclick = () => {
+      modal.hide();
+      history.back();
+    };
+
+    introStartBtn.onclick = async () => {
+      modal.hide();
+      await startAfterIntro();
+    };
+
+    try{
+      let meta = null;
+
+      if(restoredFromCache && state.game){
+        meta = state.game;
+      }else{
+        meta = await fetchJson(API.game);
+      }
+
+      GAME_META = meta;
+
+      const title = (meta?.title || 'Door Game').toString().trim();
+      const desc  = (meta?.description_html || meta?.description || '').toString().trim();
+      const inst  = (meta?.instructions_html || meta?.instructions || meta?.instruction || '').toString().trim();
+
+      introTitleEl.textContent = `${title} • Instructions`;
+      introDescEl.innerHTML  = renderSafeHtmlOrText(desc || 'No description provided.');
+      introInstrEl.innerHTML = renderSafeHtmlOrText(inst || 'Collect all keys, then reach the door before time ends.');
+
+      const dim = Number(meta?.grid_dim || state.N || 3);
+      const tms = Number(meta?.time_limit_sec || state.timeLimitSec || 30);
+
+      introDimEl.textContent = `${dim}×${dim}`;
+      introTimeEl.textContent = `${tms}`;
+
+      // keys count (from grid if present)
+      let keyCount = 0;
+      let grid = meta?.grid_json || null;
+      try{ if(typeof grid === 'string') grid = JSON.parse(grid); }catch(e){ grid = null; }
+      if(Array.isArray(grid)){
+        keyCount = grid.filter(x => !!x?.is_key).length;
+      }
+      introKeysEl.textContent = String(keyCount || (restoredFromCache ? state.keys.size : '--'));
+
+      // change start button label for restore
+      introStartBtn.innerHTML = restoredFromCache
+        ? `<i class="fa-solid fa-play me-2"></i>Resume Game`
+        : `<i class="fa-solid fa-play me-2"></i>Start Game`;
+
+    }catch(err){
+      introDescEl.innerHTML = `<div class="text-danger fw-bold">${escapeHtml(err.message || 'Failed to load')}</div>`;
+      introInstrEl.innerHTML = `<div class="text-muted">Please refresh or login again.</div>`;
+      introStartBtn.disabled = true;
+    }
+  }
+
+  async function startAfterIntro(){
+    GAME_ACTIVE = true;
+
+    // ✅ if restored attempt: resume EXACT state (timer starts now)
+    if(restoredFromCache){
+      setRunState(
+        state.status === 'in_progress' ? 'Playing' : (state.status === 'win' ? 'Completed' : 'Stopped'),
+        state.status === 'win' ? 'success' : (state.status === 'in_progress' ? 'primary' : 'danger')
+      );
+
+      // resume timer only if still in progress
+      if(state.status === 'in_progress'){
+        renderTimer();
+        if(state.timeLeft <= 0){
+          state.status = 'timeout';
+          setRunState('Timeout', 'danger');
+          elResult.textContent = 'Timeout';
+          notify('warning','Time up!', 'Auto-submitting…');
+          submitAttempt(true);
+          return;
+        }
+        startTimer();
+      }
+
+      renderBoard();
+      updateSidebar();
+      saveCache();
+      setTimeout(()=> centerOnCurrent(), 180);
+      notify('success','Resumed','Game started.');
+      return;
+    }
+
+    // ✅ new attempt: hydrate from API meta (already fetched)
+    try{
+      const game = GAME_META || await fetchJson(API.game);
+      hydrateFromGame(game);
+      elResetBtn.style.display = '';
+      setRunState('Playing', 'primary');
+      startTimer();
+      notify('success','Game started','Good luck!');
+    }catch(err){
+      await Swal.fire({ icon:'error', title:'Failed to start', text: err.message || '' });
+    }
+  }
+
+  async function boot(){
     window.addEventListener('beforeunload', beforeUnloadHandler);
 
     if(!GAME_UUID){
@@ -1789,8 +1962,9 @@ if(shouldDisable) btn.classList.add('disabled');
       return;
     }
 
-    const restored = loadCache();
-    if(restored){
+    restoredFromCache = loadCache();
+
+    if(restoredFromCache){
       elResetBtn.style.display = '';
       elGameTitle.textContent = state.game?.title ? String(state.game.title) : 'Door Game';
       elDim.textContent = `${state.N}×${state.N}`;
@@ -1798,53 +1972,27 @@ if(shouldDisable) btn.classList.add('disabled');
       elKeysTotal.textContent = String(state.keys.size);
       elKeysGot.textContent = String(state.keysCollected.size);
 
-      setRunState(
-        state.status === 'in_progress' ? 'Playing' : (state.status === 'win' ? 'Completed' : 'Stopped'),
-        state.status === 'win' ? 'success' : (state.status === 'in_progress' ? 'primary' : 'danger')
-      );
-
+      setRunState('Ready', 'muted');
       elResult.textContent =
         (state.status === 'win') ? 'Win' :
         (state.status === 'timeout') ? 'Timeout' :
         (state.status === 'fail') ? 'Fail' : '—';
 
-      elSubmitBtn.disabled = (state.status === 'in_progress');
+      // ✅ DO NOT auto-start timer here (wait for modal Start/Resume)
       renderTimer();
       renderBoard();
       updateSidebar();
-      if(state.status === 'in_progress') startTimer();
-      notify('success','Attempt restored','Loaded from sessionStorage.');
-      setTimeout(()=> centerOnCurrent(), 180);
-      return;
+      notify('info','Attempt loaded','Press Resume to continue.');
     }
 
-    try{
-      const game = await fetchJson(API.game);
-      hydrateFromGame(game);
-      elResetBtn.style.display = '';
-      setRunState('Playing', 'primary');
-      startTimer();
-      notify('success','Game loaded','Good luck!');
-    }catch(err){
-      elBoard.innerHTML = `
-        <div class="dgx-loader">
-          <i class="fa-solid fa-triangle-exclamation"></i>
-          ${escapeHtml(err.message || 'Failed to load door game')}
-        </div>
-      `;
-      elInstruction.textContent = 'Failed to load.';
-      await Swal.fire({ icon:'error', title:'Failed to load', text: err.message || '' });
-
-      if((err.message || '').toLowerCase().includes('login')){
-        setTimeout(() => window.location.href = '/login', 900);
-      }
-    }
+    await openIntroModal();
   }
 
   /* ================= Events ================= */
 
   // keyboard arrows
   document.addEventListener('keydown', (e) => {
+    if(!GAME_ACTIVE) return;
     if(state.status !== 'in_progress') return;
     if(['INPUT','TEXTAREA'].includes((e.target?.tagName || '').toUpperCase())) return;
 
@@ -1853,60 +2001,6 @@ if(shouldDisable) btn.classList.add('disabled');
     if(e.key === 'ArrowLeft') { e.preventDefault(); moveByArrow('left'); }
     if(e.key === 'ArrowRight') { e.preventDefault(); moveByArrow('right'); }
   });
-
-  elHintBtn.addEventListener('click', async () => {
-    if(!state.userId || !state.doorId) return;
-
-    let target = state.doorId;
-    if(state.keysCollected.size < state.keys.size){
-      const remaining = Array.from(state.keys).filter(k => !state.keysCollected.has(k));
-      let best = [];
-      for(const k of remaining){
-        const p = findShortestPath(state.userId, k);
-        if(p.length && (!best.length || p.length < best.length)) best = p;
-      }
-      if(best.length){
-        flashHint(best);
-        notify('info','Hint','Highlighted a route to a key (avoiding visited tiles).');
-        return;
-      }
-      notify('warning','Hint','No route to any key found.');
-      return;
-    }
-
-    const p = findShortestPath(state.userId, target);
-    flashHint(p);
-    notify('info','Hint','Highlighted a route to the door.');
-  });
-
-  elGiveUpBtn?.addEventListener('click', async () => {
-    if(state.status !== 'in_progress') return;
-
-    const r = await Swal.fire({
-      icon: 'warning',
-      title: 'Give up?',
-      text: 'This will mark your attempt as FAIL (move-log will still be saved).',
-      showCancelButton: true,
-      confirmButtonText: 'Yes, give up',
-      cancelButtonText: 'Cancel',
-      confirmButtonColor: '#ef4444'
-    });
-    if(!r.isConfirmed) return;
-
-    state.status = 'fail';
-    stopTick();
-    setRunState('Stopped', 'danger');
-    elResult.textContent = 'Fail';
-    elSubmitBtn.disabled = false;
-
-    state.moves.push({ t_ms: 0, dt_ms: 0, action: 'give_up' });
-    saveCache();
-    updateSidebar();
-    renderBoard();
-    notify('warning','Attempt ended','Marked as fail. You can submit now.');
-  });
-
-  elCenterBtn?.addEventListener('click', () => centerOnCurrent());
 
   elResetBtn.addEventListener('click', async () => {
     const r = await Swal.fire({
@@ -1941,6 +2035,11 @@ if(shouldDisable) btn.classList.add('disabled');
   });
 
   elSubmitBtn.addEventListener('click', async () => {
+    if(!GAME_ACTIVE){
+      notify('warning','Not started','Start the game first.');
+      return;
+    }
+
     if(state.status === 'in_progress'){
       const r = await Swal.fire({
         icon: 'question',
@@ -1968,7 +2067,7 @@ if(shouldDisable) btn.classList.add('disabled');
     await submitAttempt(false);
   });
 
-  init();
+  boot();
 })();
 </script>
 

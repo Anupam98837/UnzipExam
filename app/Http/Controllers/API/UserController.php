@@ -1976,6 +1976,4 @@ public function userDoorGames(Request $request, int $id)
         'data'   => $data,
     ]);
 }
-
-
 }

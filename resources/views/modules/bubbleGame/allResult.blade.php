@@ -1375,13 +1375,40 @@ bulk.filters = { game_id:'', attempt_status:'', publish_to_student:'', from:'', 
       load('results');
     }, 350);
   });
+/* ✅ MODAL BACKDROP FIX (Filter Modal) */
+const filterModalEl = document.getElementById('filterModal');
+const filterModalInst = filterModalEl ? bootstrap.Modal.getOrCreateInstance(filterModalEl) : null;
 
-  btnApplyFilters?.addEventListener('click', ()=>{
-    const filterModal = bootstrap.Modal.getInstance(document.getElementById('filterModal'));
-    filterModal.hide();
+let pendingFilterReload = false;
+
+function cleanupModalBackdrops(){
+  setTimeout(()=>{
+    if (!document.querySelector('.modal.show')) {
+      document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
+      document.body.classList.remove('modal-open');
+      document.body.style.removeProperty('overflow');
+      document.body.style.removeProperty('padding-right');
+    }
+  }, 50);
+}
+
+btnApplyFilters?.addEventListener('click', (e)=>{
+  e.preventDefault();
+  e.stopPropagation();
+
+  pendingFilterReload = true;
+  filterModalInst?.hide(); // ✅ hide first (bootstrap removes backdrop properly)
+});
+
+filterModalEl?.addEventListener('hidden.bs.modal', ()=>{
+  if (pendingFilterReload){
+    pendingFilterReload = false;
     Object.keys(state).forEach(k => state[k].page = 1);
-    load('results');
-  });
+    load('results'); // ✅ load AFTER modal fully closes
+  }
+  cleanupModalBackdrops(); // ✅ failsafe cleanup
+});
+
 
   // ✅ Reset exits bulk mode
   btnReset?.addEventListener('click', ()=>{

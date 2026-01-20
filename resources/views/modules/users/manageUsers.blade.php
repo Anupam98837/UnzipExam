@@ -4,6 +4,82 @@
 <link rel="stylesheet" href="{{ asset('assets/css/common/main.css') }}"/>
 
 <style>
+  /* =========================
+   Bulk Assign (Quizzes/Games)
+========================= */
+.ba-tabs .nav-link{
+  border-radius:999px;
+  border:1px solid var(--line-strong);
+  background:var(--surface);
+  color:var(--muted-color);
+  padding:8px 14px;
+  font-weight:600;
+}
+.ba-tabs .nav-link.active{
+  background:color-mix(in oklab, var(--accent-color) 14%, transparent);
+  border-color:var(--accent-color);
+  color:var(--ink);
+}
+.ba-box{
+  border:1px solid var(--line-strong);
+  border-radius:14px;
+  background:var(--page);
+  padding:12px;
+}
+html.theme-dark .ba-box{ background:#0b1220; }
+
+.ba-list{
+  max-height:420px;
+  overflow:auto;
+  border:1px solid var(--line-strong);
+  border-radius:14px;
+  background:var(--surface);
+}
+.ba-list::-webkit-scrollbar{ width:0;height:0; }
+.ba-list{ scrollbar-width:none; }
+
+.ba-item{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:10px 12px;
+  border-bottom:1px solid var(--line-soft);
+}
+.ba-item:last-child{border-bottom:none}
+.ba-left{
+  display:flex;align-items:center;gap:10px;min-width:0;
+}
+.ba-meta{min-width:0;line-height:1.15}
+.ba-name{
+  font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:360px;
+}
+.ba-email{
+  font-size:12px;color:var(--muted-color);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:360px;
+}
+.ba-right{display:flex;align-items:center;gap:8px}
+.ba-pill{
+  font-size:12px;
+  padding:4px 10px;
+  border-radius:999px;
+  border:1px dashed var(--line-strong);
+  color:var(--muted-color);
+  background:transparent;
+}
+.ba-progress{
+  height:6px;
+  border-radius:999px;
+  background:var(--line-soft);
+  overflow:hidden;
+}
+.ba-progress > div{
+  height:100%;
+  width:0%;
+  background:var(--accent-color);
+  transition:width .2s ease;
+}
+
 /* ===== Shell ===== */
 .usr-wrap{
   max-width:1140px;
@@ -314,6 +390,10 @@ html.theme-dark .badge-code{
         <button type="button" class="btn btn-outline-primary me-2" id="btnImportCsv" data-bs-toggle="modal" data-bs-target="#importCsvModal">
           <i class="fa fa-file-import me-1"></i> Import CSV
         </button>
+        <button type="button" class="btn btn-outline-primary me-2" id="btnBulkAssign" data-bs-toggle="modal" data-bs-target="#bulkAssignModal">
+  <i class="fa fa-layer-group me-1"></i> Bulk Assign
+</button>
+
         {{-- Add User Button --}}
         <button type="button" class="btn btn-primary" id="btnAddUser">
           <i class="fa fa-plus me-1"></i> Add User
@@ -358,6 +438,215 @@ html.theme-dark .badge-code{
       <div class="d-flex flex-wrap align-items-center justify-content-between p-3 gap-2">
         <div class="text-muted small" id="resultsInfo">—</div>
         <nav><ul id="pager" class="pagination mb-0"></ul></nav>
+      </div>
+    </div>
+  </div>
+</div>
+{{-- ================= Bulk Assign Modal (Quizzes/Games) ================= --}}
+<div class="modal fade" id="bulkAssignModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <h5 class="modal-title mb-0">
+            <i class="fa fa-layer-group me-2"></i>Bulk Assign — Quizzes & Games
+          </h5>
+          <div class="small text-muted">
+            Select users by <b>Folder</b>/<b>Role</b> and bulk assign/unassign items. Already assigned users are skipped automatically.
+          </div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body">
+
+        {{-- Tabs --}}
+        <ul class="nav ba-tabs gap-2 mb-3" role="tablist">
+          <li class="nav-item">
+            <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#baTabQuiz" type="button">
+              <i class="fa fa-question-circle me-1"></i> Quizzes
+            </button>
+          </li>
+          <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#baTabBubble" type="button">
+              <i class="fa fa-gamepad me-1"></i> Bubble Games
+            </button>
+          </li>
+          <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#baTabDoor" type="button">
+              <i class="fa fa-door-open me-1"></i> Door Games
+            </button>
+          </li>
+        </ul>
+
+        {{-- Loader --}}
+        <div id="baLoader" class="ba-box text-center py-4">
+          <i class="fa fa-circle-notch fa-spin me-1"></i> Loading users & items...
+        </div>
+
+        {{-- Progress --}}
+        <div id="baProgressWrap" class="d-none ba-box mb-3">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <div class="fw-semibold" id="baProgressText">Processing...</div>
+            <div class="small text-muted" id="baProgressStat">0/0</div>
+          </div>
+          <div class="ba-progress"><div id="baProgressBar"></div></div>
+          <div class="small text-muted mt-2" id="baProgressHint">Please wait...</div>
+        </div>
+
+        <div class="row g-3">
+          {{-- LEFT: User Filters + List --}}
+          <div class="col-lg-6">
+            <div class="ba-box">
+              <div class="fw-semibold mb-2"><i class="fa fa-users me-1"></i>Select Users</div>
+
+              <div class="row g-2">
+                <div class="col-md-6">
+                  <label class="form-label small text-muted mb-1">Folder</label>
+                  <select id="baUserFolder" class="form-select">
+                    <option value="">All Folders</option>
+                  </select>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label small text-muted mb-1">Role (Admin excluded)</label>
+                  <select id="baUserRole" class="form-select">
+                    <option value="">All</option>
+                    <option value="examiner">Examiner</option>
+                    <option value="student">Student</option>
+                  </select>
+                </div>
+                <div class="col-12">
+                  <label class="form-label small text-muted mb-1">Search</label>
+                  <div class="position-relative">
+                    <input id="baUserSearch" class="form-control ps-5" placeholder="Search users by name/email...">
+                    <i class="fa fa-search position-absolute" style="left:12px;top:50%;transform:translateY(-50%);opacity:.65;"></i>
+                  </div>
+                </div>
+              </div>
+
+              <div class="d-flex align-items-center justify-content-between mt-3">
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" id="baUserSelectAll">
+                  <label class="form-check-label" for="baUserSelectAll">Select all (visible)</label>
+                </div>
+                <div class="small text-muted" id="baUserCount">Selected: 0</div>
+              </div>
+
+              <div class="ba-list mt-3" id="baUserList">
+                <div class="p-3 text-muted">Loading...</div>
+              </div>
+            </div>
+          </div>
+
+          {{-- RIGHT: Tabs content --}}
+          <div class="col-lg-6">
+            <div class="tab-content">
+
+              {{-- QUIZZES --}}
+              <div class="tab-pane fade show active" id="baTabQuiz">
+                <div class="ba-box">
+                  <div class="fw-semibold mb-2"><i class="fa fa-question-circle me-1"></i>Bulk Quiz Assignment</div>
+
+                  <label class="form-label small text-muted mb-1">Select Quiz</label>
+                  <select id="baQuizSelect" class="form-select">
+                    <option value="">Loading quizzes...</option>
+                  </select>
+
+                  <div class="d-flex gap-3 mt-3">
+                    <div class="form-check">
+                      <input class="form-check-input" type="radio" name="baQuizMode" id="baQuizAssign" value="assign" checked>
+                      <label class="form-check-label" for="baQuizAssign">Assign</label>
+                    </div>
+                    <div class="form-check">
+                      <input class="form-check-input" type="radio" name="baQuizMode" id="baQuizUnassign" value="unassign">
+                      <label class="form-check-label" for="baQuizUnassign">Unassign</label>
+                    </div>
+                  </div>
+
+                  <div class="alert alert-light small mt-3 mb-0">
+                    <i class="fa fa-circle-info me-1"></i>
+                    Already assigned users will be skipped automatically.
+                  </div>
+
+                  <button class="btn btn-primary mt-3 w-100" id="baApplyQuiz">
+                    <i class="fa fa-check me-1"></i> Apply Quiz in Bulk
+                  </button>
+                </div>
+              </div>
+
+              {{-- BUBBLE --}}
+              <div class="tab-pane fade" id="baTabBubble">
+                <div class="ba-box">
+                  <div class="fw-semibold mb-2"><i class="fa fa-gamepad me-1"></i>Bulk Bubble Games Assignment</div>
+
+                  <label class="form-label small text-muted mb-1">Select Bubble Game</label>
+                  <select id="baBubbleSelect" class="form-select">
+                    <option value="">Loading bubble games...</option>
+                  </select>
+
+                  <div class="d-flex gap-3 mt-3">
+                    <div class="form-check">
+                      <input class="form-check-input" type="radio" name="baBubbleMode" id="baBubbleAssign" value="assign" checked>
+                      <label class="form-check-label" for="baBubbleAssign">Assign</label>
+                    </div>
+                    <div class="form-check">
+                      <input class="form-check-input" type="radio" name="baBubbleMode" id="baBubbleUnassign" value="unassign">
+                      <label class="form-check-label" for="baBubbleUnassign">Unassign</label>
+                    </div>
+                  </div>
+
+                  <div class="alert alert-light small mt-3 mb-0">
+                    <i class="fa fa-circle-info me-1"></i>
+                    Already assigned users will be skipped automatically.
+                  </div>
+
+                  <button class="btn btn-primary mt-3 w-100" id="baApplyBubble">
+                    <i class="fa fa-check me-1"></i> Apply Bubble Game in Bulk
+                  </button>
+                </div>
+              </div>
+
+              {{-- DOOR --}}
+              <div class="tab-pane fade" id="baTabDoor">
+                <div class="ba-box">
+                  <div class="fw-semibold mb-2"><i class="fa fa-door-open me-1"></i>Bulk Door Games Assignment</div>
+
+                  <label class="form-label small text-muted mb-1">Select Door Game</label>
+                  <select id="baDoorSelect" class="form-select">
+                    <option value="">Loading door games...</option>
+                  </select>
+
+                  <div class="d-flex gap-3 mt-3">
+                    <div class="form-check">
+                      <input class="form-check-input" type="radio" name="baDoorMode" id="baDoorAssign" value="assign" checked>
+                      <label class="form-check-label" for="baDoorAssign">Assign</label>
+                    </div>
+                    <div class="form-check">
+                      <input class="form-check-input" type="radio" name="baDoorMode" id="baDoorUnassign" value="unassign">
+                      <label class="form-check-label" for="baDoorUnassign">Unassign</label>
+                    </div>
+                  </div>
+
+                  <div class="alert alert-light small mt-3 mb-0">
+                    <i class="fa fa-circle-info me-1"></i>
+                    Already assigned users will be skipped automatically.
+                  </div>
+
+                  <button class="btn btn-primary mt-3 w-100" id="baApplyDoor">
+                    <i class="fa fa-check me-1"></i> Apply Door Game in Bulk
+                  </button>
+                </div>
+              </div>
+
+            </div><!-- /tab-content -->
+          </div>
+        </div>
+
+      </div>
+
+      <div class="modal-footer">
+        <div class="me-auto small text-muted" id="baFooterInfo">Ready</div>
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Close</button>
       </div>
     </div>
   </div>
@@ -1005,6 +1294,467 @@ document.addEventListener('DOMContentLoaded', function(){
   const errTxt   = document.getElementById('toastErrorText');
   const ok  = (m)=>{ okTxt.textContent = m || 'Done'; toastOk.show(); };
   const err = (m)=>{ errTxt.textContent= m || 'Something went wrong'; toastErr.show(); };
+  /* =================== BULK ASSIGN (QUIZZES/GAMES) =================== */
+  const btnBulkAssign = document.getElementById('btnBulkAssign');
+  const bulkAssignModalEl = document.getElementById('bulkAssignModal');
+
+  const baLoader = document.getElementById('baLoader');
+
+  const baUserFolder = document.getElementById('baUserFolder');
+  const baUserRole   = document.getElementById('baUserRole');
+  const baUserSearch = document.getElementById('baUserSearch');
+  const baUserSelectAll = document.getElementById('baUserSelectAll');
+  const baUserCount  = document.getElementById('baUserCount');
+  const baUserList   = document.getElementById('baUserList');
+
+  const baQuizSelect   = document.getElementById('baQuizSelect');
+  const baBubbleSelect = document.getElementById('baBubbleSelect');
+  const baDoorSelect   = document.getElementById('baDoorSelect');
+
+  const baApplyQuiz   = document.getElementById('baApplyQuiz');
+  const baApplyBubble = document.getElementById('baApplyBubble');
+  const baApplyDoor   = document.getElementById('baApplyDoor');
+
+  const baProgressWrap = document.getElementById('baProgressWrap');
+  const baProgressText = document.getElementById('baProgressText');
+  const baProgressStat = document.getElementById('baProgressStat');
+  const baProgressBar  = document.getElementById('baProgressBar');
+  const baProgressHint = document.getElementById('baProgressHint');
+  const baFooterInfo   = document.getElementById('baFooterInfo');
+
+  let bulkUsersLoaded = false;
+  let bulkUsers = [];
+  let bulkById = new Map();
+
+  let bulkCatalogLoaded = false;
+  let bulkQuizCatalog   = [];
+  let bulkBubbleCatalog = [];
+  let bulkDoorCatalog   = [];
+
+  const selectedUserIds = new Set();
+  let visibleUsers = [];
+
+  function isAdminRole(r){
+    const x = String(r || '').toLowerCase();
+    return x === 'admin' || x === 'super_admin';
+  }
+
+  async function fetchAllUsersForBulk(){
+    const all = [];
+    let p = 1;
+    const per = 500;
+    let pages = 1;
+
+    while (p <= pages && p <= 40){
+      const params = new URLSearchParams({
+        page: String(p),
+        per_page: String(per),
+        sort: 'name'
+      });
+
+      const res = await fetch('/api/users?' + params.toString(), {
+        headers: authHeaders({'Accept':'application/json'})
+      });
+
+      const j = await res.json().catch(()=> ({}));
+      if (!res.ok) throw new Error(j.message || 'Failed to load users');
+
+      const raw = Array.isArray(j.data) ? j.data : [];
+      const hiddenEmail = SYSTEM_ADMIN_EMAIL.toLowerCase();
+
+      const rows = raw.filter(row => (row.email || '').toLowerCase() !== hiddenEmail);
+      all.push(...rows);
+
+      const meta = j.meta || {};
+      pages = meta.total_pages ?? Math.max(1, Math.ceil((meta.total || all.length) / per));
+      p++;
+    }
+
+    return all;
+  }
+
+  function fillBulkUserFolderDropdown(){
+    if (!baUserFolder) return;
+    const keep = baUserFolder.value || '';
+
+    const opts = (foldersCache || []).map(f =>
+      `<option value="${esc(String(f.id))}">${esc(String(f.name))}</option>`
+    ).join('');
+
+    baUserFolder.innerHTML = `<option value="">All Folders</option>` + opts;
+    if (keep) baUserFolder.value = keep;
+  }
+
+  function filterUsersForList(){
+    const folderId = normId(baUserFolder.value || '');
+    const role     = String(baUserRole.value || '').toLowerCase();
+    const qText    = String(baUserSearch.value || '').trim().toLowerCase();
+
+    let list = bulkUsers.filter(u => !isAdminRole(u.role)); // ✅ Admin excluded ALWAYS
+
+    if (folderId){
+      list = list.filter(u => normId(u.user_folder_id ?? u.folder_id ?? '') === folderId);
+    }
+    if (role){
+      list = list.filter(u => String(u.role || '').toLowerCase() === role);
+    }
+    if (qText){
+      list = list.filter(u => {
+        const nm = String(u.name || '').toLowerCase();
+        const em = String(u.email || '').toLowerCase();
+        return nm.includes(qText) || em.includes(qText);
+      });
+    }
+
+    visibleUsers = list;
+    return list;
+  }
+
+  function renderUserList(){
+    const list = filterUsersForList();
+
+    if (!list.length){
+      baUserList.innerHTML = `<div class="p-3 text-muted">No users found.</div>`;
+      baUserCount.textContent = `Selected: 0`;
+      return;
+    }
+
+    baUserList.innerHTML = list.map(u=>{
+      const uid = String(u.id);
+      const checked = selectedUserIds.has(uid);
+      const folderNm = folderNameFromUserRow(u) || '—';
+
+      return `
+        <div class="ba-item">
+          <div class="ba-left">
+            <input class="form-check-input ba-user-chk" type="checkbox" data-id="${esc(uid)}" ${checked?'checked':''}>
+            <div class="ba-meta">
+              <div class="ba-name">${esc(u.name || '')}</div>
+              <div class="ba-email">${esc(u.email || '')}</div>
+            </div>
+          </div>
+          <div class="ba-right">
+            <span class="ba-pill">${esc(roleLabel(u.role))}</span>
+            <span class="ba-pill">${esc(folderNm)}</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    baUserCount.textContent = `Selected: ${selectedUserIds.size}`;
+  }
+
+  function showProgress(title, done, total, hint){
+    baProgressWrap.classList.remove('d-none');
+    baProgressText.textContent = title || 'Processing...';
+    baProgressStat.textContent = `${done}/${total}`;
+    baProgressHint.textContent = hint || '';
+    const pct = total ? Math.round((done/total)*100) : 0;
+    baProgressBar.style.width = pct + '%';
+  }
+
+  async function runBulkPool(ids, worker, label){
+    const total = ids.length;
+    let done = 0;
+
+    const concurrency = 8;
+    const queue = ids.slice();
+
+    let okCount = 0, skipCount = 0, errCount = 0;
+
+    async function next(){
+      const id = queue.shift();
+      if (!id) return;
+
+      try{
+        const r = await worker(id);
+        if (r === 'skip') skipCount++;
+        else okCount++;
+      }catch(ex){
+        errCount++;
+      }finally{
+        done++;
+        showProgress(label, done, total, `Success: ${okCount} • Skipped: ${skipCount} • Errors: ${errCount}`);
+      }
+
+      return next();
+    }
+
+    showProgress(label, 0, total, 'Starting...');
+    await Promise.all(Array.from({length: Math.min(concurrency, total)}, () => next()));
+
+    return { okCount, skipCount, errCount };
+  }
+
+  function fillSelect(selectEl, items, label){
+    if (!selectEl) return;
+    if (!items.length){
+      selectEl.innerHTML = `<option value="">No ${label} found</option>`;
+      return;
+    }
+    selectEl.innerHTML = `<option value="">Select ${label}...</option>` + items.map(it =>
+      `<option value="${esc(String(it.id))}">${esc(String(it.name))}</option>`
+    ).join('');
+  }
+
+  async function loadCatalogsUsingFirstUser(){
+    if (bulkCatalogLoaded) return;
+
+    // pick first eligible user (non-admin)
+    const first = bulkUsers.find(u => !isAdminRole(u.role));
+    if (!first){
+      bulkQuizCatalog = [];
+      bulkBubbleCatalog = [];
+      bulkDoorCatalog = [];
+      bulkCatalogLoaded = true;
+      return;
+    }
+
+    const uid = first.id;
+
+    // ✅ Use your EXISTING endpoints (already used in per-user manage modals)
+    try{
+      const [rq, rb, rd] = await Promise.all([
+        fetch(`/api/users/${uid}/quizzes`, { headers: authHeaders({'Accept':'application/json'}) }),
+        fetch(`/api/users/${uid}/bubble-games`, { headers: authHeaders({'Accept':'application/json'}) }),
+        fetch(`/api/users/${uid}/door-games`, { headers: authHeaders({'Accept':'application/json'}) }),
+      ]);
+
+      const jq = await rq.json().catch(()=> ({}));
+      const jb = await rb.json().catch(()=> ({}));
+      const jd = await rd.json().catch(()=> ({}));
+
+      if (rq.ok){
+        const list = Array.isArray(jq.data) ? jq.data : [];
+        bulkQuizCatalog = list.map(x => ({
+          id: x.quiz_id ?? x.id,
+          name: x.quiz_name ?? x.title ?? x.name ?? ('Quiz ' + (x.quiz_id ?? x.id ?? ''))
+        })).filter(x => x.id != null);
+      }
+
+      if (rb.ok){
+        const list = Array.isArray(jb.data) ? jb.data : [];
+        bulkBubbleCatalog = list.map(x => ({
+          id: x.bubble_game_id ?? x.game_id ?? x.id,
+          name: x.bubble_game_name ?? x.game_name ?? x.title ?? x.name ?? ('Game ' + (x.id ?? ''))
+        })).filter(x => x.id != null);
+      }
+
+      if (rd.ok){
+        const list = Array.isArray(jd.data) ? jd.data : [];
+        bulkDoorCatalog = list.map(x => ({
+          id: x.door_game_id ?? x.game_id ?? x.id,
+          name: x.door_game_name ?? x.game_name ?? x.title ?? x.name ?? ('Door Game ' + (x.id ?? ''))
+        })).filter(x => x.id != null);
+      }
+
+      bulkCatalogLoaded = true;
+
+      fillSelect(baQuizSelect, bulkQuizCatalog, 'quiz');
+      fillSelect(baBubbleSelect, bulkBubbleCatalog, 'bubble game');
+      fillSelect(baDoorSelect, bulkDoorCatalog, 'door game');
+
+    }catch(e){
+      bulkCatalogLoaded = true;
+      fillSelect(baQuizSelect, [], 'quiz');
+      fillSelect(baBubbleSelect, [], 'bubble game');
+      fillSelect(baDoorSelect, [], 'door game');
+      err(e.message || 'Failed to load catalogs');
+    }
+  }
+
+  function getMode(name){
+    const el = document.querySelector(`input[name="${name}"]:checked`);
+    return el ? el.value : 'assign';
+  }
+
+  function looksLikeSkipMessage(msg){
+    const t = String(msg || '').toLowerCase();
+    return (
+      t.includes('already') ||
+      t.includes('exists') ||
+      t.includes('assigned') ||
+      t.includes('not assigned') ||
+      t.includes('no changes') ||
+      t.includes('duplicate')
+    );
+  }
+
+  async function applyBulk(type){
+    if (!CAN_WRITE){
+      err('You do not have permission to bulk assign');
+      return;
+    }
+
+    const ids = Array.from(selectedUserIds);
+    if (!ids.length){
+      Swal.fire('No users selected', 'Please select users first.', 'info');
+      return;
+    }
+
+    let itemId = '';
+    let mode = 'assign';
+
+    if (type === 'quiz'){
+      itemId = normId(baQuizSelect.value || '');
+      mode = getMode('baQuizMode');
+      if (!itemId){ Swal.fire('Quiz required','Please select a quiz first.','info'); return; }
+    }
+    if (type === 'bubble'){
+      itemId = normId(baBubbleSelect.value || '');
+      mode = getMode('baBubbleMode');
+      if (!itemId){ Swal.fire('Bubble game required','Please select a bubble game first.','info'); return; }
+    }
+    if (type === 'door'){
+      itemId = normId(baDoorSelect.value || '');
+      mode = getMode('baDoorMode');
+      if (!itemId){ Swal.fire('Door game required','Please select a door game first.','info'); return; }
+    }
+
+    const {isConfirmed} = await Swal.fire({
+      title: `Bulk ${mode} ?`,
+      text: `This will ${mode} ${type} for ${ids.length} users. Already assigned will be skipped.`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, Apply'
+    });
+    if (!isConfirmed) return;
+
+    baFooterInfo.textContent = `Applying ${type}...`;
+
+    const result = await runBulkPool(ids, async (uid) => {
+      // endpoints (same ones you already use per user)
+      let url = '';
+      let payload = {};
+
+      if (type === 'quiz'){
+        url = mode === 'assign'
+          ? `/api/users/${uid}/quizzes/assign`
+          : `/api/users/${uid}/quizzes/unassign`;
+        payload = { quiz_id: Number(itemId) };
+      }
+
+      if (type === 'bubble'){
+        url = mode === 'assign'
+          ? `/api/users/${uid}/bubble-games/assign`
+          : `/api/users/${uid}/bubble-games/unassign`;
+        payload = { bubble_game_id: itemId };
+      }
+
+      if (type === 'door'){
+        url = mode === 'assign'
+          ? `/api/users/${uid}/door-games/assign`
+          : `/api/users/${uid}/door-games/unassign`;
+        payload = { door_game_id: itemId };
+      }
+
+      const res = await fetch(url, {
+        method:'POST',
+        headers: authHeaders({'Content-Type':'application/json','Accept':'application/json'}),
+        body: JSON.stringify(payload)
+      });
+
+      const j = await res.json().catch(()=> ({}));
+      if (!res.ok){
+        const msg = firstError(j) || j.message || 'Operation failed';
+        // ✅ treat already-assigned / already-unassigned as SKIP
+        if (looksLikeSkipMessage(msg)) return 'skip';
+        throw new Error(msg);
+      }
+
+      return 'ok';
+    }, `Bulk ${mode}...`);
+
+    if (result.errCount){
+      err(`Bulk ${type}: ${result.okCount} success • ${result.skipCount} skipped • ${result.errCount} errors`);
+    }else{
+      ok(`Bulk ${type}: ${result.okCount} success • ${result.skipCount} skipped`);
+    }
+
+    baFooterInfo.textContent = 'Done';
+  }
+
+  async function openBulkAssign(){
+    if (!CAN_WRITE){
+      err('You do not have permission to bulk assign');
+      return;
+    }
+
+    baLoader.classList.remove('d-none');
+    baProgressWrap.classList.add('d-none');
+
+    // ensure folders ready
+    await loadFoldersDropdown();
+    fillBulkUserFolderDropdown();
+
+    if (!bulkUsersLoaded){
+      try{
+        bulkUsers = await fetchAllUsersForBulk();
+        bulkById = new Map(bulkUsers.map(u => [String(u.id), u]));
+        bulkUsersLoaded = true;
+      }catch(e){
+        err(e.message || 'Failed to load users');
+      }
+    }
+
+    // load catalogs using one user’s endpoints
+    await loadCatalogsUsingFirstUser();
+
+    selectedUserIds.clear();
+    baUserSelectAll.checked = false;
+    baUserSearch.value = '';
+    baUserFolder.value = '';
+    baUserRole.value = '';
+
+    renderUserList();
+    baLoader.classList.add('d-none');
+    baFooterInfo.textContent = 'Ready';
+  }
+
+  // user list checkboxes
+  baUserList?.addEventListener('change', (e)=>{
+    const chk = e.target.closest('.ba-user-chk');
+    if (!chk) return;
+    const uid = String(chk.dataset.id || '');
+    if (!uid) return;
+
+    if (chk.checked) selectedUserIds.add(uid);
+    else selectedUserIds.delete(uid);
+
+    baUserCount.textContent = `Selected: ${selectedUserIds.size}`;
+  });
+
+  // select all visible
+  baUserSelectAll?.addEventListener('change', ()=>{
+    if (baUserSelectAll.checked){
+      visibleUsers.forEach(u => selectedUserIds.add(String(u.id)));
+    }else{
+      visibleUsers.forEach(u => selectedUserIds.delete(String(u.id)));
+    }
+    renderUserList();
+  });
+
+  // filters
+  baUserFolder?.addEventListener('change', ()=>{ renderUserList(); });
+  baUserRole?.addEventListener('change', ()=>{ renderUserList(); });
+  baUserSearch?.addEventListener('input', debounce(renderUserList, 250));
+
+  // apply buttons
+  baApplyQuiz?.addEventListener('click', ()=> applyBulk('quiz'));
+  baApplyBubble?.addEventListener('click', ()=> applyBulk('bubble'));
+  baApplyDoor?.addEventListener('click', ()=> applyBulk('door'));
+
+  // open modal hook
+  if (btnBulkAssign){
+    btnBulkAssign.addEventListener('click', openBulkAssign);
+  }
+
+  // reset progress on close
+  bulkAssignModalEl?.addEventListener('hidden.bs.modal', ()=>{
+    baProgressWrap.classList.add('d-none');
+    baProgressBar.style.width = '0%';
+    baFooterInfo.textContent = 'Ready';
+  });
 
   /* =================== UTILS =================== */
   function esc(s){

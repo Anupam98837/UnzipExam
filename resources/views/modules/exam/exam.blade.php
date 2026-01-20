@@ -87,6 +87,29 @@
     mjx-container{overflow-x:auto}
 
     @media (min-width:992px){.col-fixed-260{flex:0 0 260px;max-width:260px}}
+
+    /* ✅ Intro Modal - Bubble Game Like */
+    .intro-card{
+      border:1px solid var(--line-strong,#e5e7eb);
+      border-radius:14px;
+      background:var(--surface,#fff);
+      padding:12px 14px;
+    }
+    .intro-title{
+      font-weight:800;
+      font-size:.95rem;
+      margin-bottom:6px;
+      display:flex;
+      align-items:center;
+      gap:8px;
+    }
+    .intro-body{
+      color:var(--muted,#6b7280);
+      font-size:.9rem;
+      line-height:1.45;
+    }
+    .intro-body ul, .intro-body ol{margin:8px 0 0 18px}
+    .intro-body li{margin:4px 0}
   </style>
 </head>
 <body>
@@ -173,6 +196,66 @@
   </div>
 </main>
 
+{{-- ✅ INTRO MODAL (Bubble Game Style) --}}
+<div class="modal fade" id="examIntroModal" tabindex="-1"
+     data-bs-backdrop="static" data-bs-keyboard="false" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content" style="border-radius:16px;border:1px solid var(--line-strong,#e5e7eb);box-shadow:0 18px 60px rgba(15,23,42,.2);">
+      <div class="modal-header" style="border-bottom:1px solid var(--line-strong,#e5e7eb);background:var(--surface,#fff);border-top-left-radius:16px;border-top-right-radius:16px;">
+        <div class="d-flex align-items-center gap-2">
+          <div style="width:38px;height:38px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:rgba(79,70,229,.08);border:1px solid rgba(79,70,229,.2);">
+            <i class="fa-solid fa-circle-info" style="color:var(--accent-color,#4f46e5)"></i>
+          </div>
+          <div>
+            <div id="introQuizTitle" style="font-weight:900;font-size:1.02rem;line-height:1.15;">Exam Instructions</div>
+            <div class="small text-muted">Read carefully before starting</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-body" style="background:var(--surface,#fff);">
+        <div class="intro-card mb-3">
+          <div class="intro-title">
+            <i class="fa-solid fa-note-sticky" style="color:var(--accent-color,#4f46e5)"></i>
+            Description
+          </div>
+          <div id="introDesc" class="intro-body">
+            <div class="skeleton" style="height:14px;width:70%;margin-bottom:8px;"></div>
+            <div class="skeleton" style="height:14px;width:92%;margin-bottom:8px;"></div>
+            <div class="skeleton" style="height:14px;width:85%;"></div>
+          </div>
+        </div>
+
+        <div class="intro-card">
+          <div class="intro-title">
+            <i class="fa-solid fa-book-open-reader" style="color:var(--accent-color,#4f46e5)"></i>
+            Instructions
+          </div>
+          <div id="introInstr" class="intro-body">
+            <div class="skeleton" style="height:14px;width:80%;margin-bottom:8px;"></div>
+            <div class="skeleton" style="height:14px;width:90%;margin-bottom:8px;"></div>
+            <div class="skeleton" style="height:14px;width:72%;"></div>
+          </div>
+        </div>
+
+        <div class="mt-3 small text-muted">
+          <i class="fa-solid fa-clock me-1"></i>
+          Timer will start only after you press <b>Start Exam</b>.
+        </div>
+      </div>
+
+      <div class="modal-footer" style="border-top:1px solid var(--line-strong,#e5e7eb);background:var(--surface,#fff);border-bottom-left-radius:16px;border-bottom-right-radius:16px;">
+        <button type="button" id="introBackBtn" class="btn btn-light">
+          <i class="fa-solid fa-arrow-left me-2"></i>Back
+        </button>
+        <button type="button" id="introStartBtn" class="btn btn-primary">
+          <i class="fa-solid fa-play me-2"></i>Start Exam
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 function typeset(el){
   if (!el) return;
@@ -217,19 +300,21 @@ if (!token) {
 let ATTEMPT_UUID = localStorage.getItem(STORAGE_ATTEMPT_KEY) || null;
 
 let questions     = [];
-let selections    = {}; // qid => value
+let selections    = {};
 let reviews       = {};
 let visited       = {};
-let timeSpentSec  = {}; // qid => seconds (accumulated)
+let timeSpentSec  = {};
 let currentIndex  = 0;
 
-let serverEndAt   = null; // ISO string
+let serverEndAt   = null;
 let timerHandle   = null;
 let isSubmitting  = false;
 
-/** active question start timestamp (ms) */
 let activeQid     = null;
 let activeStartMs = null;
+
+/* ✅ exam will not start until modal Start pressed */
+let EXAM_STARTED  = false;
 
 /* ================== API helper ================== */
 async function api(path, opts = {}) {
@@ -251,6 +336,141 @@ async function api(path, opts = {}) {
   return data;
 }
 
+/* ================== Intro Modal (Bootstrap) ================== */
+function pickFirstNonEmpty(...vals){
+  for(const v of vals){
+    if(v === null || v === undefined) continue;
+    const s = String(v).trim();
+    if(s !== '') return s;
+  }
+  return '';
+}
+
+function escapeHtml(str){
+  return (str ?? '').toString()
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#39;');
+}
+
+/* ✅ allowlist sanitizer */
+function sanitizeHtmlAllowList(inputHtml){
+  const html = String(inputHtml ?? '').trim();
+  if(!html) return '';
+
+  const allowed = new Set([
+    'B','I','EM','STRONG','U','BR',
+    'P','DIV','SPAN','UL','OL','LI',
+    'A','CODE','PRE','HR','BLOCKQUOTE',
+    'SMALL','SUP','SUB','H1','H2','H3','H4','H5','H6'
+  ]);
+
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+
+  const cleanNode = (node) => {
+    if (node.nodeType === Node.COMMENT_NODE) {
+      node.remove(); return;
+    }
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      const tag = node.tagName;
+
+      if (!allowed.has(tag)) {
+        const parent = node.parentNode;
+        if (!parent) return;
+        while (node.firstChild) parent.insertBefore(node.firstChild, node);
+        parent.removeChild(node);
+        return;
+      }
+
+      [...node.attributes].forEach(attr => {
+        const name = attr.name.toLowerCase();
+        const val  = String(attr.value || '');
+
+        if (name.startsWith('on') || name === 'style') {
+          node.removeAttribute(attr.name); return;
+        }
+
+        if (tag === 'A') {
+          if (name === 'href') {
+            const href = val.trim();
+            const safe = /^https?:\/\//i.test(href) || /^mailto:/i.test(href) || href.startsWith('#');
+            if (!safe) node.removeAttribute('href');
+            return;
+          }
+          if (!['href','target','rel'].includes(name)) node.removeAttribute(attr.name);
+          return;
+        }
+
+        node.removeAttribute(attr.name);
+      });
+
+      if (tag === 'A') {
+        node.setAttribute('target','_blank');
+        node.setAttribute('rel','noopener noreferrer');
+      }
+    }
+    [...node.childNodes].forEach(cleanNode);
+  };
+
+  [...doc.body.childNodes].forEach(cleanNode);
+  return doc.body.innerHTML.trim();
+}
+
+function renderSafeHtmlOrText(raw){
+  const s = String(raw ?? '').trim();
+  if(!s) return '';
+
+  const looksHtml = /<\/?[a-z][\s\S]*>/i.test(s);
+  if (looksHtml) {
+    const cleaned = sanitizeHtmlAllowList(s);
+    return cleaned || `<div>${escapeHtml(s)}</div>`;
+  }
+
+  return `<div>${escapeHtml(s).replace(/\n/g,'<br>')}</div>`;
+}
+
+async function fetchQuizMeta(){
+  try{
+    const res = await api(`/api/exam/quizzes/${encodeURIComponent(QUIZ_KEY)}`, { method:'GET' });
+    return res.quiz || res.data || res;
+  }catch(_){
+    return null;
+  }
+}
+
+async function openIntroModal(){
+  const el = document.getElementById('examIntroModal');
+  const modal = new bootstrap.Modal(el, { backdrop:'static', keyboard:false });
+
+  // open modal first (skeleton visible)
+  modal.show();
+
+  // fill data
+  const meta = await fetchQuizMeta();
+
+  const title = pickFirstNonEmpty(meta?.quiz_name, meta?.title, meta?.name, 'Exam');
+  const descRaw = pickFirstNonEmpty(meta?.description_html, meta?.description, meta?.quiz_description, meta?.desc);
+  const instRaw = pickFirstNonEmpty(meta?.instructions_html, meta?.instructions, meta?.instruction, meta?.rules);
+
+  document.getElementById('introQuizTitle').textContent = title + ' • Instructions';
+  document.getElementById('introDesc').innerHTML  = renderSafeHtmlOrText(descRaw || 'No description provided.');
+  document.getElementById('introInstr').innerHTML = renderSafeHtmlOrText(instRaw || 'No instructions provided.');
+
+  // buttons
+  document.getElementById('introBackBtn').onclick = () => {
+    modal.hide();
+    history.back();
+  };
+
+  document.getElementById('introStartBtn').onclick = async () => {
+    modal.hide();
+    EXAM_STARTED = true;
+    await bootExam(); // ✅ now start real exam flow
+  };
+}
+
 /* ================== Cache ================== */
 function cacheLoad(){
   try{
@@ -269,7 +489,6 @@ function cacheLoad(){
     currentIndex  = Number.isFinite(Number(c.currentIndex)) ? Number(c.currentIndex) : 0;
     serverEndAt   = c.serverEndAt || null;
 
-    // normalize fib selections
     questions.forEach(q => {
       if (String(q.question_type).toLowerCase() === 'fill_in_the_blank') {
         const cur = selections[q.question_id];
@@ -309,14 +528,11 @@ function cacheSave(){
   }catch(_){}
 }
 
-/* ✅ Clear every exam-related cache (and any app leftovers you might have stored) */
 function clearAllExamClientState(){
   try{
-    // timers
     if (timerHandle) { clearInterval(timerHandle); timerHandle = null; }
     if (cacheSaveTimer) { clearTimeout(cacheSaveTimer); cacheSaveTimer = null; }
 
-    // this quiz specific keys
     if (QUIZ_KEY) {
       localStorage.removeItem(STORAGE_ATTEMPT_KEY);
       localStorage.removeItem(STORAGE_CACHE_KEY);
@@ -324,7 +540,6 @@ function clearAllExamClientState(){
       sessionStorage.removeItem(STORAGE_CACHE_KEY);
     }
 
-    // also clear in-memory state
     ATTEMPT_UUID = null;
     questions = [];
     selections = {};
@@ -335,21 +550,6 @@ function clearAllExamClientState(){
     serverEndAt = null;
     activeQid = null;
     activeStartMs = null;
-
-    // optional: if you ever stored generic exam flags, wipe common patterns safely
-    // (won't affect other app data)
-    const wipePrefixes = ['attempt_uuid:', 'exam_cache:'];
-    Object.keys(localStorage).forEach(k => {
-      if (wipePrefixes.some(p => k.startsWith(p))) {
-        // only remove keys for THIS quiz
-        if (QUIZ_KEY && k.endsWith(QUIZ_KEY)) localStorage.removeItem(k);
-      }
-    });
-    Object.keys(sessionStorage).forEach(k => {
-      if (wipePrefixes.some(p => k.startsWith(p))) {
-        if (QUIZ_KEY && k.endsWith(QUIZ_KEY)) sessionStorage.removeItem(k);
-      }
-    });
   }catch(_){}
 }
 
@@ -404,15 +604,6 @@ function normalizeTeX(s) {
     .replace(/\\\\\)/g, '\\)');
 }
 
-function escapeHtml(str){
-  return (str ?? '').toString()
-    .replace(/&/g,'&amp;')
-    .replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;')
-    .replace(/"/g,'&quot;')
-    .replace(/'/g,'&#39;');
-}
-
 function answeredVal(qid){
   const sel = selections[qid];
   if (sel == null) return false;
@@ -442,21 +633,16 @@ function refreshNav(){
   });
 }
 
-/* ================== Time Spent Tracking (local only) ================== */
+/* ================== Time spent ================== */
 function enterQuestion(qid){
   if (!qid) return;
-  // close previous first
   if (activeQid && activeQid !== qid) leaveQuestion(activeQid);
-
   activeQid = Number(qid);
   activeStartMs = Date.now();
 }
-
 function leaveQuestion(qid){
   qid = Number(qid);
   if (!qid) return;
-
-  // only if leaving the active one
   if (activeQid !== qid || !activeStartMs) return;
 
   const diffSec = Math.max(1, Math.round((Date.now() - activeStartMs) / 1000));
@@ -569,7 +755,6 @@ function renderQuestion(){
   wrap.querySelectorAll('.fib-fields').forEach(n => n.classList.add('tex2jax_process'));
   typeset(wrap);
 
-  // Local-only input handlers (no API)
   if (rawType === 'fill_in_the_blank') {
     $$('#options input[data-fib-index]').forEach(inp => {
       const updateLocal = () => {
@@ -617,7 +802,6 @@ function buildNavigator(){
     b.type = 'button';
     b.className = 'nav-btn';
     b.textContent = String(idx + 1);
-
     b.addEventListener('click', () => navigateTo(idx));
     grid.appendChild(b);
   });
@@ -626,6 +810,7 @@ function buildNavigator(){
 }
 
 function navigateTo(targetIdx){
+  if (!EXAM_STARTED) return;
   if (targetIdx < 0 || targetIdx >= questions.length) return;
   if (targetIdx === currentIndex) return;
 
@@ -643,19 +828,19 @@ function navigateTo(targetIdx){
 
 /* ================== Actions ================== */
 function onPrev(){
+  if (!EXAM_STARTED) return;
   if (currentIndex <= 0) return;
   navigateTo(currentIndex - 1);
 }
 
 function onNext(){
-  if (currentIndex < questions.length - 1) {
-    navigateTo(currentIndex + 1);
-  } else {
-    doSubmit(false);
-  }
+  if (!EXAM_STARTED) return;
+  if (currentIndex < questions.length - 1) navigateTo(currentIndex + 1);
+  else doSubmit(false);
 }
 
 function onToggleReview(){
+  if (!EXAM_STARTED) return;
   const q = questions[currentIndex];
   if (!q) return;
   reviews[q.question_id] = !reviews[q.question_id];
@@ -663,7 +848,7 @@ function onToggleReview(){
   renderQuestion();
 }
 
-/* ================== Bulk Submit ================== */
+/* ================== Submit ================== */
 function showSubmitting(){
   Swal.fire({
     title: 'Submitting…',
@@ -678,7 +863,6 @@ function showSubmitting(){
 async function doSubmit(auto){
   if (isSubmitting) return;
 
-  // confirm (manual only)
   if (!auto) {
     const res = await Swal.fire({
       title:'Submit exam?',
@@ -695,18 +879,15 @@ async function doSubmit(auto){
   try{
     isSubmitting = true;
 
-    // lock button
     $('#submit-btn').disabled = true;
     $('#submit-btn .btn-label').classList.add('d-none');
     $('#submit-btn .btn-spinner').classList.remove('d-none');
 
     showSubmitting();
 
-    // finalize current time
     const curQ = questions[currentIndex];
     if (curQ?.question_id) leaveQuestion(curQ.question_id);
 
-    // Build bulk payload for ALL questions
     const answers = questions.map(q => {
       const qid = Number(q.question_id);
       return {
@@ -716,21 +897,16 @@ async function doSubmit(auto){
       };
     });
 
-    // 1) Bulk save ONCE
     await api(`/api/exam/attempts/${ATTEMPT_UUID}/bulk-answer`, {
       method:'POST',
       body: JSON.stringify({ answers })
     });
 
-    // 2) Submit ONCE
     await api(`/api/exam/attempts/${ATTEMPT_UUID}/submit`, { method:'POST' });
 
-    // stop timer locally
     if (timerHandle) clearInterval(timerHandle);
 
     Swal.close();
-
-    // ✅ CLEAR EVERYTHING (cache + memory) *BEFORE* redirect
     clearAllExamClientState();
 
     await Swal.fire({
@@ -740,9 +916,6 @@ async function doSubmit(auto){
       confirmButtonText:'OK'
     });
 
-    const role = sessionStorage.getItem('role') || 'student';
-
-    // ✅ redirect after clearing
     window.location.replace(`/dashboard`);
 
   }catch(e){
@@ -757,43 +930,34 @@ async function doSubmit(auto){
   }
 }
 
-/* ================== Boot ================== */
-document.addEventListener('DOMContentLoaded', init);
-
-async function init(){
+/* ================== BOOT EXAM (after modal start) ================== */
+async function bootExam(){
   try{
     showSkeleton(true);
 
-    // 1) If cached exam exists, load it and avoid extra API calls
     const hasCache = cacheLoad();
 
-    // 2) If no attempt yet -> start ONCE
     if (!ATTEMPT_UUID) {
       const started = await api(`/api/exam/quizzes/${encodeURIComponent(QUIZ_KEY)}/start`, { method:'POST' });
-      const attempt = started.attempt || {};
+      const attempt = started.attempt || started.data?.attempt || started.data || {};
       ATTEMPT_UUID  = attempt.attempt_uuid || null;
 
       localStorage.setItem(STORAGE_ATTEMPT_KEY, ATTEMPT_UUID);
-
-      // ✅ correct key in your API is "server_end_at"
       serverEndAt = attempt.server_end_at || null;
 
-      // set title
       if (attempt.quiz_name) document.title = attempt.quiz_name + ' • Exam';
-
       cacheSave();
     }
 
-    // 3) If no cache (or cache empty), load questions ONCE and cache
     if (!hasCache || !questions.length) {
       const data = await api(`/api/exam/attempts/${ATTEMPT_UUID}/questions`);
-      questions  = data.questions || [];
-      selections = data.selections || {};
+      const pack = data.data || data;
 
-      // ✅ attempt.server_end_at from questions endpoint
-      if (data.attempt?.server_end_at) serverEndAt = data.attempt.server_end_at;
+      questions  = pack.questions || [];
+      selections = pack.selections || {};
 
-      // normalize fib selections
+      if (pack.attempt?.server_end_at) serverEndAt = pack.attempt.server_end_at;
+
       questions.forEach(q => {
         if (String(q.question_type).toLowerCase() === 'fill_in_the_blank') {
           const cur = selections[q.question_id];
@@ -809,26 +973,21 @@ async function init(){
       cacheSave();
     }
 
-    // 4) UI build
     showSkeleton(false);
     buildNavigator();
     currentIndex = Math.min(Math.max(0, currentIndex), Math.max(0, questions.length - 1));
     renderQuestion();
 
-    // 5) Timer from server end
     startTimerFromServerEnd();
 
-    // 6) enter first/current question for time tracking
     const q = questions[currentIndex];
     if (q?.question_id) enterQuestion(q.question_id);
 
-    // 7) events
     $('#prev-btn').addEventListener('click', onPrev);
     $('#next-btn').addEventListener('click', onNext);
     $('#review-btn').addEventListener('click', onToggleReview);
     $('#submit-btn').addEventListener('click', () => doSubmit(false));
 
-    // 8) on refresh/close, store time + cache
     window.addEventListener('beforeunload', () => {
       const cur = questions[currentIndex];
       if (cur?.question_id) leaveQuestion(cur.question_id);
@@ -841,6 +1000,11 @@ async function init(){
     Swal.fire({icon:'error',title:'Cannot start exam',text:e.message || 'Please try again.'});
   }
 }
+
+/* ================== Boot (Modal first) ================== */
+document.addEventListener('DOMContentLoaded', async () => {
+  await openIntroModal(); // ✅ shows normal bootstrap modal first
+});
 </script>
 
 </body>

@@ -36,7 +36,85 @@ private function normalizeRole(?string $role): string
         $role   = $this->normalizeRole($actor['role'] ?? '');
         $userId = (int)($actor['id'] ?? 0);
 
-        // ✅ publish column safe
+        /*
+        |----------------------------------------------------------------------
+        | ✅ Helpers (multi filters + safe cleaning)
+        |----------------------------------------------------------------------
+        */
+        $clean = function ($v) {
+            if ($v === null) return null;
+
+            if (is_string($v)) {
+                $v = trim($v);
+                if ($v === '') return null;
+
+                $low = strtolower($v);
+                if (in_array($low, ['all', 'any', 'null', 'undefined', 'none'], true)) return null;
+                return $v;
+            }
+
+            return $v;
+        };
+
+        $toStrList = function ($v) use ($clean) {
+            if ($v === null) return [];
+
+            $arr = is_array($v)
+                ? $v
+                : preg_split('/[,\|]/', (string)$v, -1, PREG_SPLIT_NO_EMPTY);
+
+            $out = [];
+            foreach ($arr as $item) {
+                $item = $clean($item);
+                if ($item !== null) $out[] = (string)$item;
+            }
+
+            return array_values(array_unique($out));
+        };
+
+        $toIntList = function ($v) use ($clean) {
+            if ($v === null) return [];
+
+            $arr = is_array($v)
+                ? $v
+                : preg_split('/[,\|]/', (string)$v, -1, PREG_SPLIT_NO_EMPTY);
+
+            $out = [];
+            foreach ($arr as $item) {
+                $item = $clean($item);
+                if ($item !== null && is_numeric($item)) {
+                    $n = (int)$item;
+                    if ($n > 0) $out[] = $n;
+                }
+            }
+
+            return array_values(array_unique($out));
+        };
+
+        $toBool01 = function ($v) use ($clean) {
+            $v = $clean($v);
+            if ($v === null) return null;
+
+            if (in_array((string)$v, ['0', '1'], true)) return (int)$v;
+
+            $b = filter_var($v, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+            if ($b === null) return null;
+
+            return $b ? 1 : 0;
+        };
+
+        $toFloat = function ($v) use ($clean) {
+            $v = $clean($v);
+            if ($v === null) return null;
+            if (!is_numeric($v)) return null;
+            return (float)$v;
+        };
+
+        /*
+        |----------------------------------------------------------------------
+        | ✅ publish column safe
+        |----------------------------------------------------------------------
+        */
         $hasPublish = false;
         try {
             $hasPublish = Schema::hasColumn('door_game_results', 'publish_to_student');
@@ -44,35 +122,73 @@ private function normalizeRole(?string $role): string
             $hasPublish = false;
         }
 
-        // ✅ folder table safe
+        /*
+        |----------------------------------------------------------------------
+        | ✅ folder table safe
+        |----------------------------------------------------------------------
+        */
         $hasFolderTable = false;
+        $hasFolderDeletedAt = false;
+
         try {
             $hasFolderTable = Schema::hasTable('user_folders');
+            if ($hasFolderTable) {
+                $hasFolderDeletedAt = Schema::hasColumn('user_folders', 'deleted_at');
+            }
         } catch (\Throwable $e) {
             $hasFolderTable = false;
+            $hasFolderDeletedAt = false;
         }
 
-        // ✅ Base query
+        /*
+        |----------------------------------------------------------------------
+        | ✅ users soft delete safe
+        |----------------------------------------------------------------------
+        */
+        $hasUserDeletedAt = false;
+        try {
+            $hasUserDeletedAt = Schema::hasColumn('users', 'deleted_at');
+        } catch (\Throwable $e) {
+            $hasUserDeletedAt = false;
+        }
+
+        /*
+        |----------------------------------------------------------------------
+        | ✅ Base query
+        |----------------------------------------------------------------------
+        */
         $q = DB::table('door_game_results as dgr')
             ->join('door_game as dg', 'dgr.door_game_id', '=', 'dg.id')
             ->join('users as u', 'dgr.user_id', '=', 'u.id')
             ->whereNull('dgr.deleted_at')
             ->whereNull('dg.deleted_at');
 
+        if ($hasUserDeletedAt) {
+            $q->whereNull('u.deleted_at');
+        }
+
         // ✅ JOIN folder if exists
         if ($hasFolderTable) {
-            $q->leftJoin('user_folders as uf', function ($j) {
+            $q->leftJoin('user_folders as uf', function ($j) use ($hasFolderDeletedAt) {
                 $j->on('uf.id', '=', 'u.user_folder_id');
-                // soft delete safe
-                try {
-                    if (Schema::hasColumn('user_folders', 'deleted_at')) {
-                        $j->whereNull('uf.deleted_at');
-                    }
-                } catch (\Throwable $e) {}
+                if ($hasFolderDeletedAt) {
+                    $j->whereNull('uf.deleted_at');
+                }
             });
         }
 
-        // ✅ SELECT columns
+        /*
+        |----------------------------------------------------------------------
+        | ✅ Accuracy % expression (DoorGame score is 0/1 -> accuracy = score*100)
+        |----------------------------------------------------------------------
+        */
+        $accExpr = '(COALESCE(dgr.score,0) * 100.0)';
+
+        /*
+        |----------------------------------------------------------------------
+        | ✅ SELECT columns
+        |----------------------------------------------------------------------
+        */
         $select = [
             // result
             'dgr.id as result_id',
@@ -97,16 +213,19 @@ private function normalizeRole(?string $role): string
             'u.name as student_name',
             'u.email as student_email',
             'u.user_folder_id as user_folder_id',
+
+            // ✅ computed accuracy in SQL (so min/max works)
+            DB::raw("ROUND($accExpr, 2) as accuracy_pct"),
         ];
 
-        // ✅ publish column safe
+        // publish column safe
         if ($hasPublish) {
             $select[] = 'dgr.publish_to_student';
         } else {
             $select[] = DB::raw('0 as publish_to_student');
         }
 
-        // ✅ folder title safe
+        // folder title safe
         if ($hasFolderTable) {
             $select[] = 'uf.id as folder_id';
             $select[] = 'uf.title as folder_title';
@@ -132,83 +251,137 @@ private function normalizeRole(?string $role): string
 
         /*
         |----------------------------------------------------------
-        | ✅ Filters
+        | ✅ Filters (MULTI + COMBINABLE)
         |----------------------------------------------------------
         */
 
-        // door_game_id (id or uuid supported)
-        if ($request->filled('door_game_id')) {
-            $v = (string) $request->input('door_game_id');
-            $q->where(function($w) use ($v){
-                if (is_numeric($v)) $w->where('dg.id', (int)$v);
-                else $w->where('dg.uuid', $v)->orWhere('dg.id', $v);
-            });
-        }
+        // door_game_id supports mixed list (ids + uuids) => ?door_game_id=1,2,uuid1
+        $doorGameKeys = $toStrList($request->query('door_game_id'));
+        if (!empty($doorGameKeys)) {
+            $ids = [];
+            $uuids = [];
 
-        // game_uuid
-        if ($request->filled('game_uuid')) {
-            $q->where('dg.uuid', (string)$request->input('game_uuid'));
-        }
-
-        // student_email
-        if ($request->filled('student_email')) {
-            $email = trim((string)$request->input('student_email'));
-            $q->where('u.email', 'like', "%{$email}%");
-        }
-
-        // ✅ folder dropdown filter (value = folder_id)
-        if ($request->filled('user_folder_id')) {
-            $q->where('u.user_folder_id', (int)$request->input('user_folder_id'));
-        }
-
-        // ✅ folder title filter (optional if you want)
-        if ($request->filled('folder_title')) {
-            $ft = trim((string)$request->input('folder_title'));
-            if ($ft !== '' && $hasFolderTable) {
-                $q->where('uf.title', 'like', "%{$ft}%");
+            foreach ($doorGameKeys as $v) {
+                if (is_numeric($v)) $ids[] = (int)$v;
+                else $uuids[] = (string)$v;
             }
-        }
 
-        // search q
-        $txt = trim((string) $request->input('q', ''));
-        if ($txt !== '') {
-            $q->where(function($w) use ($txt){
-                $w->where('u.name', 'like', "%{$txt}%")
-                  ->orWhere('u.email', 'like', "%{$txt}%")
-                  ->orWhere('dg.title', 'like', "%{$txt}%")
-                  ->orWhere('dgr.uuid', 'like', "%{$txt}%");
+            $ids = array_values(array_unique($ids));
+            $uuids = array_values(array_unique($uuids));
+
+            $q->where(function ($w) use ($ids, $uuids) {
+                $hasAny = false;
+                if (!empty($ids)) {
+                    $w->orWhereIn('dg.id', $ids);
+                    $hasAny = true;
+                }
+                if (!empty($uuids)) {
+                    $w->orWhereIn('dg.uuid', $uuids);
+                    $hasAny = true;
+                }
+                // safety no-op if empty (but it will never be empty here)
+                if (!$hasAny) {
+                    $w->whereRaw('1=1');
+                }
             });
         }
 
-        // attempt_status
-        if ($request->filled('attempt_status')) {
-            $q->where('dgr.status', (string)$request->input('attempt_status'));
+        // game_uuid multi
+        $gameUuids = $toStrList($request->query('game_uuid'));
+        if (!empty($gameUuids)) {
+            $q->whereIn('dg.uuid', $gameUuids);
         }
 
-        // attempt_no
-        if ($request->filled('attempt_no')) {
-            $q->where('dgr.attempt_no', (int)$request->input('attempt_no'));
+        // student_email multi terms (OR)
+        $emailTerms = $toStrList($request->query('student_email'));
+        if (!empty($emailTerms)) {
+            $q->where(function ($w) use ($emailTerms) {
+                foreach ($emailTerms as $t) {
+                    $w->orWhere('u.email', 'like', "%{$t}%");
+                }
+            });
+        }
+
+        // folder dropdown filter (id multi)
+        $folderIds = $toIntList($request->query('user_folder_id'));
+        if (!empty($folderIds)) {
+            $q->whereIn('u.user_folder_id', $folderIds);
+        }
+
+        // folder title filter (optional)
+        $folderTitles = $toStrList($request->query('folder_title'));
+        if (!empty($folderTitles) && $hasFolderTable) {
+            $q->where(function ($w) use ($folderTitles) {
+                foreach ($folderTitles as $t) {
+                    $w->orWhere('uf.title', 'like', "%{$t}%");
+                }
+            });
+        }
+
+        // search q / search
+        $txt = $clean($request->query('q', null));
+        $alt = $clean($request->query('search', null));
+        $search = $txt ?? $alt;
+
+        if ($search !== null) {
+            $q->where(function ($w) use ($search) {
+                $w->where('u.name', 'like', "%{$search}%")
+                  ->orWhere('u.email', 'like', "%{$search}%")
+                  ->orWhere('dg.title', 'like', "%{$search}%")
+                  ->orWhere('dgr.uuid', 'like', "%{$search}%");
+            });
+        }
+
+        // attempt_status multi
+        $attemptStatus = $toStrList($request->query('attempt_status'));
+        if (!empty($attemptStatus)) {
+            $q->whereIn('dgr.status', $attemptStatus);
+        }
+
+        // attempt_no multi
+        $attemptNos = $toIntList($request->query('attempt_no'));
+        if (!empty($attemptNos)) {
+            $q->whereIn('dgr.attempt_no', $attemptNos);
         }
 
         // publish_to_student filter (admin/instructor only)
-        if ($hasPublish && $role !== 'student' && $request->filled('publish_to_student')) {
-            $q->where('dgr.publish_to_student', (int)$request->input('publish_to_student'));
+        if ($hasPublish && $role !== 'student') {
+            $pub = $toBool01($request->query('publish_to_student'));
+            if ($pub !== null) {
+                $q->where('dgr.publish_to_student', $pub);
+            }
         }
 
-        // date range
-        if ($request->filled('from')) {
-            $q->whereDate('dgr.created_at', '>=', $request->input('from'));
-        }
-        if ($request->filled('to')) {
-            $q->whereDate('dgr.created_at', '<=', $request->input('to'));
+        // date range (safe)
+        $from = $clean($request->query('from'));
+        $to   = $clean($request->query('to'));
+
+        if ($from !== null || $to !== null) {
+            try {
+                $start = $from ? Carbon::parse($from)->startOfDay() : null;
+                $end   = $to   ? Carbon::parse($to)->endOfDay() : null;
+
+                if ($start && $end) {
+                    if ($start->gt($end)) { $tmp = $start; $start = $end; $end = $tmp; }
+                    $q->whereBetween('dgr.created_at', [$start, $end]);
+                } elseif ($start) {
+                    $q->where('dgr.created_at', '>=', $start);
+                } elseif ($end) {
+                    $q->where('dgr.created_at', '<=', $end);
+                }
+            } catch (\Throwable $e) {}
         }
 
-        // min/max percentage (DoorGame score=0/1 => accuracy=score*100)
-        if ($request->filled('min_percentage')) {
-            $q->whereRaw('(dgr.score * 100) >= ?', [(float)$request->input('min_percentage')]);
-        }
-        if ($request->filled('max_percentage')) {
-            $q->whereRaw('(dgr.score * 100) <= ?', [(float)$request->input('max_percentage')]);
+        // ✅ min/max percentage (NOW REALLY WORKS + swap safety)
+        $minPct = $toFloat($request->query('min_percentage'));
+        $maxPct = $toFloat($request->query('max_percentage'));
+
+        if ($minPct !== null && $maxPct !== null) {
+            if ($minPct > $maxPct) { $tmp = $minPct; $minPct = $maxPct; $maxPct = $tmp; }
+            $q->whereRaw("$accExpr BETWEEN ? AND ?", [$minPct, $maxPct]);
+        } else {
+            if ($minPct !== null) $q->whereRaw("$accExpr >= ?", [$minPct]);
+            if ($maxPct !== null) $q->whereRaw("$accExpr <= ?", [$maxPct]);
         }
 
         /*
@@ -216,7 +389,7 @@ private function normalizeRole(?string $role): string
         | ✅ Sorting
         |----------------------------------------------------------
         */
-        $sort = (string)$request->input('sort', '-result_created_at');
+        $sort = (string)$request->query('sort', '-result_created_at');
         $dir  = str_starts_with($sort, '-') ? 'desc' : 'asc';
         $key  = ltrim($sort, '-');
 
@@ -225,7 +398,7 @@ private function normalizeRole(?string $role): string
             'student_email'     => 'u.email',
             'game_title'        => 'dg.title',
             'score'             => 'dgr.score',
-            'accuracy'          => DB::raw('(dgr.score * 100)'),
+            'accuracy'          => DB::raw($accExpr),
             'attempt_no'        => 'dgr.attempt_no',
             'result_created_at' => 'dgr.created_at',
             'publish_to_student'=> $hasPublish ? 'dgr.publish_to_student' : 'dgr.created_at',
@@ -233,25 +406,90 @@ private function normalizeRole(?string $role): string
         ];
 
         $orderCol = $sortMap[$key] ?? 'dgr.created_at';
-        $q->orderBy($orderCol, $dir);
+
+        // ✅ stable ordering (pagination safe)
+        $q->orderBy($orderCol, $dir)->orderBy('dgr.id', 'desc');
 
         /*
         |----------------------------------------------------------
-        | ✅ Pagination
+        | ✅ No pagination support
         |----------------------------------------------------------
         */
-        $perPage = max(1, min(100, (int)$request->input('per_page', 20)));
-        $page    = max(1, (int)$request->input('page', 1));
-        $total   = (clone $q)->count();
-        $rows    = $q->forPage($page, $perPage)->get();
+        if ($request->boolean('paginate') === false || $request->query('paginate') === 'false') {
+            $rows = $q->get();
+
+            $items = collect($rows)->map(function ($r) use ($hasPublish) {
+                $accuracy = isset($r->accuracy_pct) ? (float)$r->accuracy_pct : (round(((float)($r->score ?? 0)) * 100, 2));
+
+                return [
+                    'student' => [
+                        'id'    => (int)($r->student_id ?? 0),
+                        'uuid'  => (string)($r->student_uuid ?? ''),
+                        'name'  => (string)($r->student_name ?? ''),
+                        'email' => (string)($r->student_email ?? ''),
+
+                        'user_folder_id'   => $r->user_folder_id ?? null,
+                        'folder_id'        => $r->folder_id ?? null,
+                        'folder_title'     => $r->folder_title ?? null,
+                        'folder_name'      => $r->folder_title ?? null,
+                        'user_folder_name' => $r->folder_title ?? null,
+                    ],
+
+                    'game' => [
+                        'id'     => (int)($r->game_id ?? 0),
+                        'uuid'   => (string)($r->game_uuid ?? ''),
+                        'title'  => (string)($r->game_title ?? ''),
+                        'status' => (string)($r->game_status ?? ''),
+                    ],
+
+                    'attempt' => [
+                        'status' => (string)($r->attempt_status ?? ''),
+                    ],
+
+                    'result' => [
+                        'id'                => (int)($r->result_id ?? 0),
+                        'uuid'              => (string)($r->result_uuid ?? ''),
+                        'attempt_no'        => (int)($r->attempt_no ?? 0),
+                        'score'             => (int)($r->score ?? 0),
+                        'accuracy'          => $accuracy,
+                        'publish_to_student'=> $hasPublish ? (int)($r->publish_to_student ?? 0) : 0,
+
+                        'created_at'        => $r->result_created_at ? Carbon::parse($r->result_created_at)->toDateTimeString() : null,
+                        'result_created_at' => $r->result_created_at ? Carbon::parse($r->result_created_at)->toDateTimeString() : null,
+                    ],
+                ];
+            })->values();
+
+            return response()->json([
+                'success' => true,
+                'data' => $items,
+                'pagination' => null,
+            ]);
+        }
+
+        /*
+        |----------------------------------------------------------
+        | ✅ Pagination (DISTINCT count safety)
+        |----------------------------------------------------------
+        */
+        $perPage = max(1, min(100, (int)$request->query('per_page', 20)));
+        $page    = max(1, (int)$request->query('page', 1));
+
+        $base  = clone $q;
+        $total = (clone $base)->distinct()->count('dgr.id');
+
+        $rows = (clone $base)->forPage($page, $perPage)->get();
 
         /*
         |----------------------------------------------------------
         | ✅ Transform for frontend (Bubble-style compatible)
         |----------------------------------------------------------
         */
-        $items = collect($rows)->map(function($r) use ($hasPublish) {
-            $accuracy = ($r->score !== null) ? round(((float)$r->score) * 100, 2) : null;
+        $items = collect($rows)->map(function ($r) use ($hasPublish) {
+            // ✅ always match SQL-calculated accuracy
+            $accuracy = isset($r->accuracy_pct)
+                ? (float)$r->accuracy_pct
+                : round(((float)($r->score ?? 0)) * 100, 2);
 
             return [
                 'student' => [
@@ -260,10 +498,10 @@ private function normalizeRole(?string $role): string
                     'name'  => (string)($r->student_name ?? ''),
                     'email' => (string)($r->student_email ?? ''),
 
-                    // ✅ folder fields (for dropdown + display)
                     'user_folder_id'   => $r->user_folder_id ?? null,
                     'folder_id'        => $r->folder_id ?? null,
                     'folder_title'     => $r->folder_title ?? null,
+                    'folder_name'      => $r->folder_title ?? null,
                     'user_folder_name' => $r->folder_title ?? null,
                 ],
 
@@ -286,7 +524,6 @@ private function normalizeRole(?string $role): string
                     'accuracy'          => $accuracy,
                     'publish_to_student'=> $hasPublish ? (int)($r->publish_to_student ?? 0) : 0,
 
-                    // ✅ both keys to avoid UI breaking
                     'created_at'        => $r->result_created_at ? Carbon::parse($r->result_created_at)->toDateTimeString() : null,
                     'result_created_at' => $r->result_created_at ? Carbon::parse($r->result_created_at)->toDateTimeString() : null,
                 ],
@@ -319,6 +556,7 @@ private function normalizeRole(?string $role): string
         ], 500);
     }
 }
+
 public function folderOptions(Request $request)
 {
     try {
@@ -2101,6 +2339,484 @@ public function bulkPublishAny(Request $request)
         'affected' => (int)$affected,
         'data'     => $updated,
     ], 200);
+}
+/**
+ * GET /api/door-game/result/export
+ *
+ * Export filtered door game results as CSV
+ * 
+ * Supports all the same filters as index():
+ *  - door_game_id, game_uuid, student_email, user_folder_id, folder_title
+ *  - q, search, from, to
+ *  - publish_to_student (0/1)
+ *  - min_percentage, max_percentage
+ *  - attempt_status, attempt_no
+ *  - sort
+ * 
+ * Exported columns:
+ *  - Student Name
+ *  - Email
+ *  - Phone No
+ *  - User Folder Name
+ *  - Game Title
+ *  - Percentage (%)
+ *  - Score
+ *  - Attempt Number
+ *  - Time Taken (sec)
+ *  - Efficiency (%)
+ */
+public function export(Request $request)
+{
+    Log::info('DoorGameResult.export: start', [
+        'ip' => $request->ip(),
+        'query' => $request->query(),
+    ]);
+
+    try {
+        // ✅ token-safe actor
+        $actor  = $this->actor($request);
+        $role   = $this->normalizeRole($actor['role'] ?? '');
+        $userId = (int)($actor['id'] ?? 0);
+
+        /*
+        |----------------------------------------------------------------------
+        | ✅ Helpers (same as index)
+        |----------------------------------------------------------------------
+        */
+        $clean = function ($v) {
+            if ($v === null) return null;
+
+            if (is_string($v)) {
+                $v = trim($v);
+                if ($v === '') return null;
+
+                $low = strtolower($v);
+                if (in_array($low, ['all', 'any', 'null', 'undefined', 'none'], true)) return null;
+                return $v;
+            }
+
+            return $v;
+        };
+
+        $toStrList = function ($v) use ($clean) {
+            if ($v === null) return [];
+
+            $arr = is_array($v)
+                ? $v
+                : preg_split('/[,\|]/', (string)$v, -1, PREG_SPLIT_NO_EMPTY);
+
+            $out = [];
+            foreach ($arr as $item) {
+                $item = $clean($item);
+                if ($item !== null) $out[] = (string)$item;
+            }
+
+            return array_values(array_unique($out));
+        };
+
+        $toIntList = function ($v) use ($clean) {
+            if ($v === null) return [];
+
+            $arr = is_array($v)
+                ? $v
+                : preg_split('/[,\|]/', (string)$v, -1, PREG_SPLIT_NO_EMPTY);
+
+            $out = [];
+            foreach ($arr as $item) {
+                $item = $clean($item);
+                if ($item !== null && is_numeric($item)) {
+                    $n = (int)$item;
+                    if ($n > 0) $out[] = $n;
+                }
+            }
+
+            return array_values(array_unique($out));
+        };
+
+        $toBool01 = function ($v) use ($clean) {
+            $v = $clean($v);
+            if ($v === null) return null;
+
+            if (in_array((string)$v, ['0', '1'], true)) return (int)$v;
+
+            $b = filter_var($v, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+            if ($b === null) return null;
+
+            return $b ? 1 : 0;
+        };
+
+        $toFloat = function ($v) use ($clean) {
+            $v = $clean($v);
+            if ($v === null) return null;
+            if (!is_numeric($v)) return null;
+            return (float)$v;
+        };
+
+        /*
+        |----------------------------------------------------------------------
+        | ✅ Column checks (same as index)
+        |----------------------------------------------------------------------
+        */
+        $hasPublish = false;
+        try {
+            $hasPublish = Schema::hasColumn('door_game_results', 'publish_to_student');
+        } catch (\Throwable $e) {
+            $hasPublish = false;
+        }
+
+        $hasFolderTable = false;
+        $hasFolderDeletedAt = false;
+
+        try {
+            $hasFolderTable = Schema::hasTable('user_folders');
+            if ($hasFolderTable) {
+                $hasFolderDeletedAt = Schema::hasColumn('user_folders', 'deleted_at');
+            }
+        } catch (\Throwable $e) {
+            $hasFolderTable = false;
+            $hasFolderDeletedAt = false;
+        }
+
+        $hasUserDeletedAt = false;
+        try {
+            $hasUserDeletedAt = Schema::hasColumn('users', 'deleted_at');
+        } catch (\Throwable $e) {
+            $hasUserDeletedAt = false;
+        }
+
+        /*
+        |----------------------------------------------------------------------
+        | ✅ Base query (same as index)
+        |----------------------------------------------------------------------
+        */
+        $q = DB::table('door_game_results as dgr')
+            ->join('door_game as dg', 'dgr.door_game_id', '=', 'dg.id')
+            ->join('users as u', 'dgr.user_id', '=', 'u.id')
+            ->whereNull('dgr.deleted_at')
+            ->whereNull('dg.deleted_at');
+
+        if ($hasUserDeletedAt) {
+            $q->whereNull('u.deleted_at');
+        }
+
+        // ✅ JOIN folder if exists
+        if ($hasFolderTable) {
+            $q->leftJoin('user_folders as uf', function ($j) use ($hasFolderDeletedAt) {
+                $j->on('uf.id', '=', 'u.user_folder_id');
+                if ($hasFolderDeletedAt) {
+                    $j->whereNull('uf.deleted_at');
+                }
+            });
+        }
+
+        /*
+        |----------------------------------------------------------------------
+        | ✅ Accuracy % expression
+        |----------------------------------------------------------------------
+        */
+        $accExpr = '(COALESCE(dgr.score,0) * 100.0)';
+
+        /*
+        |----------------------------------------------------------------------
+        | ✅ SELECT columns for export
+        |----------------------------------------------------------------------
+        */
+        $select = [
+            'u.name as student_name',
+            'u.email as student_email',
+            'u.phone_no',
+
+            'dg.title as game_title',
+            'dg.time_limit_sec',
+
+            'dgr.score',
+            'dgr.attempt_no',
+            'dgr.time_taken_ms',
+
+            DB::raw("ROUND($accExpr, 2) as accuracy_pct"),
+        ];
+
+        // folder title safe
+        if ($hasFolderTable) {
+            $select[] = 'uf.title as folder_title';
+        } else {
+            $select[] = DB::raw('NULL as folder_title');
+        }
+
+        $q->select($select);
+
+        /*
+        |----------------------------------------------------------
+        | ✅ Student visibility rule
+        |----------------------------------------------------------
+        */
+        if ($role === 'student') {
+            $q->where('dgr.user_id', $userId);
+            if ($hasPublish) {
+                $q->where('dgr.publish_to_student', 1);
+            }
+        }
+
+        /*
+        |----------------------------------------------------------
+        | ✅ Apply all filters (same as index)
+        |----------------------------------------------------------
+        */
+
+        // door_game_id (mixed)
+        $doorGameKeys = $toStrList($request->query('door_game_id'));
+        if (!empty($doorGameKeys)) {
+            $ids = [];
+            $uuids = [];
+
+            foreach ($doorGameKeys as $v) {
+                if (is_numeric($v)) $ids[] = (int)$v;
+                else $uuids[] = (string)$v;
+            }
+
+            $ids = array_values(array_unique($ids));
+            $uuids = array_values(array_unique($uuids));
+
+            $q->where(function ($w) use ($ids, $uuids) {
+                $hasAny = false;
+                if (!empty($ids)) {
+                    $w->orWhereIn('dg.id', $ids);
+                    $hasAny = true;
+                }
+                if (!empty($uuids)) {
+                    $w->orWhereIn('dg.uuid', $uuids);
+                    $hasAny = true;
+                }
+                if (!$hasAny) {
+                    $w->whereRaw('1=1');
+                }
+            });
+        }
+
+        // game_uuid multi
+        $gameUuids = $toStrList($request->query('game_uuid'));
+        if (!empty($gameUuids)) {
+            $q->whereIn('dg.uuid', $gameUuids);
+        }
+
+        // student_email multi terms (OR)
+        $emailTerms = $toStrList($request->query('student_email'));
+        if (!empty($emailTerms)) {
+            $q->where(function ($w) use ($emailTerms) {
+                foreach ($emailTerms as $t) {
+                    $w->orWhere('u.email', 'like', "%{$t}%");
+                }
+            });
+        }
+
+        // folder dropdown filter (id multi)
+        $folderIds = $toIntList($request->query('user_folder_id'));
+        if (!empty($folderIds)) {
+            $q->whereIn('u.user_folder_id', $folderIds);
+        }
+
+        // folder title filter
+        $folderTitles = $toStrList($request->query('folder_title'));
+        if (!empty($folderTitles) && $hasFolderTable) {
+            $q->where(function ($w) use ($folderTitles) {
+                foreach ($folderTitles as $t) {
+                    $w->orWhere('uf.title', 'like', "%{$t}%");
+                }
+            });
+        }
+
+        // search q / search
+        $txt = $clean($request->query('q', null));
+        $alt = $clean($request->query('search', null));
+        $search = $txt ?? $alt;
+
+        if ($search !== null) {
+            $q->where(function ($w) use ($search) {
+                $w->where('u.name', 'like', "%{$search}%")
+                  ->orWhere('u.email', 'like', "%{$search}%")
+                  ->orWhere('dg.title', 'like', "%{$search}%")
+                  ->orWhere('dgr.uuid', 'like', "%{$search}%");
+            });
+        }
+
+        // attempt_status multi
+        $attemptStatus = $toStrList($request->query('attempt_status'));
+        if (!empty($attemptStatus)) {
+            $q->whereIn('dgr.status', $attemptStatus);
+        }
+
+        // attempt_no multi
+        $attemptNos = $toIntList($request->query('attempt_no'));
+        if (!empty($attemptNos)) {
+            $q->whereIn('dgr.attempt_no', $attemptNos);
+        }
+
+        // publish_to_student filter (admin/instructor only)
+        if ($hasPublish && $role !== 'student') {
+            $pub = $toBool01($request->query('publish_to_student'));
+            if ($pub !== null) {
+                $q->where('dgr.publish_to_student', $pub);
+            }
+        }
+
+        // date range
+        $from = $clean($request->query('from'));
+        $to   = $clean($request->query('to'));
+
+        if ($from !== null || $to !== null) {
+            try {
+                $start = $from ? Carbon::parse($from)->startOfDay() : null;
+                $end   = $to   ? Carbon::parse($to)->endOfDay() : null;
+
+                if ($start && $end) {
+                    if ($start->gt($end)) { $tmp = $start; $start = $end; $end = $tmp; }
+                    $q->whereBetween('dgr.created_at', [$start, $end]);
+                } elseif ($start) {
+                    $q->where('dgr.created_at', '>=', $start);
+                } elseif ($end) {
+                    $q->where('dgr.created_at', '<=', $end);
+                }
+            } catch (\Throwable $e) {}
+        }
+
+        // min/max percentage
+        $minPct = $toFloat($request->query('min_percentage'));
+        $maxPct = $toFloat($request->query('max_percentage'));
+
+        if ($minPct !== null && $maxPct !== null) {
+            if ($minPct > $maxPct) { $tmp = $minPct; $minPct = $maxPct; $maxPct = $tmp; }
+            $q->whereRaw("$accExpr BETWEEN ? AND ?", [$minPct, $maxPct]);
+        } else {
+            if ($minPct !== null) $q->whereRaw("$accExpr >= ?", [$minPct]);
+            if ($maxPct !== null) $q->whereRaw("$accExpr <= ?", [$maxPct]);
+        }
+
+        /*
+        |----------------------------------------------------------
+        | ✅ Sorting
+        |----------------------------------------------------------
+        */
+        $sort = (string)$request->query('sort', '-result_created_at');
+        $dir  = str_starts_with($sort, '-') ? 'desc' : 'asc';
+        $key  = ltrim($sort, '-');
+
+        $sortMap = [
+            'student_name'      => 'u.name',
+            'student_email'     => 'u.email',
+            'game_title'        => 'dg.title',
+            'score'             => 'dgr.score',
+            'accuracy'          => DB::raw($accExpr),
+            'attempt_no'        => 'dgr.attempt_no',
+            'result_created_at' => 'dgr.created_at',
+            'folder_title'      => $hasFolderTable ? 'uf.title' : 'u.name',
+        ];
+
+        $orderCol = $sortMap[$key] ?? 'dgr.created_at';
+
+        $q->orderBy($orderCol, $dir)->orderBy('dgr.id', 'desc');
+
+        /*
+        |----------------------------------------------------------
+        | ✅ Fetch all results (no pagination for export)
+        |----------------------------------------------------------
+        */
+        $rows = $q->get();
+
+        if ($rows->count() === 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No results found to export',
+            ], 404);
+        }
+
+        /*
+        |----------------------------------------------------------
+        | ✅ Generate CSV
+        |----------------------------------------------------------
+        */
+        $filename = 'door_game_results_' . Carbon::now()->format('Y-m-d_His') . '.csv';
+
+        $headers = [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+            'Pragma' => 'no-cache',
+            'Cache-Control' => 'must-revalidate, post-check=0, pre-check=0',
+            'Expires' => '0',
+        ];
+
+        $callback = function() use ($rows) {
+            $file = fopen('php://output', 'w');
+
+            // Add BOM for UTF-8 Excel compatibility
+            fprintf($file, chr(0xEF).chr(0xBB).chr(0xBF));
+
+            // CSV Headers
+            fputcsv($file, [
+                'Student Name',
+                'Email',
+                'Phone No',
+                'User Folder Name',
+                'Game Title',
+                'Percentage (%)',
+                'Score',
+                'Attempt Number',
+                'Time Taken (sec)',
+                'Efficiency (%)',
+            ]);
+
+            // CSV Data Rows
+            foreach ($rows as $r) {
+                $percentage = isset($r->accuracy_pct) ? (float)$r->accuracy_pct : 0;
+                $timeTakenMs = (int)($r->time_taken_ms ?? 0);
+                $timeTakenSec = $timeTakenMs > 0 ? round($timeTakenMs / 1000, 2) : 0;
+                
+                // Calculate efficiency: (score / time_limit) * 100 if time_limit exists
+                $efficiency = 0;
+                $timeLimitSec = (int)($r->time_limit_sec ?? 0);
+                if ($timeLimitSec > 0 && $timeTakenSec > 0) {
+                    // Efficiency = (remaining_time / time_limit) * 100
+                    // OR Efficiency = score * (time_limit / time_taken) * 100
+                    $efficiency = min(100, round((($timeLimitSec - $timeTakenSec) / $timeLimitSec) * 100, 2));
+                    // Alternative formula if you want: score-based efficiency
+                    // $efficiency = round(((int)($r->score ?? 0) * 100) / max($timeTakenSec, 1), 2);
+                }
+
+                fputcsv($file, [
+                    $r->student_name ?? '',
+                    $r->student_email ?? '',
+                    $r->phone_no ?? '',
+                    $r->folder_title ?? '',
+                    $r->game_title ?? '',
+                    number_format($percentage, 2),
+                    (int)($r->score ?? 0),
+                    (int)($r->attempt_no ?? 0),
+                    $timeTakenSec,
+                    number_format($efficiency, 2),
+                ]);
+            }
+
+            fclose($file);
+        };
+
+        Log::info('DoorGameResult.export: success', [
+            'rows_exported' => $rows->count(),
+            'filename' => $filename,
+        ]);
+
+        return response()->stream($callback, 200, $headers);
+
+    } catch (\Throwable $e) {
+        Log::error('DoorGameResult.export: exception', [
+            'message' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Server error while exporting results',
+        ], 500);
+    }
 }
 
 }

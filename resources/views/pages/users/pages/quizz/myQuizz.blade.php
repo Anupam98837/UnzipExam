@@ -502,7 +502,7 @@ document.addEventListener('DOMContentLoaded', function () {
   // Start routes
   const START_QUIZ_ROUTE = '/exam/';                 // /exam/{quiz_uuid}
   const START_GAME_ROUTE = '/tests/play?game=';      // bubble games play
-  const START_DOOR_ROUTE = '/door-games/exam?game='; // door games play
+  const START_DOOR_ROUTE = '/door-tests/play?game='; // door games play
 
   // =======================
   // DOM
@@ -686,7 +686,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (myStatus === 'in_progress') label = 'Continue';
     else if (myStatus === 'completed') label = 'Retake';
 
-    if (enforceAttemptLimit && maxAttemptReached) label = 'No Attempts left';
+    if (enforceAttemptLimit && maxAttemptReached) label = 'Finished';
 
     const isDisabled = (status !== 'active') || (enforceAttemptLimit && maxAttemptReached);
 

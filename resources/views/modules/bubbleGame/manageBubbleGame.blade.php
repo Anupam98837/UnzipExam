@@ -1002,12 +1002,40 @@ html.theme-dark .page-link:hover{ background-color: rgba(255,255,255,.1); }
     load('games');
   });
 
-  btnApplyFilters?.addEventListener('click', ()=>{
-    const m = bootstrap.Modal.getInstance(document.getElementById('filterModal'));
-    m?.hide();
-    state.games.page = 1;
+  /* ✅ MODAL BACKDROP FIX (Filter Games) */
+const filterModalEl = document.getElementById('filterModal');
+const filterModalInst = filterModalEl ? bootstrap.Modal.getOrCreateInstance(filterModalEl) : null;
+
+let pendingFilterReload = false;
+
+btnApplyFilters?.addEventListener('click', (e)=>{
+  e.preventDefault();
+  e.stopPropagation();
+
+  pendingFilterReload = true;
+  state.games.page = 1;
+
+  // ✅ Hide first (bootstrap will remove backdrop properly)
+  filterModalInst?.hide();
+});
+
+/* ✅ After modal fully closes, THEN reload table */
+filterModalEl?.addEventListener('hidden.bs.modal', ()=>{
+  if (pendingFilterReload){
+    pendingFilterReload = false;
     load('games');
-  });
+  }
+
+  // ✅ FAILSAFE cleanup if any backdrop gets stuck
+  setTimeout(()=>{
+    if (!document.querySelector('.modal.show')) {
+      document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
+      document.body.classList.remove('modal-open');
+      document.body.style.removeProperty('overflow');
+      document.body.style.removeProperty('padding-right');
+    }
+  }, 50);
+});
 
   btnReset?.addEventListener('click', ()=>{
     if (q) q.value = '';

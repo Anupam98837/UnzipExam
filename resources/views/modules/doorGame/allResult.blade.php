@@ -161,6 +161,9 @@ html.theme-dark .dropdown-menu{background:#0f172a;border-color:var(--line-strong
           <button id="btnReset" class="btn btn-primary">
             <i class="fa fa-rotate-left me-1"></i>Reset
           </button>
+          <button id="btnExport" class="btn btn-light">
+  <i class="fa fa-file-arrow-down me-1"></i>Export
+</button>
 
           {{-- ✅ Bulk publish --}}
           <button id="btnBulk" class="btn btn-primary">
@@ -378,7 +381,7 @@ html.theme-dark .dropdown-menu{background:#0f172a;border-color:var(--line-strong
             </select>
           </div>
 
-          <div class="col-12 d-none">
+          <div class="col-12">
             <label class="form-label">Attempt status</label>
             <select id="fAttemptStatus" class="form-select">
               <option value="">All</option>
@@ -416,12 +419,12 @@ html.theme-dark .dropdown-menu{background:#0f172a;border-color:var(--line-strong
             <input id="fTo" type="date" class="form-control">
           </div>
 
-          <div class="col-12 d-none">
+          <div class="col-12 ">
             <label class="form-label">Game UUID (optional)</label>
             <input id="fGameUuid" type="text" class="form-control" placeholder="e.g. 6d2f...">
           </div>
 
-          <div class="col-12 d-none">
+          <div class="col-12">
             <label class="form-label">Student email (optional)</label>
             <input id="fStudentEmail" type="text" class="form-control" placeholder="student@example.com">
           </div>
@@ -543,6 +546,7 @@ document.addEventListener('click', (e) => {
   const DOOR_RESULTS_LIST_API   = '/api/door-game-results/all';
   const DOOR_RESULTS_ACTION_API = '/api/door-game-results';
   const DOOR_GAMES_LIST_API     = '/api/door-games?per_page=100&status=active';
+  const DOOR_RESULTS_EXPORT_API = '/api/door-game/result/export';
 
   // ✅ Folder list API (adjust if needed)
   const DOOR_FOLDERS_LIST_API   = '/api/user-folders';
@@ -557,6 +561,8 @@ document.addEventListener('click', (e) => {
   const q = document.getElementById('q');
   const perPageSel = document.getElementById('per_page');
   const btnReset = document.getElementById('btnReset');
+  const btnExport = document.getElementById('btnExport');
+
   const btnApplyFilters = document.getElementById('btnApplyFilters');
   const btnBulk = document.getElementById('btnBulk');
   const btnBulkExit = document.getElementById('btnBulkExit');
@@ -588,6 +594,23 @@ document.addEventListener('click', (e) => {
 
   const qs=(sel)=>document.querySelector(sel);
   const qsa=(sel)=>document.querySelectorAll(sel);
+  /* ✅ MODAL BACKDROP FIX (Filter Modal) */
+const filterModalEl = document.getElementById('filterModal');
+const filterModalInst = filterModalEl ? bootstrap.Modal.getOrCreateInstance(filterModalEl) : null;
+
+let pendingFilterApply = false;
+
+function cleanupModalBackdrops(){
+  setTimeout(()=>{
+    // ✅ If no modal is open, force cleanup leftovers
+    if (!document.querySelector('.modal.show')) {
+      document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
+      document.body.classList.remove('modal-open');
+      document.body.style.removeProperty('overflow');
+      document.body.style.removeProperty('padding-right');
+    }
+  }, 60);
+}
 
   function esc(s){
     if (s === null || s === undefined) return '';
@@ -641,6 +664,75 @@ document.addEventListener('click', (e) => {
       ? `<span class="badge badge-success text-uppercase">published</span>`
       : `<span class="badge badge-secondary text-uppercase">not published</span>`;
   }
+async function exportResults(){
+  const scope = activeScope || 'results';
+
+  // ✅ take current filters (same as list)
+  const usp = new URLSearchParams(buildParams(scope));
+
+  // ✅ export should NOT depend on pagination
+  usp.set('page', '1');
+  usp.set('per_page', '100000'); // big number
+  usp.set('export', '1');
+
+  const url = `${DOOR_RESULTS_EXPORT_API}?${usp.toString()}`;
+
+  const oldHtml = btnExport?.innerHTML || '';
+  if (btnExport){
+    btnExport.disabled = true;
+    btnExport.innerHTML = `<i class="fa fa-spinner fa-spin me-1"></i>Exporting...`;
+  }
+
+  try{
+    const res = await fetch(url, {
+      method:'GET',
+      headers:{
+        'Authorization':'Bearer ' + TOKEN,
+        'Accept':'text/csv, application/octet-stream, application/json'
+      }
+    });
+
+    // ✅ backend might return json error
+    if (!res.ok){
+      const j = await res.json().catch(()=> ({}));
+      throw new Error(j?.message || `Export failed (${res.status})`);
+    }
+
+    const blob = await res.blob();
+
+    // ✅ filename from response header if exists
+    let filename = `door-game-results-${scope}.csv`;
+    const cd = res.headers.get('Content-Disposition') || res.headers.get('content-disposition') || '';
+
+    // filename*=UTF-8''...
+    const m1 = cd.match(/filename\*=UTF-8''([^;]+)/i);
+    if (m1 && m1[1]) filename = decodeURIComponent(m1[1]);
+
+    // filename="..."
+    const m2 = cd.match(/filename="?([^"]+)"?/i);
+    if (m2 && m2[1]) filename = m2[1];
+
+    // ✅ download
+    const a = document.createElement('a');
+    const objUrl = URL.createObjectURL(blob);
+    a.href = objUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(objUrl);
+
+    ok('Export downloaded ✅');
+  }catch(e){
+    console.error(e);
+    err(e.message || 'Export failed');
+  }finally{
+    if (btnExport){
+      btnExport.disabled = false;
+      btnExport.innerHTML = oldHtml || `<i class="fa fa-file-arrow-down me-1"></i>Export`;
+    }
+  }
+}
 
   async function patchPublishAny(kind, payload){
     const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
@@ -1307,25 +1399,57 @@ if (fFolderId && fFolderId.value){
 
     updateBulkButtonText();
   });
-
-  btnApplyFilters?.addEventListener('click', ()=>{
-    bootstrap.Modal.getInstance(document.getElementById('filterModal')).hide();
-
-    if (bulk.pending){
-      bulk.pending = false;
-      bulk.enabled = true;
-      clearBulkSelection();
-      syncBulkUI();
-    }
-
-    filterTitle.innerHTML = `<i class="fa fa-filter me-2"></i>Filter Results`;
-    applyTxt.textContent = 'Apply Filters';
-
-    Object.keys(state).forEach(k => state[k].page = 1);
-    load('results');
-    load('published');
-    load('unpublished');
+  btnExport?.addEventListener('click', async ()=>{
+  const confirm = await Swal.fire({
+    icon:'question',
+    title:'Export results?',
+    text:'This will download a CSV using your current filters.',
+    showCancelButton:true,
+    confirmButtonText:'Export',
+    cancelButtonText:'Cancel'
   });
+
+  if (!confirm.isConfirmed) return;
+  exportResults();
+});
+
+btnApplyFilters?.addEventListener('click', (e)=>{
+  e.preventDefault();
+  e.stopPropagation();
+
+  pendingFilterApply = true;
+  filterModalInst?.hide(); // ✅ close modal first
+});
+
+/* ✅ AFTER modal fully closes -> apply logic + load */
+filterModalEl?.addEventListener('hidden.bs.modal', ()=>{
+  if (!pendingFilterApply){
+    cleanupModalBackdrops();
+    return;
+  }
+  pendingFilterApply = false;
+
+  // ✅ If it was opened for bulk selection
+  if (bulk.pending){
+    bulk.pending = false;
+    bulk.enabled = true;
+    clearBulkSelection();
+    syncBulkUI();
+  }
+
+  // ✅ Reset modal UI text
+  filterTitle.innerHTML = `<i class="fa fa-filter me-2"></i>Filter Results`;
+  applyTxt.textContent = 'Apply Filters';
+
+  // ✅ NOW load safely (no stuck backdrop)
+  Object.keys(state).forEach(k => state[k].page = 1);
+  load('results');
+  load('published');
+  load('unpublished');
+
+  cleanupModalBackdrops(); // ✅ failsafe
+});
+
 
   btnReset?.addEventListener('click', ()=>{
     if (q) q.value='';

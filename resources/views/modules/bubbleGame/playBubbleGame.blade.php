@@ -506,11 +506,9 @@
     }
 
     /* =========================================================
-      ✅ NEW: Start Exam Modal (Bootstrap) — professional
+      ✅ Start Exam Modal (Bootstrap) — professional
     ========================================================= */
-    .bgx-start-modal .modal-dialog{
-      max-width: 860px;
-    }
+    .bgx-start-modal .modal-dialog{ max-width: 860px; }
     .bgx-start-modal .modal-content{
       border-radius: 22px;
       border: 1px solid color-mix(in srgb, var(--bgx-brand) 25%, var(--bgx-line));
@@ -529,10 +527,10 @@
       background:
         radial-gradient(900px 240px at 14% 0%, rgba(201,79,240,.22), transparent 55%),
         radial-gradient(900px 240px at 86% 0%, rgba(149,30,170,.18), transparent 55%),
-        linear-gradient(135deg,
+        /* linear-gradient(135deg,
           color-mix(in srgb, var(--bgx-brand) 72%, white) 0%,
           color-mix(in srgb, var(--bgx-brand2) 72%, white) 100%);
-      color: #fff;
+      color: #fff; */
     }
     html.theme-dark .bgx-start-modal .modal-header{
       background:
@@ -543,12 +541,7 @@
           color-mix(in srgb, var(--bgx-brand2) 58%, #0b1220) 100%);
     }
 
-    .bgx-modal-title{
-      display:flex;
-      align-items:center;
-      gap: 12px;
-      min-width:0;
-    }
+    .bgx-modal-title{ display:flex; align-items:center; gap: 12px; min-width:0; }
     .bgx-modal-ico{
       width: 44px;
       height: 44px;
@@ -578,18 +571,14 @@
       margin-top: 2px;
     }
 
-    .bgx-start-modal .modal-body{
-      padding: 16px 18px 6px;
-    }
+    .bgx-start-modal .modal-body{ background: white; padding: 16px 18px 6px; }
     .bgx-modal-grid{
       display:grid;
       grid-template-columns: 1.35fr .85fr;
       gap: 14px;
       align-items:start;
     }
-    @media (max-width: 992px){
-      .bgx-modal-grid{ grid-template-columns: 1fr; }
-    }
+    @media (max-width: 992px){ .bgx-modal-grid{ grid-template-columns: 1fr; } }
 
     .bgx-modal-box{
       border: 1px solid var(--bgx-line);
@@ -619,11 +608,7 @@
       line-height: 1.45;
     }
 
-    .bgx-modal-stats{
-      display:flex;
-      flex-direction: column;
-      gap: 10px;
-    }
+    .bgx-modal-stats{ display:flex; flex-direction: column; gap: 10px; }
     .bgx-stat{
       display:flex;
       align-items:flex-start;
@@ -676,7 +661,7 @@
       gap: 10px;
       justify-content: space-between;
       flex-wrap: wrap;
-      background: linear-gradient(180deg, transparent, rgba(2,6,23,.02));
+      /* background: linear-gradient(180deg, transparent, rgba(2,6,23,.02)); */
     }
     html.theme-dark .bgx-start-modal .modal-footer{
       background: linear-gradient(180deg, transparent, rgba(148,163,184,.05));
@@ -720,8 +705,8 @@
     .bgx-modal-btn:active{ transform: translateY(0px); }
 
     .bgx-modal-btn.primary{
-      background: linear-gradient(135deg, var(--bgx-brand), var(--bgx-brand2));
-      color:#fff;
+      /* background: linear-gradient(135deg, var(--bgx-brand), var(--bgx-brand2));
+      color:#fff; */
       border-color: rgba(255,255,255,.08);
     }
     .bgx-modal-btn.danger{
@@ -751,7 +736,7 @@
         <a class="bgx-btn" href="/dashboard" id="bgxQuitBtn">
           <i class="fa-solid fa-house"></i> Dashboard
         </a>
-        <button class="bgx-btn danger" id="bgxClearLocal" type="button" style="display:none">
+        <button class="bgx-btn danger d-none" id="bgxClearLocal" type="button" style="display:none">
           <i class="fa-solid fa-rotate-left"></i> Reset Attempt
         </button>
       </div>
@@ -871,7 +856,7 @@
   </div>
 </div>
 
-{{-- ✅ NEW: Start Exam Modal (Bootstrap) --}}
+{{-- ✅ Start Exam Modal (Bootstrap) --}}
 <div class="modal fade bgx-start-modal" id="bgxStartModal" tabindex="-1" aria-hidden="true"
      data-bs-backdrop="static" data-bs-keyboard="false">
   <div class="modal-dialog modal-dialog-centered modal-lg">
@@ -886,7 +871,6 @@
             <div class="small" id="bgxStartModalSub">Please read the instructions before starting.</div>
           </div>
         </div>
-        {{-- no close button (professional + forced) --}}
       </div>
 
       <div class="modal-body">
@@ -896,15 +880,13 @@
               <i class="fa-solid fa-book-open"></i> Description & Instructions
             </div>
 
+            {{-- ✅ dynamic injected --}}
             <div class="bgx-modal-text" id="bgxStartModalDesc">
               Loading details…
             </div>
 
-            <ul class="bgx-modal-list" id="bgxStartModalRules">
-              <li>Read each question and select bubbles in the required order.</li>
-              <li>Your selection is auto-saved locally (until you Submit).</li>
-              <li>Timer runs per question. If time ends, it will auto move next.</li>
-            </ul>
+            {{-- ✅ NO STATIC ITEMS ANYMORE (filled dynamically if API provides list) --}}
+            <ul class="bgx-modal-list" id="bgxStartModalRules" style="display:none"></ul>
           </div>
 
           <div class="bgx-modal-stats">
@@ -961,7 +943,7 @@
           <a href="/dashboard" class="bgx-modal-btn">
             <i class="fa-solid fa-arrow-left"></i> Back
           </a>
-          <button type="button" class="bgx-modal-btn danger d-none" id="bgxModalResetBtn">
+          <button type="button" class="bgx-modal-btn danger d-none" style="display:none;" id="bgxModalResetBtn">
             <i class="fa-solid fa-rotate-left"></i> Reset Attempt
           </button>
           <button type="button" class="bgx-modal-btn primary" id="bgxModalStartBtn">
@@ -975,16 +957,12 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
 <script>
 (() => {
   /* =========================================================
     ✅ SWAL EDITION + SKIP SUPPORT
-    - Uses SweetAlert2 for confirm + toast
-    - ✅ NEW: Bootstrap Modal auto-opens before exam starts
-    - Skip button shows only if allow_skip = "yes"
-    - Submit payload supports BOTH formats:
-        1) { game_uuid, answers:[...] } (your successful input)
-        2) { bubble_game_uuid, user_answer_json:[...] } (safe compatibility)
+    - ✅ Start modal Description + Instructions now fully DYNAMIC from API
   ========================================================= */
 
   function getGameUuidFromUrl() {
@@ -1003,7 +981,6 @@
 
   const CACHE_KEY = `bg_exam_${GAME_UUID}`;
 
-  // Swal toast (kept for small non-modal notifications)
   const Toast = Swal.mixin({
     toast: true,
     position: 'bottom-end',
@@ -1016,7 +993,6 @@
     Toast.fire({ icon, title: title || '', text: text || '' });
   }
 
-  // DOM
   const elGameTitle = document.getElementById('bgxGameTitle');
   const elRound = document.getElementById('bgxRound');
   const elPerQ = document.getElementById('bgxPerQ');
@@ -1075,19 +1051,16 @@
     game: null,
     questions: [],
     qIndex: 0,
-    answers: {},          // keyed by qKey
-    currentSelection: [], // original indices
+    answers: {},
+    currentSelection: [],
     perQTime: 30,
-    timers: {},           // timers[qKey] = { timeLeft, lastAt }
+    timers: {},
     tick: null,
     isSubmitting: false,
     autoSubmitted: false,
     suppressUnloadPrompt: false,
-
-    // ✅ intro drop animation only on first render after page load
     introDropDone: false,
 
-    // ✅ new start modal behavior
     examStarted: false,
     startModalShown: false,
     isRestoredAttempt: false,
@@ -1105,7 +1078,6 @@
     state.qIndex = qi;
   }
 
-  /* ============ helpers ============ */
   function getToken() {
     return localStorage.getItem('token') || sessionStorage.getItem('token');
   }
@@ -1169,7 +1141,6 @@
       state.perQTime = Number(parsed.perQTime || 30);
       state.timers = parsed.timers || {};
 
-      // adjust timers by elapsed time
       const now = Date.now();
       Object.keys(state.timers || {}).forEach(k => {
         const t = state.timers[k];
@@ -1391,7 +1362,6 @@
     }).join('');
   }
 
-  // ✅ animate=true only on very first render after page load
   function renderBubbles(animate=false) {
     const q = currentQuestion();
     if (!q) {
@@ -1413,10 +1383,9 @@
       div.className = 'bgx-bubble';
       div.setAttribute('data-i', String(origIdx));
 
-      // ✅ intro “drop from sky” animation (only first load)
       if (animate) {
         div.classList.add('bgx-drop');
-        div.style.animationDelay = `${Math.min(900, idx * 65)}ms`; // stagger
+        div.style.animationDelay = `${Math.min(900, idx * 65)}ms`;
         div.style.setProperty('--drop-x', `${(Math.random() * 80 - 40).toFixed(1)}px`);
         div.style.setProperty('--drop-rot', `${(Math.random() * 18 - 9).toFixed(1)}deg`);
       }
@@ -1433,7 +1402,6 @@
       div.appendChild(document.createTextNode(label));
 
       div.addEventListener('click', () => {
-        // ✅ exam must start first (modal accept)
         if (state.examStarted !== true) return;
 
         const pos = state.currentSelection.indexOf(origIdx);
@@ -1450,7 +1418,7 @@
 
         const need = (q.bubbles_original || []).length;
         if (state.currentSelection.length === need){
-          persistCurrentAnswer(false, true); // silent autosave
+          persistCurrentAnswer(false, true);
         } else {
           saveCache();
         }
@@ -1562,7 +1530,6 @@
       elSkipBtn.classList.add('d-none');
     }
 
-    // ✅ while exam not started -> disable action buttons safely
     if (state.examStarted !== true){
       elNextBtn.disabled = true;
       elSubmitBtn.disabled = true;
@@ -1596,8 +1563,6 @@
   function autoAdvanceOnTimeout() {
     const q = currentQuestion();
     if (!q) return;
-
-    // ✅ do not auto-advance if exam not started (modal open)
     if (state.examStarted !== true) return;
 
     persistCurrentAnswer(true, true);
@@ -1633,7 +1598,6 @@
 
     restoreSelectionForCurrent();
 
-    // ✅ intro drop animation only once (when page is first visited/loaded)
     const doIntroDrop = (state.introDropDone !== true);
     renderBubbles(doIntroDrop);
     if (doIntroDrop) state.introDropDone = true;
@@ -1642,11 +1606,10 @@
     renderRightPanel();
     updateNavButtons();
 
-    // ✅ start timer only when exam started
     if (state.examStarted === true){
       startTimerFor(qKey(q));
     } else {
-      renderTimer(qKey(q)); // just show default time
+      renderTimer(qKey(q));
     }
   }
 
@@ -1691,42 +1654,117 @@
   }
 
   /* =========================================================
-      ✅ NEW: Start Modal functions
+      ✅ Start Modal — Dynamic Description + Instructions (API)
   ========================================================= */
   function computeTotalPoints(){
     return (state.questions || []).reduce((sum, q) => sum + (parseInt(q?.points || 1, 10) || 0), 0);
   }
 
- function sanitizeBasicHtml(html){
-  // ✅ basic safety (removes <script> and inline onClick/onError etc.)
-  // (Best practice: sanitize on backend too)
-  return String(html || '')
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-    .replace(/\son\w+="[^"]*"/gi, '')
-    .replace(/\son\w+='[^']*'/gi, '');
+  function sanitizeBasicHtml(html){
+    return String(html || '')
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+      .replace(/\son\w+="[^"]*"/gi, '')
+      .replace(/\son\w+='[^']*'/gi, '');
+  }
+
+  function isProbablyHtml(str){
+    const s = String(str || '').trim();
+    if (!s) return false;
+    return /<\/?[a-z][\s\S]*>/i.test(s);
+  }
+
+  function pickFirstNonEmpty(...vals){
+    for (const v of vals){
+      const s = String(v ?? '').trim();
+      if (s) return s;
+    }
+    return '';
+  }
+
+  function parseRulesArrayFromGame(game){
+    const candidates = [
+      game?.rules_json,
+      game?.instructions_points_json,
+      game?.instruction_points_json,
+      game?.rules,
+      game?.instructions_points,
+    ];
+
+    let raw = null;
+    for (const c of candidates){
+      if (!c) continue;
+      if (Array.isArray(c) && c.length) return c.map(x => String(x ?? '').trim()).filter(Boolean);
+      const s = String(c).trim();
+      if (s) { raw = s; break; }
+    }
+
+    if (!raw) return [];
+
+    // JSON array
+    try{
+      const j = JSON.parse(raw);
+      if (Array.isArray(j)){
+        return j.map(x => String(x ?? '').trim()).filter(Boolean);
+      }
+    }catch(e){}
+
+    // newline bullets
+    const lines = raw.split(/\r?\n/).map(x => x.trim()).filter(Boolean);
+    if (lines.length >= 2) return lines;
+
+    // separators
+    return raw.split(/•|\-|;|\|/).map(x => String(x).trim()).filter(Boolean);
+  }
+  function decodeEntities(str){
+  const t = document.createElement('textarea');
+  t.innerHTML = String(str ?? '');
+  return t.value;
+}
+
+function renderSafeHtmlOrText(raw){
+  const decoded = decodeEntities(raw);
+
+  // If it looks like HTML, render as HTML (sanitized)
+  if (isProbablyHtml(decoded)){
+    return sanitizeBasicHtml(decoded);
+  }
+
+  // Otherwise render as safe text with <br>
+  return nl2br(decoded);
 }
 
 function buildModalTextFromGame(game){
-  const desc = String(game?.description || '').trim();
+  const descRaw = pickFirstNonEmpty(
+    game?.description,
+    game?.game_description,
+    game?.desc,
+    game?.about
+  );
 
-  // ✅ your real field from API
-  const instrHtmlRaw = String(game?.instructions_html || '').trim();
-  const instrHtml = sanitizeBasicHtml(instrHtmlRaw);
+  const instrRaw = pickFirstNonEmpty(
+    game?.instructions_html,
+    game?.instruction_html,
+    game?.instructions,
+    game?.instruction,
+    game?.instructions_text
+  );
 
   const blocks = [];
 
-  // Description
-  if (desc) {
+  // ✅ Description (HTML supported)
+  if (descRaw) {
+    const descHtml = renderSafeHtmlOrText(descRaw);
     blocks.push(`
       <div>
         <b>Game Description</b>
-        <div style="margin-top:6px">${escapeHtml(desc)}</div>
+        <div style="margin-top:6px">${descHtml}</div>
       </div>
     `);
   }
 
-  // Instructions HTML (preferred)
-  if (instrHtml) {
+  // ✅ Instructions (HTML supported)
+  if (instrRaw) {
+    const instrHtml = renderSafeHtmlOrText(instrRaw);
     blocks.push(`
       <div style="margin-top:12px">
         <b>Game Instructions</b>
@@ -1735,20 +1773,18 @@ function buildModalTextFromGame(game){
     `);
   }
 
-  // Fallback
   if (!blocks.length) {
     blocks.push(`
       <div>
-        <b>Instructions</b>
-        <div style="margin-top:6px">
-          Follow the on-screen instruction for each question and select bubbles in the correct order.
-        </div>
+        <b>Details</b>
+        <div style="margin-top:6px">No description/instructions found for this game.</div>
       </div>
     `);
   }
 
   return blocks.join('');
 }
+
 
   function fillStartModalUI(){
     const g = state.game || {};
@@ -1758,27 +1794,23 @@ function buildModalTextFromGame(game){
     elStartModalTitle.textContent = g?.title ? String(g.title) : 'Bubble Game Exam';
     elStartModalSub.textContent = state.isRestoredAttempt ? 'Your previous attempt is available. You can resume now.' : 'Please read the instructions before starting.';
 
+    // ✅ 100% dynamic description + instructions from API
     elStartModalDesc.innerHTML = buildModalTextFromGame(g);
 
     elStartModalTotalQ.textContent = String(totalQ);
     elStartModalPerQ.textContent = String(state.perQTime || 30);
     elStartModalSkip.textContent = allowSkip ? 'Enabled (You can skip)' : 'Disabled (Must answer)';
+    elStartModalPoints.textContent = String(computeTotalPoints());
 
-    const totalPts = computeTotalPoints();
-    elStartModalPoints.textContent = String(totalPts);
-
-    // rules list (professional + dynamic)
-    const rules = [];
-    rules.push(`Read each question and select bubbles in the required order.`);
-    rules.push(`Your attempt is auto-saved locally until you Submit.`);
-    rules.push(`Timer runs per question. If time ends, it auto moves next.`);
-    if (allowSkip){
-      rules.push(`Skip is allowed, but blank/wrong answers may reduce score.`);
+    // ✅ optional dynamic rules list (ONLY IF API provides)
+    const rulesArr = parseRulesArrayFromGame(g);
+    if (rulesArr.length){
+      elStartModalRules.style.display = '';
+      elStartModalRules.innerHTML = rulesArr.map(r => `<li>${escapeHtml(r)}</li>`).join('');
     } else {
-      rules.push(`Skipping is not allowed. You must select all bubbles to continue.`);
+      elStartModalRules.style.display = 'none';
+      elStartModalRules.innerHTML = '';
     }
-
-    elStartModalRules.innerHTML = rules.map(r => `<li>${escapeHtml(r)}</li>`).join('');
 
     // resume card
     if (state.isRestoredAttempt){
@@ -1806,7 +1838,6 @@ function buildModalTextFromGame(game){
     pauseTimer();
     updateNavButtons();
 
-    // show placeholder bubbles while waiting
     elBubblesWrap.innerHTML = `
       <div class="bgx-loader">
         <i class="fa-solid fa-circle-play"></i>
@@ -1821,12 +1852,10 @@ function buildModalTextFromGame(game){
     state.examStarted = true;
     state.startModalShown = false;
 
-    // enable local reset button on topbar only for restored attempt
     if (state.isRestoredAttempt){
       elClearLocal.style.display = '';
     }
 
-    // start from current index (restored) or first question
     loadQuestion();
     notify('success', 'Exam started', 'Good luck!');
   }
@@ -1932,15 +1961,11 @@ function buildModalTextFromGame(game){
     if (r.isConfirmed) window.location.href = DASHBOARD_URL;
   });
 
-  // ✅ Modal Start button
   elModalStartBtn.addEventListener('click', () => {
-    if (startModal){
-      startModal.hide();
-    }
+    if (startModal){ startModal.hide(); }
     beginExam();
   });
 
-  // ✅ Modal Reset button
   elModalResetBtn.addEventListener('click', async () => {
     const r = await Swal.fire({
       icon: 'warning',
@@ -1959,10 +1984,6 @@ function buildModalTextFromGame(game){
   async function submitExamNow(isAuto=false){
     if (state.isSubmitting) return;
     state.isSubmitting = true;
-    if (isAuto) {
-      state.suppressUnloadPrompt = true;
-      window.removeEventListener('beforeunload', beforeUnloadHandler);
-    }
 
     try{
       [elPrevBtn, elNextBtn, elUndoBtn, elClearBtn, elSkipBtn, elSubmitBtn].forEach(b => {
@@ -1978,7 +1999,6 @@ function buildModalTextFromGame(game){
       const payload = {
         game_uuid: GAME_UUID,
         answers: answersArray,
-
         bubble_game_uuid: GAME_UUID,
         user_answer_json: answersArray,
         time_taken_sec: totalTime,
@@ -2042,9 +2062,6 @@ function buildModalTextFromGame(game){
   });
 
   function beforeUnloadHandler(e) {
-    // ✅ do not show browser "Leave site?" dialog during auto-submit redirect only
-    if (state.suppressUnloadPrompt === true) return;
-
     const has = countAnswered() > 0 || state.currentSelection.length > 0;
     if (!has) return;
 
@@ -2053,7 +2070,6 @@ function buildModalTextFromGame(game){
   }
   window.addEventListener('beforeunload', beforeUnloadHandler);
 
-  /* ============ init ============ */
   async function init(){
     if (!GAME_UUID){
       elBubblesWrap.innerHTML = `
@@ -2067,7 +2083,6 @@ function buildModalTextFromGame(game){
       return;
     }
 
-    // prepare modal instance early
     if (elStartModal){
       startModal = new bootstrap.Modal(elStartModal, { backdrop: 'static', keyboard: false });
     }
@@ -2080,13 +2095,9 @@ function buildModalTextFromGame(game){
       elPerQ.textContent = String(state.perQTime);
       renderRightPanel();
 
-      // show start modal BEFORE starting timer
       showStartModal();
-
-      // still prep first question UI (no timer start)
       loadQuestion();
 
-      // show reset attempt button (also in modal)
       elClearLocal.style.display = '';
       notify('success', 'Attempt restored', 'Loaded from sessionStorage.');
       return;
@@ -2109,10 +2120,7 @@ function buildModalTextFromGame(game){
       saveCache();
       renderRightPanel();
 
-      // show modal automatically (professional start)
       showStartModal();
-
-      // prep first question UI behind modal (no timer until start)
       loadQuestion();
 
     }catch(err){

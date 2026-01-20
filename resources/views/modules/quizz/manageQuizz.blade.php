@@ -808,21 +808,51 @@ document.addEventListener('click', (e) => {
   });
 
   /* ========= Filters (active tab) ========= */
-  let srchT; 
-  q?.addEventListener('input', ()=>{
-    clearTimeout(srchT);
-    srchT=setTimeout(()=>{
-      state.active.page=1;
-      load('active');
-    }, 350);
-  });
-  
-  btnApplyFilters?.addEventListener('click', ()=>{
-    const filterModal = bootstrap.Modal.getInstance(document.getElementById('filterModal'));
-    filterModal.hide();
-    state.active.page=1; 
+  /* ========= Filters (active tab) ========= */
+let srchT;
+q?.addEventListener('input', ()=>{
+  clearTimeout(srchT);
+  srchT=setTimeout(()=>{
+    state.active.page=1;
     load('active');
-  });
+  }, 350);
+});
+
+/* ✅ MODAL BACKDROP FIX */
+const filterModalEl = document.getElementById('filterModal');
+const filterModalInst = filterModalEl ? bootstrap.Modal.getOrCreateInstance(filterModalEl) : null;
+
+let pendingFilterReload = false;
+
+btnApplyFilters?.addEventListener('click', (e)=>{
+  e.preventDefault();
+  e.stopPropagation();
+
+  pendingFilterReload = true;
+  state.active.page = 1;
+
+  // ✅ Hide modal first (let bootstrap remove backdrop properly)
+  filterModalInst?.hide();
+});
+
+/* ✅ After modal fully closes, THEN load data */
+filterModalEl?.addEventListener('hidden.bs.modal', ()=>{
+  if (pendingFilterReload){
+    pendingFilterReload = false;
+    load('active');
+  }
+
+  // ✅ FAILSAFE: if backdrop stuck for any reason, clean it
+  setTimeout(()=>{
+    if (!document.querySelector('.modal.show')) {
+      document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
+      document.body.classList.remove('modal-open');
+      document.body.style.removeProperty('overflow');
+      document.body.style.removeProperty('padding-right');
+    }
+  }, 50);
+});
+
   
   btnReset?.addEventListener('click', ()=>{
     if (q) q.value=''; 

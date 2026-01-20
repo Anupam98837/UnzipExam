@@ -21,38 +21,120 @@ class QuizzResultController extends Controller
      *  - sort (-result_created_at, percentage, marks_obtained, student_name, quiz_name, attempt_number)
      *  - page, per_page
      */
-    public function index(Request $request)
+   public function index(Request $request)
 {
     // Pagination
     $page    = max(1, (int) $request->query('page', 1));
     $perPage = max(1, min(100, (int) $request->query('per_page', 20)));
 
-    // Search
-    $qText = trim((string) $request->query('q', ''));
+    // ========= Helpers (IMPORTANT) =========
+    $clean = function ($v) {
+        if ($v === null) return null;
 
-    // Filters
-    $quizId        = $request->query('quiz_id');
-    $quizUuid      = trim((string) $request->query('quiz_uuid', ''));
-    $studentId     = $request->query('student_id');
-    $studentEmail  = trim((string) $request->query('student_email', ''));
-    $attemptUuid   = trim((string) $request->query('attempt_uuid', ''));
-    $attemptStatus = trim((string) $request->query('attempt_status', ''));
+        if (is_string($v)) {
+            $v = trim($v);
+            if ($v === '') return null;
 
+            $low = strtolower($v);
+            if (in_array($low, ['all', 'any', 'null', 'undefined', 'none'], true)) return null;
+            return $v;
+        }
+
+        // numeric/bool stays
+        return $v;
+    };
+
+    $toStrList = function ($v) use ($clean) {
+        if ($v === null) return [];
+
+        $arr = is_array($v)
+            ? $v
+            : preg_split('/[,\|]/', (string)$v, -1, PREG_SPLIT_NO_EMPTY);
+
+        $out = [];
+        foreach ($arr as $item) {
+            $item = $clean($item);
+            if ($item !== null) $out[] = (string)$item;
+        }
+
+        return array_values(array_unique($out));
+    };
+
+    $toIntList = function ($v) use ($clean) {
+        if ($v === null) return [];
+
+        $arr = is_array($v)
+            ? $v
+            : preg_split('/[,\|]/', (string)$v, -1, PREG_SPLIT_NO_EMPTY);
+
+        $out = [];
+        foreach ($arr as $item) {
+            $item = $clean($item);
+            if ($item !== null && is_numeric($item)) {
+                $n = (int)$item;
+                if ($n > 0) $out[] = $n;
+            }
+        }
+
+        return array_values(array_unique($out));
+    };
+
+    $toBool01 = function ($v) use ($clean) {
+        $v = $clean($v);
+        if ($v === null) return null;
+
+        // Accept 0/1
+        if (in_array((string)$v, ['0', '1'], true)) return (int)$v;
+
+        // Accept true/false yes/no
+        $b = filter_var($v, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+        if ($b === null) return null;
+
+        return $b ? 1 : 0;
+    };
+
+    $toFloat = function ($v) use ($clean) {
+        $v = $clean($v);
+        if ($v === null) return null;
+        if (!is_numeric($v)) return null;
+        return (float)$v;
+    };
+
+    $toInt = function ($v) use ($clean) {
+        $v = $clean($v);
+        if ($v === null) return null;
+        if (!is_numeric($v)) return null;
+        return (int)$v;
+    };
+
+    // ========= Search =========
+    $qText = $clean($request->query('q', ''));
+
+    // ========= Filters (now supports multi-values) =========
+    $quizIds       = $toIntList($request->query('quiz_id'));           // supports 1,2 or []
+    $quizUuids     = $toStrList($request->query('quiz_uuid'));         // supports csv/array
+    $studentIds    = $toIntList($request->query('student_id'));
+    $studentEmails = $toStrList($request->query('student_email'));
+    $attemptUuids  = $toStrList($request->query('attempt_uuid'));
+    $attemptStats  = $toStrList($request->query('attempt_status'));
+
+    // publish filter + alias only_published
     $publish = $request->query('publish_to_student', null);
-
-    // convenience alias: only_published=1 means publish_to_student=1
     $onlyPublished = $request->query('only_published', null);
-    if ($onlyPublished !== null && in_array((string) $onlyPublished, ['0', '1'], true)) {
-        $publish = (string) $onlyPublished;
+    if ($onlyPublished !== null) {
+        $publish = $onlyPublished; // override
     }
+    $publish01 = $toBool01($publish);
 
-    $minPct   = $request->query('min_percentage', null);
-    $maxPct   = $request->query('max_percentage', null);
-    $minMarks = $request->query('min_marks', null);
-    $maxMarks = $request->query('max_marks', null);
+    // ranges
+    $minPct   = $toFloat($request->query('min_percentage'));
+    $maxPct   = $toFloat($request->query('max_percentage'));
+    $minMarks = $toInt($request->query('min_marks'));
+    $maxMarks = $toInt($request->query('max_marks'));
 
-    $from = trim((string) $request->query('from', '')); // YYYY-MM-DD
-    $to   = trim((string) $request->query('to', ''));
+    // dates
+    $from = $clean($request->query('from', '')); // YYYY-MM-DD
+    $to   = $clean($request->query('to', ''));
 
     // Sorting
     $sort = (string) $request->query('sort', '-result_created_at');
@@ -80,21 +162,19 @@ class QuizzResultController extends Controller
     }
     $orderByCol = $sortMap[$col];
 
-    // Base query
+    // ========= Base Query =========
     $query = DB::table('quizz_results as r')
         ->join('quizz_attempts as a', 'a.id', '=', 'r.attempt_id')
         ->join('quizz as qz', 'qz.id', '=', 'r.quiz_id')
         ->join('users as u', 'u.id', '=', 'r.user_id')
-
-        // ✅ NEW: join user_folders via users.user_folder_id
         ->leftJoin('user_folders as uf', 'uf.id', '=', 'u.user_folder_id');
 
-    // Soft delete guards (only if columns exist)
+    // Soft delete guards
     $query->whereNull('u.deleted_at')
           ->whereNull('qz.deleted_at');
 
     // Search
-    if ($qText !== '') {
+    if ($qText !== null) {
         $query->where(function ($w) use ($qText) {
             $w->where('u.name', 'like', "%{$qText}%")
               ->orWhere('u.email', 'like', "%{$qText}%")
@@ -102,40 +182,61 @@ class QuizzResultController extends Controller
         });
     }
 
-    // Filters
-    if ($quizId !== null && is_numeric($quizId))         $query->where('r.quiz_id', (int) $quizId);
-    if ($quizUuid !== '')                                $query->where('qz.uuid', $quizUuid);
-    if ($studentId !== null && is_numeric($studentId))   $query->where('r.user_id', (int) $studentId);
-    if ($studentEmail !== '')                            $query->where('u.email', $studentEmail);
-    if ($attemptUuid !== '')                             $query->where('a.uuid', $attemptUuid);
-    if ($attemptStatus !== '')                           $query->where('a.status', $attemptStatus);
+    // ========= Apply Filters (ALL together = AND) =========
+    if (!empty($quizIds))       $query->whereIn('r.quiz_id', $quizIds);
+    if (!empty($quizUuids))     $query->whereIn('qz.uuid', $quizUuids);
+    if (!empty($studentIds))    $query->whereIn('r.user_id', $studentIds);
 
-    if ($publish !== null && in_array((string) $publish, ['0', '1'], true)) {
-        $query->where('r.publish_to_student', (int) $publish);
+    // emails: exact OR (if you want partial match, tell me)
+    if (!empty($studentEmails)) $query->whereIn('u.email', $studentEmails);
+
+    if (!empty($attemptUuids))  $query->whereIn('a.uuid', $attemptUuids);
+    if (!empty($attemptStats))  $query->whereIn('a.status', $attemptStats);
+
+    if ($publish01 !== null) {
+        $query->where('r.publish_to_student', $publish01);
     }
 
-    if ($minPct !== null && is_numeric($minPct))         $query->where('r.percentage', '>=', (float) $minPct);
-    if ($maxPct !== null && is_numeric($maxPct))         $query->where('r.percentage', '<=', (float) $maxPct);
-    if ($minMarks !== null && is_numeric($minMarks))     $query->where('r.marks_obtained', '>=', (int) $minMarks);
-    if ($maxMarks !== null && is_numeric($maxMarks))     $query->where('r.marks_obtained', '<=', (int) $maxMarks);
+    // ranges (with whereBetween)
+    if ($minPct !== null || $maxPct !== null) {
+        $min = ($minPct !== null) ? $minPct : 0;
+        $max = ($maxPct !== null) ? $maxPct : 100;
+        if ($min > $max) { $tmp = $min; $min = $max; $max = $tmp; }
+        $query->whereBetween('r.percentage', [$min, $max]);
+    }
+
+    if ($minMarks !== null || $maxMarks !== null) {
+        $min = ($minMarks !== null) ? $minMarks : 0;
+        $max = ($maxMarks !== null) ? $maxMarks : PHP_INT_MAX;
+        if ($min > $max) { $tmp = $min; $min = $max; $max = $tmp; }
+        $query->whereBetween('r.marks_obtained', [$min, $max]);
+    }
 
     // Date range on result created_at
-    if ($from !== '') {
-        try { $query->where('r.created_at', '>=', Carbon::parse($from)->startOfDay()); } catch (\Throwable $e) {}
-    }
-    if ($to !== '') {
-        try { $query->where('r.created_at', '<=', Carbon::parse($to)->endOfDay()); } catch (\Throwable $e) {}
+    if ($from !== null && $to !== null) {
+        try {
+            $query->whereBetween('r.created_at', [
+                Carbon::parse($from)->startOfDay(),
+                Carbon::parse($to)->endOfDay(),
+            ]);
+        } catch (\Throwable $e) {}
+    } else {
+        if ($from !== null) {
+            try { $query->where('r.created_at', '>=', Carbon::parse($from)->startOfDay()); } catch (\Throwable $e) {}
+        }
+        if ($to !== null) {
+            try { $query->where('r.created_at', '<=', Carbon::parse($to)->endOfDay()); } catch (\Throwable $e) {}
+        }
     }
 
     /**
-     * ✅ IMPORTANT FIX:
-     * Clone the filtered base query BEFORE doing select()/order/limit,
-     * so aggregate query doesn't mix non-aggregate selected columns.
+     * ✅ FIX:
+     * Clone the filtered base query BEFORE select/order/limit
      */
     $base = clone $query;
 
-    // Total count (use DISTINCT for safety if joins ever duplicate r.id)
-    $total = (clone $base)->distinct('r.id')->count('r.id');
+    // Total count
+    $total = (clone $base)->distinct()->count('r.id');
 
     // Fetch rows
     $rows = (clone $base)
@@ -173,9 +274,8 @@ class QuizzResultController extends Controller
             'u.name as student_name',
             'u.email as student_email',
 
-            // ✅ NEW: folder info
             'u.user_folder_id',
-'uf.title as user_folder_name',
+            'uf.title as user_folder_name',
         ])
         ->get();
 
@@ -212,8 +312,6 @@ class QuizzResultController extends Controller
                 'id'           => (int) $r->student_id,
                 'name'         => (string) ($r->student_name ?? ''),
                 'email'        => (string) ($r->student_email ?? ''),
-
-                // ✅ NEW: user folder name (from user_folders)
                 'user_folder_id'   => $r->user_folder_id !== null ? (int) $r->user_folder_id : null,
                 'user_folder_name' => (string) ($r->user_folder_name ?? ''),
             ],
@@ -252,13 +350,13 @@ class QuizzResultController extends Controller
         'success' => true,
         'filters' => [
             'q'                  => $qText,
-            'quiz_id'            => $quizId,
-            'quiz_uuid'          => $quizUuid,
-            'student_id'         => $studentId,
-            'student_email'      => $studentEmail,
-            'attempt_uuid'       => $attemptUuid,
-            'attempt_status'     => $attemptStatus,
-            'publish_to_student' => $publish,
+            'quiz_id'            => $quizIds,
+            'quiz_uuid'          => $quizUuids,
+            'student_id'         => $studentIds,
+            'student_email'      => $studentEmails,
+            'attempt_uuid'       => $attemptUuids,
+            'attempt_status'     => $attemptStats,
+            'publish_to_student' => $publish01,
             'only_published'     => $onlyPublished,
             'min_percentage'     => $minPct,
             'max_percentage'     => $maxPct,
@@ -283,7 +381,6 @@ class QuizzResultController extends Controller
         ],
     ], 200);
 }
-
 
     /**
      * ✅ PATCH /api/quizz/result/{resultId}/publish
@@ -491,5 +588,277 @@ class QuizzResultController extends Controller
                 'publish_to_student' => (int) $publish,
             ],
         ], 200);
+    }
+     public function export(Request $request)
+    {
+        // ========= Helpers (same as index) =========
+        $clean = function ($v) {
+            if ($v === null) return null;
+
+            if (is_string($v)) {
+                $v = trim($v);
+                if ($v === '') return null;
+
+                $low = strtolower($v);
+                if (in_array($low, ['all', 'any', 'null', 'undefined', 'none'], true)) return null;
+                return $v;
+            }
+
+            return $v;
+        };
+
+        $toStrList = function ($v) use ($clean) {
+            if ($v === null) return [];
+
+            $arr = is_array($v)
+                ? $v
+                : preg_split('/[,\|]/', (string)$v, -1, PREG_SPLIT_NO_EMPTY);
+
+            $out = [];
+            foreach ($arr as $item) {
+                $item = $clean($item);
+                if ($item !== null) $out[] = (string)$item;
+            }
+
+            return array_values(array_unique($out));
+        };
+
+        $toIntList = function ($v) use ($clean) {
+            if ($v === null) return [];
+
+            $arr = is_array($v)
+                ? $v
+                : preg_split('/[,\|]/', (string)$v, -1, PREG_SPLIT_NO_EMPTY);
+
+            $out = [];
+            foreach ($arr as $item) {
+                $item = $clean($item);
+                if ($item !== null && is_numeric($item)) {
+                    $n = (int)$item;
+                    if ($n > 0) $out[] = $n;
+                }
+            }
+
+            return array_values(array_unique($out));
+        };
+
+        $toBool01 = function ($v) use ($clean) {
+            $v = $clean($v);
+            if ($v === null) return null;
+
+            if (in_array((string)$v, ['0', '1'], true)) return (int)$v;
+
+            $b = filter_var($v, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+            if ($b === null) return null;
+
+            return $b ? 1 : 0;
+        };
+
+        $toFloat = function ($v) use ($clean) {
+            $v = $clean($v);
+            if ($v === null) return null;
+            if (!is_numeric($v)) return null;
+            return (float)$v;
+        };
+
+        $toInt = function ($v) use ($clean) {
+            $v = $clean($v);
+            if ($v === null) return null;
+            if (!is_numeric($v)) return null;
+            return (int)$v;
+        };
+
+        // ========= Search =========
+        $qText = $clean($request->query('q', ''));
+
+        // ========= Filters (same as index) =========
+        $quizIds       = $toIntList($request->query('quiz_id'));
+        $quizUuids     = $toStrList($request->query('quiz_uuid'));
+        $studentIds    = $toIntList($request->query('student_id'));
+        $studentEmails = $toStrList($request->query('student_email'));
+        $attemptUuids  = $toStrList($request->query('attempt_uuid'));
+        $attemptStats  = $toStrList($request->query('attempt_status'));
+
+        // publish filter + alias only_published
+        $publish = $request->query('publish_to_student', null);
+        $onlyPublished = $request->query('only_published', null);
+        if ($onlyPublished !== null) {
+            $publish = $onlyPublished;
+        }
+        $publish01 = $toBool01($publish);
+
+        // ranges
+        $minPct   = $toFloat($request->query('min_percentage'));
+        $maxPct   = $toFloat($request->query('max_percentage'));
+        $minMarks = $toInt($request->query('min_marks'));
+        $maxMarks = $toInt($request->query('max_marks'));
+
+        // dates
+        $from = $clean($request->query('from', ''));
+        $to   = $clean($request->query('to', ''));
+
+        // Sorting
+        $sort = (string) $request->query('sort', '-result_created_at');
+        $dir  = 'asc';
+        $col  = $sort;
+
+        if (substr($sort, 0, 1) === '-') {
+            $dir = 'desc';
+            $col = ltrim($sort, '-');
+        }
+
+        $sortMap = [
+            'result_created_at' => 'r.created_at',
+            'percentage'        => 'r.percentage',
+            'marks_obtained'    => 'r.marks_obtained',
+            'total_marks'       => 'r.total_marks',
+            'attempt_number'    => 'r.attempt_number',
+            'student_name'      => 'u.name',
+            'quiz_name'         => 'qz.quiz_name',
+        ];
+
+        if (!isset($sortMap[$col])) {
+            $col = 'result_created_at';
+            $dir = 'desc';
+        }
+        $orderByCol = $sortMap[$col];
+
+        // ========= Base Query (same as index) =========
+        $query = DB::table('quizz_results as r')
+            ->join('quizz_attempts as a', 'a.id', '=', 'r.attempt_id')
+            ->join('quizz as qz', 'qz.id', '=', 'r.quiz_id')
+            ->join('users as u', 'u.id', '=', 'r.user_id')
+            ->leftJoin('user_folders as uf', 'uf.id', '=', 'u.user_folder_id');
+
+        // Soft delete guards
+        $query->whereNull('u.deleted_at')
+              ->whereNull('qz.deleted_at');
+
+        // Search
+        if ($qText !== null) {
+            $query->where(function ($w) use ($qText) {
+                $w->where('u.name', 'like', "%{$qText}%")
+                  ->orWhere('u.email', 'like', "%{$qText}%")
+                  ->orWhere('qz.quiz_name', 'like', "%{$qText}%");
+            });
+        }
+
+        // Apply all filters
+        if (!empty($quizIds))       $query->whereIn('r.quiz_id', $quizIds);
+        if (!empty($quizUuids))     $query->whereIn('qz.uuid', $quizUuids);
+        if (!empty($studentIds))    $query->whereIn('r.user_id', $studentIds);
+        if (!empty($studentEmails)) $query->whereIn('u.email', $studentEmails);
+        if (!empty($attemptUuids))  $query->whereIn('a.uuid', $attemptUuids);
+        if (!empty($attemptStats))  $query->whereIn('a.status', $attemptStats);
+
+        if ($publish01 !== null) {
+            $query->where('r.publish_to_student', $publish01);
+        }
+
+        // ranges
+        if ($minPct !== null || $maxPct !== null) {
+            $min = ($minPct !== null) ? $minPct : 0;
+            $max = ($maxPct !== null) ? $maxPct : 100;
+            if ($min > $max) { $tmp = $min; $min = $max; $max = $tmp; }
+            $query->whereBetween('r.percentage', [$min, $max]);
+        }
+
+        if ($minMarks !== null || $maxMarks !== null) {
+            $min = ($minMarks !== null) ? $minMarks : 0;
+            $max = ($maxMarks !== null) ? $maxMarks : PHP_INT_MAX;
+            if ($min > $max) { $tmp = $min; $min = $max; $max = $tmp; }
+            $query->whereBetween('r.marks_obtained', [$min, $max]);
+        }
+
+        // Date range
+        if ($from !== null && $to !== null) {
+            try {
+                $query->whereBetween('r.created_at', [
+                    Carbon::parse($from)->startOfDay(),
+                    Carbon::parse($to)->endOfDay(),
+                ]);
+            } catch (\Throwable $e) {}
+        } else {
+            if ($from !== null) {
+                try { $query->where('r.created_at', '>=', Carbon::parse($from)->startOfDay()); } catch (\Throwable $e) {}
+            }
+            if ($to !== null) {
+                try { $query->where('r.created_at', '<=', Carbon::parse($to)->endOfDay()); } catch (\Throwable $e) {}
+            }
+        }
+
+        // ========= Fetch All Results (no pagination for export) =========
+        $rows = $query
+            ->orderBy($orderByCol, $dir)
+            ->orderBy('r.id', 'desc')
+            ->select([
+                'r.marks_obtained',
+                'r.percentage',
+                'r.attempt_number',
+
+                'qz.quiz_name',
+
+                'u.name as student_name',
+                'u.email as student_email',
+                'u.phone_no',
+
+                'uf.title as user_folder_name',
+            ])
+            ->get();
+
+        if ($rows->count() === 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No results found to export',
+            ], 404);
+        }
+
+        // ========= Generate CSV =========
+        $filename = 'quiz_results_' . Carbon::now()->format('Y-m-d_His') . '.csv';
+
+        $headers = [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+            'Pragma' => 'no-cache',
+            'Cache-Control' => 'must-revalidate, post-check=0, pre-check=0',
+            'Expires' => '0',
+        ];
+
+        $callback = function() use ($rows) {
+            $file = fopen('php://output', 'w');
+
+            // Add BOM for UTF-8 Excel compatibility
+            fprintf($file, chr(0xEF).chr(0xBB).chr(0xBF));
+
+            // CSV Headers
+            fputcsv($file, [
+                'Student Name',
+                'Phone No',
+                'Email',
+                'User Folder Name',
+                'Quiz Name',
+                'Marks Obtained',
+                'Percentage (%)',
+                'Attempt Number',
+            ]);
+
+            // CSV Data Rows
+            foreach ($rows as $r) {
+                fputcsv($file, [
+                    $r->student_name ?? '',
+                    $r->phone_no ?? '',
+                    $r->student_email ?? '',
+                    $r->user_folder_name ?? '',
+                    $r->quiz_name ?? '',
+                    $r->marks_obtained,
+                    number_format($r->percentage ?? 0, 2),
+                    $r->attempt_number ?? 0,
+                ]);
+            }
+
+            fclose($file);
+        };
+
+        return response()->stream($callback, 200, $headers);
     }
 }

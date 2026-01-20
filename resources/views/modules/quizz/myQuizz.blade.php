@@ -770,6 +770,26 @@ document.addEventListener('DOMContentLoaded', function () {
       : '<span class="qz-chip"><i class="fa-solid fa-lock"></i>Private</span>';
   }
 
+  // ✅ NEW: sort helper (Oldest → Newest)
+  function parseDateSafe(v){
+    if(!v) return null;
+    const d = new Date(v);
+    if (isNaN(d.getTime())) return null;
+    return d;
+  }
+  function sortOldestFirst(items){
+    if(!Array.isArray(items)) return items || [];
+    return items.slice().sort((a,b)=>{
+      const da = parseDateSafe(a?.created_at);
+      const db = parseDateSafe(b?.created_at);
+      // missing dates go last
+      if(!da && !db) return 0;
+      if(!da) return 1;
+      if(!db) return -1;
+      return da.getTime() - db.getTime(); // ✅ oldest first
+    });
+  }
+
   // =======================
   // State per tab
   // =======================
@@ -1032,6 +1052,10 @@ document.addEventListener('DOMContentLoaded', function () {
     params.set('per_page', 9);
     if ((S.q || '').trim() !== '') params.set('q', (S.q || '').trim());
 
+    // ✅ NEW: ask backend to sort (safe if ignored)
+    params.set('sort', 'created_at');
+    params.set('order', 'asc'); // oldest → newest
+
     try {
       const res = await fetch(api + '?' + params.toString(), {
         method: 'GET',
@@ -1053,7 +1077,10 @@ document.addEventListener('DOMContentLoaded', function () {
         throw new Error(json.message || json.error || 'Failed to load list.');
       }
 
-      const items      = json.data || [];
+      // ✅ NEW: frontend sorting oldest → newest
+      const itemsRaw   = json.data || [];
+      const items      = sortOldestFirst(itemsRaw);
+
       const pagination = json.pagination || {};
 
       renderCards(tab, items);

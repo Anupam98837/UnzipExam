@@ -781,7 +781,21 @@ document.addEventListener('DOMContentLoaded', function () {
   // =======================
   // Instructions Modal
   // =======================
-  function openInsModal(row) {
+  function nl2brWithDOMPurify(text) {
+  if (!text) return '';
+  
+  // Convert newlines to <br>
+  const withBreaks = text.replace(/\n/g, '<br>');
+  
+  // Sanitize while allowing safe tags
+  return DOMPurify.sanitize(withBreaks, {
+    ALLOWED_TAGS: ['b', 'strong', 'i', 'em', 'u', 'br', 'p', 'ul', 'ol', 'li'],
+    ALLOWED_ATTR: []
+  });
+}
+
+// ✅ UPDATE YOUR FUNCTION
+function openInsModal(row) {
     if (!row) return;
 
     const duration = toDurationText(row);
@@ -793,13 +807,18 @@ document.addEventListener('DOMContentLoaded', function () {
       ${created ? `<span><i class="fa-regular fa-calendar"></i> Added ${sanitize(created)}</span>` : ''}
     `;
 
-    const inst = pickInstructions(row);
-    insContent.innerHTML = inst ? nl2brSafe(inst) : '<span class="text-muted">No instructions available.</span>';
+   const inst = pickInstructions(row);
 
+if (inst) {
+  // Just convert newlines to <br> and render the HTML as-is
+  insContent.innerHTML = inst.replace(/\n/g, '<br>');
+} else {
+  insContent.innerHTML = '<span class="text-muted">No instructions available.</span>';
+}
     insModal.classList.add('show');
     insModal.setAttribute('aria-hidden', 'false');
     document.body.classList.add('modal-open');
-  }
+}
 
   function closeInsModal() {
     insModal.classList.remove('show');

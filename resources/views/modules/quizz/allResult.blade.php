@@ -146,6 +146,11 @@ html.theme-dark .dropdown-menu{background:#0f172a;border-color:var(--line-strong
             <i class="fa fa-filter me-1"></i>Filter
           </button>
 
+          {{-- ✅ Export button added --}}
+          <button id="btnExport" class="btn btn-light">
+            <i class="fa fa-file-export me-1"></i>Export
+          </button>
+
           {{-- ✅ This button will transform into Publish/Unpublish in bulk-selection mode --}}
           <button id="btnBulkPublish" class="btn btn-primary">
             <i class="fa fa-bullhorn me-1"></i>Bulk Publish
@@ -678,6 +683,21 @@ document.addEventListener('click', (e) => {
     return;
   }
 
+  /* ============================================================
+   * ✅ FIX: BACKDROP ISSUE (Filter Modal & others)
+   * - sometimes bootstrap backdrop remains + body stuck scroll
+   * - we aggressively cleanup on modal hidden
+   * ============================================================ */
+  function cleanupBackdrops(){
+    document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
+    document.body.classList.remove('modal-open');
+    document.body.style.removeProperty('padding-right');
+    document.body.style.removeProperty('overflow');
+  }
+  document.addEventListener('hidden.bs.modal', () => {
+    setTimeout(cleanupBackdrops, 50);
+  });
+
   /* ========= Toasts ========= */
   const okToast  = new bootstrap.Toast(document.getElementById('okToast'));
   const errToast = new bootstrap.Toast(document.getElementById('errToast'));
@@ -692,6 +712,7 @@ document.addEventListener('click', (e) => {
   const btnReset = document.getElementById('btnReset');
   const btnApplyFilters = document.getElementById('btnApplyFilters');
   const btnBulkPublish = document.getElementById('btnBulkPublish');
+  const btnExport = document.getElementById('btnExport'); // ✅ NEW
 
   const fQuizId = document.getElementById('fQuizId');
   const fFolderGroup = document.getElementById('fFolderGroup');
@@ -764,8 +785,6 @@ document.addEventListener('click', (e) => {
 
   function folderBadge(item){
     const student = item?.student || {};
-
-    // ✅ FIX: ensure folder name always uses your backend key "user_folder_name"
     const name =
       student.user_folder_name ||
       student.folder_title ||
@@ -776,11 +795,8 @@ document.addEventListener('click', (e) => {
       student.user_folder?.title ||
       student.user_folder?.name ||
       '';
-
-     if (!name) return `<span class="text-muted small">—</span>`;
-
-  // ✅ simple text only (NOT badge-pill)
-  return `<span class="small">${esc(name)}</span>`;
+    if (!name) return `<span class="text-muted small">—</span>`;
+    return `<span class="small">${esc(name)}</span>`;
   }
 
   function actionMenu(item){
@@ -843,7 +859,6 @@ document.addEventListener('click', (e) => {
 
     const tr = document.createElement('tr');
 
-    // ✅ Checkbox always exists in DOM, but shown only in bulk-mode via CSS
     tr.innerHTML = `
       <td class="chkcell bulk-col">
         <input class="form-check-input chk-row" type="checkbox"
@@ -868,7 +883,6 @@ document.addEventListener('click', (e) => {
         <div class="fw-semibold">${fmtPct(result.percentage)}</div>
       </td>
 
-      {{-- ✅ NEW CELL: Publish Status --}}
       <td>${publishStatusBadge(result.publish_to_student)}</td>
 
       ${scope==='results' ? `<td>${statusBadge(attempt.status)}</td>` : ``}
@@ -884,9 +898,8 @@ document.addEventListener('click', (e) => {
   const state = { results:{page:1}, published:{page:1}, unpublished:{page:1} };
   const loadedOnce = { results:false, published:false, unpublished:false };
 
-  // ✅ Results endpoint fallback (supports your existing /all)
-  let RESULT_LIST_ENDPOINT = '/api/quizz/result/all'; // primary
-  const fallbackResultEndpoint = '/api/quizz/result'; // fallback
+  let RESULT_LIST_ENDPOINT = '/api/quizz/result/all';
+  const fallbackResultEndpoint = '/api/quizz/result';
 
   function getActiveScope(){
     const active = document.querySelector('.tab-pane.active');
@@ -909,23 +922,18 @@ document.addEventListener('click', (e) => {
     return { res, json };
   }
 
-  /* ============================================================
-   * ✅ BULK SELECTION MODE (YOUR REQUIRED FEATURE)
-   * - default: checkboxes hidden
-   * - after bulk-filter apply: checkboxes visible + button becomes Publish/Unpublish
-   * ============================================================ */
+  /* ========= Bulk selection mode ========= */
   const bulk = {
     mode: false,
     filtersActive: false,
-    filters: { quiz_id:'', folder_id:'', attempt_status:'', publish:'', from:'', to:'' }, // ✅ NEW publish
-    selected: new Map(), // id -> {pub, uuid}
+    filters: { quiz_id:'', folder_id:'', attempt_status:'', publish:'', from:'', to:'' },
+    selected: new Map(),
   };
 
   function setBulkMode(on){
     bulk.mode = !!on;
     wrapEl.classList.toggle('bulk-mode', bulk.mode);
 
-    // Reset header checkboxes visuals
     ['results','published','unpublished'].forEach(sc=>{
       const h = document.getElementById(`chkAll-${sc}`);
       if (h){
@@ -938,12 +946,9 @@ document.addEventListener('click', (e) => {
   }
 
   function computeBulkButtonState(){
-    if (!bulk.mode) {
-      return { label:'Bulk Publish', icon:'fa-bullhorn' };
-    }
-    if (bulk.selected.size === 0){
-      return { label:'Publish', icon:'fa-eye' };
-    }
+    if (!bulk.mode) return { label:'Bulk Publish', icon:'fa-bullhorn' };
+    if (bulk.selected.size === 0) return { label:'Publish', icon:'fa-eye' };
+
     const vals = Array.from(bulk.selected.values()).map(v => Number(v?.pub||0));
     const allPublished = vals.length>0 && vals.every(v => v===1);
     if (allPublished) return { label:'Unpublish', icon:'fa-eye-slash' };
@@ -958,8 +963,6 @@ document.addEventListener('click', (e) => {
   function clearBulkSelection(){
     bulk.selected.clear();
     updateBulkButton();
-
-    // uncheck all visible row checkboxes
     document.querySelectorAll('input.chk-row').forEach(c => c.checked = false);
     ['results','published','unpublished'].forEach(sc=>{
       const h = document.getElementById(`chkAll-${sc}`);
@@ -987,7 +990,6 @@ document.addEventListener('click', (e) => {
 
   function applyBulkCheckedOnRender(scope){
     if (!bulk.mode) return;
-
     const rows = document.querySelectorAll(`input.chk-row[data-scope="${scope}"]`);
     rows.forEach(chk=>{
       const id = chk.dataset.id || '';
@@ -1007,7 +1009,6 @@ document.addEventListener('click', (e) => {
       body: JSON.stringify(payload),
     });
 
-    // UUID fallback (only if your backend supports it later)
     if (res.status === 404 && resultUuid){
       const urlByUuid = `/api/exam/result/${encodeURIComponent(resultUuid)}/publish`;
       ({ res, json } = await fetchJson(urlByUuid, {
@@ -1022,15 +1023,12 @@ document.addEventListener('click', (e) => {
   }
 
   async function runBulkAction(){
-    if (!bulk.mode){
-      return;
-    }
+    if (!bulk.mode) return;
     if (bulk.selected.size === 0){
       err('Select at least 1 student result');
       return;
     }
 
-    // If ALL selected are already published => action becomes UNPUBLISH
     const vals = Array.from(bulk.selected.values()).map(v => Number(v?.pub||0));
     const allPublished = vals.length>0 && vals.every(v => v===1);
     const publishVal = allPublished ? 0 : 1;
@@ -1039,10 +1037,9 @@ document.addEventListener('click', (e) => {
     btnBulkPublish.disabled = true;
 
     let success = 0, failed = 0;
-
-    // small concurrency limiter
     const limit = 6;
     let idx = 0;
+
     const workers = Array.from({length: limit}).map(async ()=>{
       while (idx < ids.length){
         const my = ids[idx++];
@@ -1063,12 +1060,10 @@ document.addEventListener('click', (e) => {
       ok(publishVal ? `Published ${success}/${ids.length}` : `Unpublished ${success}/${ids.length}`);
       if (failed>0) err(`${failed} failed (check console)`);
 
-      // ✅ refresh tables
       await load(getActiveScope());
       if (loadedOnce.published) await load('published');
       if (loadedOnce.unpublished) await load('unpublished');
 
-      // ✅ NOW EXIT BULK MODE COMPLETELY (your requirement)
       bulk.filtersActive = false;
       bulk.filters = { quiz_id:'', folder_id:'', attempt_status:'', publish:'', from:'', to:'' };
 
@@ -1153,7 +1148,6 @@ document.addEventListener('click', (e) => {
 
     if (q && q.value.trim()) usp.set('q', q.value.trim());
 
-    // Normal filters
     if (fQuizId && fQuizId.value) usp.set('quiz_id', fQuizId.value);
     if (fFolderGroup && fFolderGroup.value) {
       usp.set('user_folder_id', fFolderGroup.value);
@@ -1171,7 +1165,6 @@ document.addEventListener('click', (e) => {
     if (fQuizUuid && fQuizUuid.value.trim()) usp.set('quiz_uuid', fQuizUuid.value.trim());
     if (fStudentEmail && fStudentEmail.value.trim()) usp.set('student_email', fStudentEmail.value.trim());
 
-    // ✅ Bulk filters override (only after applying bulk filters)
     if (bulk.mode && bulk.filtersActive){
       if (bulk.filters.quiz_id) usp.set('quiz_id', bulk.filters.quiz_id);
 
@@ -1181,18 +1174,23 @@ document.addEventListener('click', (e) => {
       }
 
       if (bulk.filters.attempt_status) usp.set('attempt_status', bulk.filters.attempt_status);
-
-      // ✅ NEW: bulk publish status filter
       if (bulk.filters.publish !== '') usp.set('publish_to_student', bulk.filters.publish);
 
       if (bulk.filters.from) usp.set('from', bulk.filters.from);
       if (bulk.filters.to) usp.set('to', bulk.filters.to);
     }
 
-    // tab-specific
     const extra = tabs[scope].extra || {};
     Object.keys(extra).forEach(k => usp.set(k, extra[k]));
 
+    return usp.toString();
+  }
+
+  // ✅ helper for export (override page/per_page)
+  function buildParamsWithOverrides(scope, overrides={}){
+    const usp = new URLSearchParams(buildParams(scope));
+    if (overrides.page != null) usp.set('page', String(overrides.page));
+    if (overrides.per_page != null) usp.set('per_page', String(overrides.per_page));
     return usp.toString();
   }
 
@@ -1270,7 +1268,6 @@ document.addEventListener('click', (e) => {
 
       meta.textContent = `Showing page ${current} of ${totalPages} — ${total} result(s)`;
 
-      // ✅ keep selections checked after pagination reload
       applyBulkCheckedOnRender(scope);
 
     }catch(e){
@@ -1311,13 +1308,19 @@ document.addEventListener('click', (e) => {
   });
 
   btnApplyFilters?.addEventListener('click', ()=>{
-    const filterModal = bootstrap.Modal.getInstance(document.getElementById('filterModal'));
+    const modalEl = document.getElementById('filterModal');
+    // ✅ safer than getInstance
+    const filterModal = bootstrap.Modal.getOrCreateInstance(modalEl);
     filterModal.hide();
+
     Object.keys(state).forEach(k => state[k].page = 1);
     load('results');
+
+    // ✅ ensure backdrop cleanup
+    setTimeout(()=>cleanupBackdrops(), 80);
   });
 
-  // ✅ Reset also exits bulk-selection mode (checkboxes hidden again)
+  // ✅ Reset also exits bulk-selection mode
   btnReset?.addEventListener('click', ()=>{
     if (q) q.value='';
     if (perPageSel) perPageSel.value='20';
@@ -1333,7 +1336,6 @@ document.addEventListener('click', (e) => {
     if (fStudentEmail) fStudentEmail.value='';
     sort='-result_created_at';
 
-    // exit bulk mode
     bulk.filtersActive = false;
     bulk.filters = { quiz_id:'', folder_id:'', attempt_status:'', publish:'', from:'', to:'' };
     clearBulkSelection();
@@ -1341,6 +1343,8 @@ document.addEventListener('click', (e) => {
 
     Object.keys(state).forEach(k => state[k].page = 1);
     load('results');
+
+    setTimeout(()=>cleanupBackdrops(), 80);
   });
 
   perPageSel?.addEventListener('change', ()=>{
@@ -1473,6 +1477,8 @@ document.addEventListener('click', (e) => {
       if (loadedOnce.published) await load('published');
       if (loadedOnce.unpublished) await load('unpublished');
 
+      setTimeout(()=>cleanupBackdrops(), 80);
+
     }catch(e){
       console.error(e);
       err(e.message || 'Failed');
@@ -1481,7 +1487,7 @@ document.addEventListener('click', (e) => {
     }
   });
 
-  /* ========= Bulk Publish Modal (filter-only now) ========= */
+  /* ========= Bulk Publish Modal ========= */
   const bulkModal = new bootstrap.Modal(bm.el);
 
   function buildBulkCountParams(){
@@ -1498,15 +1504,12 @@ document.addEventListener('click', (e) => {
     }
 
     if (bm.status?.value) usp.set('attempt_status', bm.status.value);
-
-    // ✅ NEW: bulk publish filter in count
     if (bm.publish?.value !== '') usp.set('publish_to_student', bm.publish.value);
 
     if (bm.from?.value) usp.set('from', bm.from.value);
     if (bm.to?.value) usp.set('to', bm.to.value);
 
     if (q && q.value.trim()) usp.set('q', q.value.trim());
-
     return usp.toString();
   }
 
@@ -1545,26 +1548,24 @@ document.addEventListener('click', (e) => {
     bulkCountTimer = setTimeout(refreshBulkCount, 250);
   }
 
-  // ✅ Toolbar bulk button behavior:
-  // - default: open bulk filter modal
-  // - after bulk filter applied: becomes Publish/Unpublish action button
   btnBulkPublish?.addEventListener('click', ()=>{
     if (!bulk.mode){
-      // prefill bulk filter from main filter selections
       if (bm.quiz && fQuizId) bm.quiz.value = fQuizId.value || '';
       if (bm.folder && fFolderGroup) bm.folder.value = fFolderGroup.value || '';
       if (bm.status && fAttemptStatus) bm.status.value = fAttemptStatus.value || '';
-      if (bm.publish && fPublish) bm.publish.value = (fPublish.value ?? ''); // ✅ NEW
+      if (bm.publish && fPublish) bm.publish.value = (fPublish.value ?? '');
       if (bm.from && fFrom) bm.from.value = fFrom.value || '';
       if (bm.to && fTo) bm.to.value = fTo.value || '';
 
       bm.count.textContent = '—';
+
+      // ✅ safe cleanup before open
+      cleanupBackdrops();
       bulkModal.show();
       scheduleBulkCount();
       return;
     }
 
-    // bulk-mode: run Publish/Unpublish for selected rows
     runBulkAction();
   });
 
@@ -1574,7 +1575,6 @@ document.addEventListener('click', (e) => {
     el.addEventListener('input', scheduleBulkCount);
   });
 
-  // ✅ Apply bulk filters => show checkboxes + convert toolbar bulk button to Publish/Unpublish
   bm.run?.addEventListener('click', async ()=>{
     const hasSafe = !!(bm.quiz?.value || bm.status?.value || bm.publish?.value || bm.from?.value || bm.to?.value);
     if (!hasSafe){
@@ -1587,7 +1587,7 @@ document.addEventListener('click', (e) => {
       quiz_id: bm.quiz?.value || '',
       folder_id: bm.folder?.value || '',
       attempt_status: bm.status?.value || '',
-      publish: (bm.publish?.value ?? ''), // ✅ NEW
+      publish: (bm.publish?.value ?? ''),
       from: bm.from?.value || '',
       to: bm.to?.value || '',
     };
@@ -1595,10 +1595,9 @@ document.addEventListener('click', (e) => {
     clearBulkSelection();
     setBulkMode(true);
 
-    // close modal
     bulkModal.hide();
+    setTimeout(()=>cleanupBackdrops(), 80);
 
-    // move to Results tab (so user selects students from full list)
     const tabResults = document.querySelector('a[href="#tab-results"]');
     if (tabResults){
       bootstrap.Tab.getOrCreateInstance(tabResults).show();
@@ -1613,8 +1612,158 @@ document.addEventListener('click', (e) => {
     ok('Bulk selection enabled — select students & click Publish/Unpublish');
   });
 
+  /* ============================================================
+   * ✅ EXPORT CSV (NEW)
+   * - exports based on current scope + filters + bulk filters (if active)
+   * ============================================================ */
+  function getFolderNamePlain(item){
+    const student = item?.student || {};
+    return (
+      student.user_folder_name ||
+      student.folder_title ||
+      student.folder_name ||
+      student.folder_group_name ||
+      student.folder_group ||
+      student.folder ||
+      student.user_folder?.title ||
+      student.user_folder?.name ||
+      ''
+    );
+  }
+
+  function csvEscape(v){
+    if (v == null) return '';
+    const s = String(v).replace(/\r?\n/g, ' ').trim();
+    if (/[",]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+    return s;
+  }
+
+  function buildCsv(items, scope){
+    const headers = [
+      'Result UUID',
+      'Student Name',
+      'Student Email',
+      'Folder',
+      'Quiz',
+      'Attempt #',
+      'Marks Obtained',
+      'Total Marks',
+      'Percentage',
+      'Published To Student',
+      'Attempt Status',
+      'Submitted At'
+    ];
+
+    const lines = [];
+    lines.push(headers.map(csvEscape).join(','));
+
+    items.forEach(it=>{
+      const student = it?.student || {};
+      const quiz = it?.quiz || {};
+      const attempt = it?.attempt || {};
+      const result = it?.result || {};
+
+      const row = [
+        result.uuid || '',
+        student.name || '',
+        student.email || '',
+        getFolderNamePlain(it) || '',
+        (quiz.name || quiz.quiz_name || ''),
+        result.attempt_number ?? '',
+        result.marks_obtained ?? '',
+        result.total_marks ?? '',
+        result.percentage ?? '',
+        Number(result.publish_to_student||0) === 1 ? 'Yes' : 'No',
+        attempt.status || '',
+        result.created_at || ''
+      ];
+
+      lines.push(row.map(csvEscape).join(','));
+    });
+
+    // ✅ Excel-friendly BOM
+    return '\ufeff' + lines.join('\n');
+  }
+
+  function downloadTextFile(filename, content, mime='text/csv;charset=utf-8'){
+    const blob = new Blob([content], {type:mime});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 400);
+  }
+
+  async function fetchAllForExport(scope){
+    const per = 500; // safe chunk
+    let page = 1;
+    let totalPages = 1;
+    const all = [];
+
+    while(page <= totalPages){
+      let url = `${RESULT_LIST_ENDPOINT}?${buildParamsWithOverrides(scope, {page, per_page: per})}`;
+      let { res, json } = await fetchJson(url);
+
+      if (res.status === 404 && RESULT_LIST_ENDPOINT.endsWith('/all')) {
+        RESULT_LIST_ENDPOINT = fallbackResultEndpoint;
+        url = `${RESULT_LIST_ENDPOINT}?${buildParamsWithOverrides(scope, {page, per_page: per})}`;
+        ({ res, json } = await fetchJson(url));
+      }
+
+      if (!res.ok) throw new Error(json?.message || 'Export load failed');
+
+      const items = json?.data || [];
+      const pg = json?.pagination || {};
+      totalPages = Number(pg.total_pages || 1);
+
+      all.push(...items);
+      page++;
+      // hard safety
+      if (page > 200) break;
+    }
+
+    return all;
+  }
+
+  btnExport?.addEventListener('click', async ()=>{
+    const scope = getActiveScope();
+
+    try{
+      btnExport.disabled = true;
+
+      Swal.fire({
+        title: 'Exporting...',
+        text: 'Preparing CSV file, please wait...',
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading(),
+      });
+
+      const items = await fetchAllForExport(scope);
+
+      const dt = new Date();
+      const ymd = dt.toISOString().slice(0,10);
+      const filename = `quiz_results_${scope}_${ymd}.csv`;
+
+      const csv = buildCsv(items, scope);
+      downloadTextFile(filename, csv);
+
+      Swal.close();
+      ok(`Exported ${items.length} row(s)`);
+
+    }catch(e){
+      console.error(e);
+      Swal.close();
+      err(e.message || 'Export failed');
+    }finally{
+      btnExport.disabled = false;
+    }
+  });
+
   /* ========= Initial load ========= */
-  setBulkMode(false); // ✅ default: no checkboxes
+  setBulkMode(false);
   Promise.all([
     loadQuizzesForFilter(),
     loadFoldersForFilter(),

@@ -668,7 +668,8 @@ document.addEventListener('DOMContentLoaded', function () {
     const used    = pickUsedAttempts(item);
     const remaining = computeRemainingAttempts(item, allowed, used);
 
-    const enforceAttemptLimit = (type === 'game' || type === 'door');
+// ✅ "No Attempts left" for Quizzes + Games + Door
+const enforceAttemptLimit = (type === 'quiz' || type === 'game' || type === 'door');
 
     const allowContinueEvenIfMax = (enforceAttemptLimit && myStatus === 'in_progress');
 

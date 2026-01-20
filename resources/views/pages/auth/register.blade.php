@@ -24,22 +24,20 @@
 
     html, body { height:100%; }
 
-    /* ✅ FIX 1: Don't hard-lock the whole page */
     body.ux-auth-body{
       min-height:100%;
       height:auto;
-      overflow:auto; /* ✅ allow natural scroll when needed */
+      overflow:auto;
       background:var(--bg-body);
       color:var(--text-color);
       font-family:var(--font-sans);
     }
 
-    /* GRID */
     .ux-grid{
-      min-height:100vh;  /* ✅ allow expand */
+      min-height:100vh;
       min-height:100svh;
       min-height:100dvh;
-      height:auto;       /* ✅ FIX: was forcing 100vh clipping */
+      height:auto;
 
       display:grid;
       grid-template-columns: minmax(420px,560px) 1fr;
@@ -54,7 +52,6 @@
     @media (max-width: 1100px){ .ux-grid{ grid-template-columns: minmax(320px,460px) 1fr; } }
     @media (max-width: 992px){ .ux-grid{ grid-template-columns: 1fr; } }
 
-    /* LEFT */
     .ux-left{
       min-height:100vh;
       min-height:100svh;
@@ -67,15 +64,13 @@
       justify-content:flex-start;
 
       padding:clamp(18px,5vw,56px);
-      padding-bottom:clamp(22px,5vw,64px); /* ✅ FIX: bottom safe space so button never gets hidden */
+      padding-bottom:clamp(22px,5vw,64px);
 
       position:relative;
       isolation:isolate;
-
-      overflow:visible; /* ✅ FIX: no clipping */
+      overflow:visible;
     }
 
-    /* ✅ remove these auto pushes (they can cause weird positioning in short height) */
     .ux-brand{ margin-top:0; }
     #ux_form{ margin-bottom:0; }
 
@@ -95,15 +90,17 @@
 
     .ux-title{
       font-family:var(--font-head);
-      font-weight:700;
+      font-weight:800;
       color:var(--ink);
       text-align:center;
-      font-size:clamp(1.6rem, 2.6vw, 2.2rem);
+      font-size:clamp(1.5rem, 2.6vw, 2.2rem);
       margin:.35rem 0 .25rem;
       position:relative;
       z-index:1;
       max-width:min(560px, 100%);
+      line-height:1.2;
     }
+
     .ux-sub{
       text-align:center;
       color:var(--muted-color);
@@ -124,8 +121,6 @@
       width:100%;
       max-width:min(460px, 100%);
       overflow:hidden;
-
-      /* ✅ FIX: ensure internal spacing never collapses */
       display:flex;
       flex-direction:column;
     }
@@ -168,12 +163,14 @@
 
     .ux-label{ font-weight:600; color:var(--ink); }
     .ux-input-wrap{ position:relative; }
+
     .ux-control{
       height:46px;
       border-radius:12px;
       padding-right:48px;
       max-width:100%;
     }
+
     .ux-control::placeholder{ color:#aab2c2; }
 
     .ux-eye{
@@ -217,15 +214,13 @@
       );
       box-shadow:0 10px 22px rgba(20,184,166,.26);
       transition:var(--transition);
-
-      margin-top:6px; /* ✅ extra breathing space */
+      margin-top:6px;
     }
     .ux-login:hover{
       filter:brightness(.98);
       transform:translateY(-1px);
     }
 
-    /* Field error */
     .ux-field-err{
       font-size:12px;
       margin-top:6px;
@@ -240,7 +235,6 @@
       min-height:100vh;
       min-height:100svh;
       min-height:100dvh;
-
       display:grid;
       place-items:center;
       background:
@@ -291,8 +285,6 @@
     }
     @media (max-width: 1366px){ .ux-hero{ width:min(600px, 96%); } }
     @media (max-width: 1200px){ .ux-hero{ width:min(560px, 96%); } }
-    @media (max-height: 760px){ .ux-hero{ width:min(560px, 96%); } }
-    @media (max-height: 680px){ .ux-hero{ width:min(520px, 96%); } }
 
     .ux-hero-frame{
       position:relative;
@@ -333,14 +325,6 @@
       animation: ux-twinkle 12s linear infinite;
     }
 
-    .ux-hero:hover .ux-hero-frame{
-      transform:translateY(-4px);
-      box-shadow:
-        0 30px 64px rgba(0,0,0,.42),
-        0 0 0 1px rgba(255,255,255,.10) inset,
-        0 0 0 8px rgba(20,184,166,.10);
-    }
-
     .ux-obj{
       position:absolute;
       z-index:3;
@@ -370,19 +354,6 @@
       color:#0b1120;
     }
 
-    /* Height tightening */
-    @media (max-height: 760px){
-      .ux-brand{ margin-bottom:12px; }
-      .ux-sub{ margin-bottom:12px; }
-      .ux-card{ padding:18px; }
-    }
-    @media (max-height: 680px){
-      .ux-brand img{ height:56px; }
-      .ux-title{ font-size:1.45rem; }
-      .ux-card{ padding:16px; }
-      .ux-control{ height:44px; }
-      .ux-login{ height:46px; }
-    }
     @media (max-width: 576px){
       .ux-left{ padding:16px; padding-bottom:26px; }
       .ux-brand img{ height:60px; }
@@ -391,7 +362,6 @@
       .ux-login{ height:46px; }
     }
 
-    /* Animations */
     @keyframes ux-pop{
       from{opacity:0; transform:translateY(10px) scale(.98);}
       to{opacity:1; transform:none;}
@@ -403,7 +373,7 @@
     }
     @keyframes ux-spin{ 0%{transform:rotate(0deg);} 100%{transform:rotate(360deg);} }
     @keyframes ux-orbitA{ 0%{transform:translate(0,0);} 50%{transform:translate(6px, -6px);} 100%{transform:translate(0,0);} }
-    @keyframes ux-orbitB{ 0%{transform:translate(0,0);} 50%{transform:translate(-6px, 6px);} 100%{transform:translate(0,0);} }
+    @keyframes ux-orbitB{ 0%{transform:translate(-6px, 6px);} 100%{transform:translate(0,0);} }
     @keyframes ux-chip{
       0%,100%{ transform:translateY(0);}
       50%{ transform:translateY(-6px);}
@@ -419,28 +389,9 @@
 <body class="ux-auth-body">
 
 @php
-  /**
-   * ✅ CONFIG
-   */
   $REGISTER_API    = url('/api/auth/student-register');
   $LOGIN_URL       = url('/login');
   $REDIRECT_AFTER  = url('/dashboard');
-
-  /**
-   * ✅ OPTIONAL fallback: server render folders (if available)
-   * This will still work if API fails.
-   */
-  if (!isset($folders) || (is_countable($folders) && count($folders) === 0)) {
-    try{
-      $folders = \App\Models\UserFolder::query()
-        ->select(['id','folder_name'])
-        ->whereNull('deleted_at')
-        ->orderBy('folder_name')
-        ->get();
-    }catch(\Throwable $e){
-      $folders = [];
-    }
-  }
 @endphp
 
 <div class="ux-grid">
@@ -451,8 +402,9 @@
       <img src="{{ asset('/assets/media/images/web/logo.png') }}" alt="Unzip Examination">
     </div>
 
-    <h1 class="ux-title">Create your Student Account</h1>
-    <p class="ux-sub">Register to access exams, quizzes, and activities.</p>
+    {{-- ✅ Campaign Title auto-filled by UID --}}
+    <h1 class="ux-title" id="ux_campaignTitle">Student Registration</h1>
+    <p class="ux-sub" id="ux_campaignSub">Create your account to proceed.</p>
 
     <form class="ux-card" id="ux_form" novalidate>
       <span class="ux-float-chip"><i class="fa-solid fa-shield-halved me-1"></i>Secure • Token based</span>
@@ -460,25 +412,10 @@
       <!-- Inline alert -->
       <div id="ux_alert" class="alert d-none mb-3" role="alert"></div>
 
-      <!-- Folder -->
-      <div class="mb-3">
-        <label class="ux-label form-label" for="ux_folder">Group / Folder</label>
-        <div class="ux-input-wrap">
-          <select id="ux_folder" class="ux-control form-select" style="padding-right:16px;" required>
-            <option value="">Loading folders…</option>
-
-            {{-- ✅ fallback server rendered options (if API fails, these remain) --}}
-            @if(!empty($folders) && count($folders))
-              @foreach($folders as $f)
-                <option value="{{ $f->id }}">
-                  {{ $f->folder_name ?? ('Folder #' . $f->id) }}
-                </option>
-              @endforeach
-            @endif
-          </select>
-        </div>
-        <div class="ux-field-err" id="err_user_folder_id"></div>
-      </div>
+      {{-- ✅ Hidden fields (folder + campaign uid) --}}
+      <input type="hidden" id="ux_folder_id" value="">
+      <input type="hidden" id="ux_campaign_uid" value="">
+      <div class="ux-field-err" id="err_user_folder_id"></div>
 
       <!-- Name -->
       <div class="mb-3">
@@ -587,32 +524,38 @@
 (function(){
   // ✅ CONFIG
   const REGISTER_API   = @json($REGISTER_API);
+  const LOGIN_URL      = @json($LOGIN_URL);
   const REDIRECT_AFTER = @json($REDIRECT_AFTER);
 
-  // ✅ Folder API (tries multiple in order)
-  const FOLDER_API_CANDIDATES = [
-    '/api/user-folders/public',
-    '/api/user-folders?public=1',
-    '/api/user-folders?show=all'
-  ];
+  // ✅ Campaign API candidates
+  function campaignApiCandidates(uid){
+    return [
+      `/api/interview-registration-campaigns/public/${encodeURIComponent(uid)}`,
+      `/api/interview-registration-campaigns/${encodeURIComponent(uid)}`
+    ];
+  }
 
   const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
   // DOM
-  const form   = document.getElementById('ux_form');
-  const btn    = document.getElementById('ux_btn');
-  const alertEl= document.getElementById('ux_alert');
+  const form    = document.getElementById('ux_form');
+  const btn     = document.getElementById('ux_btn');
+  const alertEl = document.getElementById('ux_alert');
 
-  const folder = document.getElementById('ux_folder');
-  const nameIn = document.getElementById('ux_name');
-  const email  = document.getElementById('ux_email');
-  const phone  = document.getElementById('ux_phone');
-  const pw1    = document.getElementById('ux_pw');
-  const pw2    = document.getElementById('ux_pw2');
-  const keepCb = document.getElementById('ux_keep');
+  const nameIn  = document.getElementById('ux_name');
+  const email   = document.getElementById('ux_email');
+  const phone   = document.getElementById('ux_phone');
+  const pw1     = document.getElementById('ux_pw');
+  const pw2     = document.getElementById('ux_pw2');
+  const keepCb  = document.getElementById('ux_keep');
 
-  const t1     = document.getElementById('ux_togglePw');
-  const t2     = document.getElementById('ux_togglePw2');
+  const t1      = document.getElementById('ux_togglePw');
+  const t2      = document.getElementById('ux_togglePw2');
+
+  const folderHidden   = document.getElementById('ux_folder_id');
+  const campaignHidden = document.getElementById('ux_campaign_uid');
+  const titleEl        = document.getElementById('ux_campaignTitle');
+  const subEl          = document.getElementById('ux_campaignSub');
 
   // UI helpers
   function setBusy(b){
@@ -639,6 +582,7 @@
       el.textContent = '';
     });
   }
+
   function setFieldError(key, msg){
     const el = document.getElementById('err_' + key);
     if(el){
@@ -647,31 +591,44 @@
     }
   }
 
-  // ✅ Safe escape (for dropdown)
-  function esc(s){
-    const m = {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'};
-    return (s==null?'':String(s)).replace(/[&<>"']/g,ch=>m[ch]);
+  // ✅ Get campaign UID from URL
+  function getCampaignUid(){
+    // supports:
+    // /register/{uid}
+    // /register?uid={uid}
+    const u = new URL(window.location.href);
+
+    const qp =
+      u.searchParams.get('uid') ||
+      u.searchParams.get('campaign') ||
+      u.searchParams.get('c') ||
+      u.searchParams.get('id');
+
+    if (qp && String(qp).trim()) return String(qp).trim();
+
+    const parts = (u.pathname || '').split('/').filter(Boolean);
+    return parts.length ? parts[parts.length - 1] : '';
   }
-  function normId(v){
-    if (v === null || v === undefined) return '';
-    const s = String(v).trim();
-    return (s === 'null' || s === 'undefined') ? '' : s;
-  }
 
-  // ✅ Load folders via API (no token needed here)
-  async function loadFoldersFromApi(){
-    if (!folder) return;
+  // ✅ Load campaign details by UID
+  async function loadCampaign(){
+    const uid = getCampaignUid();
 
-    const prevSelected = folder.value || '';
-
-    // show loading only if the user hasn't selected
-    if (!prevSelected){
-      folder.innerHTML = `<option value="">Loading folders…</option>`;
+    // ✅ REQUIRED: If uid missing -> redirect to login
+    if (!uid){
+      window.location.assign(LOGIN_URL);
+      return;
     }
+
+    campaignHidden.value = uid;
+
+    // temporary UI
+    titleEl.textContent = 'Loading campaign…';
+    subEl.textContent = 'Please wait…';
 
     let lastErr = null;
 
-    for (const apiUrl of FOLDER_API_CANDIDATES){
+    for (const apiUrl of campaignApiCandidates(uid)){
       try{
         const res = await fetch(apiUrl, {
           headers: {
@@ -680,51 +637,39 @@
           }
         });
 
-        const data = await res.json().catch(()=> ({}));
-        if (!res.ok) throw new Error(data?.message || 'Failed to load folders');
+        const j = await res.json().catch(()=> ({}));
+        if (!res.ok) throw new Error(j?.message || 'Failed to load campaign');
 
-        const list =
-          Array.isArray(data.data) ? data.data :
-          Array.isArray(data.folders) ? data.folders :
-          Array.isArray(data.items) ? data.items : [];
+        const row = j?.data || j?.campaign || j;
 
-        const parsed = list.map(f => {
-          const idRaw = f.id ?? f.folder_id ?? f.user_folder_id ?? f.uuid ?? '';
-          const nmRaw = f.folder_name ?? f.name ?? f.title ?? f.folder_title ?? f.folder ?? ('Folder ' + (f.id ?? ''));
-          return { id: normId(idRaw), name: String(nmRaw || '').trim() };
-        }).filter(x => x.id !== '');
+        const campTitle = row?.title || 'Student Registration';
+        const folderId  = row?.user_folder_id ?? row?.folder_id ?? '';
 
-        if (!parsed.length){
-          folder.innerHTML = `<option value="">Select folder</option>`;
+        titleEl.textContent = campTitle;
+        subEl.textContent = 'Create your student account to proceed.';
+
+        if (!folderId){
+          folderHidden.value = '';
+          setFieldError('user_folder_id', 'Campaign folder not configured. Contact admin.');
+          showAlert('error', 'Campaign is missing folder configuration.');
+          btn.disabled = true;
           return;
         }
 
-        const options = parsed.map(f =>
-          `<option value="${esc(String(f.id))}">${esc(String(f.name))}</option>`
-        ).join('');
-
-        folder.innerHTML = `<option value="">Select folder</option>` + options;
-
-        // restore selection if possible
-        if (prevSelected){
-          folder.value = prevSelected;
-        }
-
+        folderHidden.value = String(folderId);
         return; // ✅ success
+
       }catch(e){
         lastErr = e;
       }
     }
 
-    // ✅ If all APIs fail: keep existing server-rendered options (do not break)
-    console.warn('Folder API failed, keeping blade fallback. Last error:', lastErr);
-    if (!folder.querySelector('option[value=""]')){
-      // ensure first empty option exists
-      const first = document.createElement('option');
-      first.value = '';
-      first.textContent = 'Select folder';
-      folder.insertBefore(first, folder.firstChild);
-    }
+    console.warn('Campaign API failed:', lastErr);
+    titleEl.textContent = 'Student Registration';
+    subEl.textContent = 'Campaign not found or expired.';
+    folderHidden.value = '';
+    showAlert('error', lastErr?.message || 'Campaign not found.');
+    btn.disabled = true;
   }
 
   // ✅ Storage helpers
@@ -760,8 +705,10 @@
     clearAlert();
     clearFieldErrors();
 
+    const folderId = (folderHidden.value || '').trim();
+
     const payload = {
-      user_folder_id: (folder.value || '').trim(),
+      user_folder_id: folderId,
       name: (nameIn.value || '').trim(),
       email: (email.value || '').trim(),
       phone_number: (phone.value || '').trim(),
@@ -770,8 +717,8 @@
     };
 
     if(!payload.user_folder_id){
-      setFieldError('user_folder_id', 'Please select a folder');
-      showAlert('warn','Please fix the errors below.');
+      setFieldError('user_folder_id', 'Folder missing in campaign. Contact admin.');
+      showAlert('warn','Invalid campaign configuration.');
       return;
     }
     if(!payload.name || payload.name.length < 2){
@@ -856,8 +803,8 @@
     }
   });
 
-  // ✅ Load folders on page load
-  loadFoldersFromApi();
+  // ✅ Load campaign on page load
+  loadCampaign();
 
   // same parallax as login (desktop only)
   (function(){

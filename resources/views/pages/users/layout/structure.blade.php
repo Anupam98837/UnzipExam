@@ -281,6 +281,32 @@
         <a href="/user-folders/manage" class="w3-link">Manage Folders</a>
       </div>
     </div>
+    {{-- ✅ Registration Campaigns --}}
+<div class="w3-nav-section">
+<div class="w3-section-title">
+<i class="fa-solid fa-bullhorn"></i> REGISTRATION CAMPAIGNS
+</div>
+<div class="w3-section-rule"></div>
+</div>
+ 
+<div class="w3-group">
+<a href="#" class="w3-link w3-toggle" data-target="sm-admin-reg-campaign" aria-expanded="false">
+<i class="fa-solid fa-rectangle-ad"></i><span>Registration Campaign</span>
+<i class="fa fa-chevron-down w3-chev"></i>
+</a>
+ 
+  <div id="sm-admin-reg-campaign" class="w3-submenu" role="group" aria-label="Registration Campaign submenu">
+<a href="/registration-campaign/create" class="w3-link">
+<span>Create Campaign</span>
+</a>
+ 
+    <a href="/interview-registration-campaigns/manage" class="w3-link">
+<span>Manage Campaigns</span>
+</a>
+</div>
+</div>
+
+ 
 <div class="w3-nav-section">
       <div class="w3-section-title"><i class="fa-solid fa-graduation-cap"></i> Quizzes & Exam</div>
       <div class="w3-section-rule"></div>
@@ -326,6 +352,7 @@
         <a href="/decision-making-test/results" class="w3-link">Results</a>
       </div>
     </div>
+    
     <!-- ✅ END NEW -->
     <div class="w3-nav-section">
       <div class="w3-section-title"><i class="fa-solid fa-graduation-cap"></i> MENU PRIVILEGES</div>

@@ -19,6 +19,7 @@ use App\Http\Controllers\API\DoorGameController;
 use App\Http\Controllers\API\DoorGameResultController;
 use App\Http\Controllers\API\UserFolderController;
 use App\Http\Controllers\API\StudentResultController;
+use App\Http\Controllers\API\InterviewRegistrationCampaignController;
 
 
 
@@ -533,6 +534,18 @@ Route::prefix('student-results')
         Route::post('/', [StudentResultController::class, 'store']);
     });
 
-    Route::get('/quizz/result/export', [QuizzResultController::class, 'export']);
-    Route::get('/door-game/result/export', [DoorGameResultController::class, 'export']);
-    Route::get('/bubble-game/result/export', [BubbleGameResultController::class, 'exportResults']);
+
+
+    Route::prefix('interview-registration-campaigns')->group(function () {
+
+        // ✅ Public: register page fetch
+        Route::get('/public/{uid}', [InterviewRegistrationCampaignController::class, 'publicShow']);
+    
+        // Admin APIs
+        Route::get('/',        [InterviewRegistrationCampaignController::class, 'index']);
+        Route::get('/{id}',    [InterviewRegistrationCampaignController::class, 'show']);
+        Route::post('/',       [InterviewRegistrationCampaignController::class, 'store']);
+        Route::put('/{id}',    [InterviewRegistrationCampaignController::class, 'update']);
+        Route::delete('/{id}', [InterviewRegistrationCampaignController::class, 'destroy']);
+    
+    });

@@ -11,9 +11,10 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', function () {
     return view('pages.auth.login');
 });
-Route::get('/register', function () {
+Route::get('/register/{uid}', function ($uid) {
     return view('pages.auth.register');
-});
+})->where('uid', '.*');
+
  
 /*
 |--------------------------------------------------------------------------
@@ -221,4 +222,13 @@ Route::get('/user-folders/create', fn () => view('pages.users.pages.userFolder.c
 
 Route::get('/my/result', function () {
     return view('modules.result.myResult');
+});
+
+
+Route::get('/registration-campaign/create', function () {
+    return view('pages.users.pages.interviewRegistrationCampaigns.createInterviewRegistrationCampaign');
+});
+
+Route::get('/interview-registration-campaigns/manage', function () {
+    return view('pages.users.pages.interviewRegistrationCampaigns.manageInterviewRegistrationCampaigns');
 });

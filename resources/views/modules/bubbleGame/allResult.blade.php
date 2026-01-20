@@ -153,6 +153,10 @@ html.theme-dark .dropdown-menu{background:#0f172a;border-color:var(--line-strong
           <button id="btnBulkPublish" class="btn btn-primary">
             <i class="fa fa-bullhorn me-1"></i>Bulk Publish
           </button>
+          <button id="btnExport" class="btn btn-light">
+  <i class="fa fa-file-export me-1"></i>Export
+</button>
+
 
           <button id="btnReset" class="btn btn-primary">
             <i class="fa fa-rotate-left me-1"></i>Reset
@@ -706,6 +710,7 @@ document.addEventListener('click', (e) => {
   const btnReset = document.getElementById('btnReset');
   const btnApplyFilters = document.getElementById('btnApplyFilters');
   const btnBulkPublish = document.getElementById('btnBulkPublish');
+  const btnExport = document.getElementById('btnExport');
 
   const fGameId = document.getElementById('fGameId');
   const fAttemptStatus = document.getElementById('fAttemptStatus');
@@ -931,6 +936,7 @@ document.addEventListener('click', (e) => {
   // ✅ results endpoint + fallback
   let RESULT_LIST_ENDPOINT = '/api/bubble-game-results/all';
   const fallbackResultEndpoint = '/api/bubble-game-results';
+const BUBBLE_EXPORT_API = '/api/bubble-game/result/export';
 
   function getActiveScope(){
     const active = document.querySelector('.tab-pane.active');
@@ -1034,7 +1040,6 @@ filters: { game_id:'', attempt_status:'', publish_to_student:'', from:'', to:'',
     updateBulkButton();
   }
 
-  // ✅ publish/unpublish patch with multi-endpoint fallbacks
   // ✅ publish/unpublish patch with multi-endpoint + multi-method fallbacks
 async function patchPublishAny(resultId, resultUuid, publishVal){
   const payload = { publish_to_student: Number(publishVal) };
@@ -1084,6 +1089,112 @@ async function patchPublishAny(resultId, resultUuid, publishVal){
   throw (lastErr || new Error('Publish update failed'));
 }
 
+/* ============================================================
+ * ✅ EXPORT (CSV Download with Bearer Token)
+ * ============================================================ */
+function buildExportParams(scope){
+  const usp = new URLSearchParams();
+
+  // ✅ Export always from page 1 with very high limit
+  usp.set('page', '1');
+  usp.set('per_page', '100000');
+  usp.set('sort', sort);
+
+  if (q && q.value.trim()) usp.set('q', q.value.trim());
+
+  // Normal filters
+  if (fGameId && fGameId.value) usp.set('bubble_game_id', fGameId.value);
+  if (fAttemptStatus && fAttemptStatus.value) usp.set('attempt_status', fAttemptStatus.value);
+  if (fPublish && fPublish.value !== '') usp.set('publish_to_student', fPublish.value);
+
+  if (fMinPct && fMinPct.value !== '') usp.set('min_percentage', fMinPct.value);
+  if (fMaxPct && fMaxPct.value !== '') usp.set('max_percentage', fMaxPct.value);
+
+  if (fFrom && fFrom.value) usp.set('from', fFrom.value);
+  if (fTo && fTo.value) usp.set('to', fTo.value);
+
+  if (fGameUuid && fGameUuid.value.trim()) usp.set('game_uuid', fGameUuid.value.trim());
+  if (fStudentEmail && fStudentEmail.value.trim()) usp.set('student_email', fStudentEmail.value.trim());
+  if (fFolderName && fFolderName.value.trim()) usp.set('folder_name', fFolderName.value.trim());
+
+  // ✅ If bulk mode active, export that filtered selection list
+  if (bulk.mode && bulk.filtersActive){
+    if (bulk.filters.game_id) usp.set('bubble_game_id', bulk.filters.game_id);
+    if (bulk.filters.attempt_status) usp.set('attempt_status', bulk.filters.attempt_status);
+    if (bulk.filters.publish_to_student !== '') usp.set('publish_to_student', bulk.filters.publish_to_student);
+    if (bulk.filters.from) usp.set('from', bulk.filters.from);
+    if (bulk.filters.to) usp.set('to', bulk.filters.to);
+    if (bulk.filters.folder_name) usp.set('folder_name', bulk.filters.folder_name);
+  }
+
+  // tab specific (published/unpublished)
+  const extra = tabs[scope]?.extra || {};
+  Object.keys(extra).forEach(k => usp.set(k, extra[k]));
+
+  return usp.toString();
+}
+
+async function downloadExportCSV(){
+  const scope = getActiveScope();
+  const url = `${BUBBLE_EXPORT_API}?${buildExportParams(scope)}`;
+
+  const oldHtml = btnExport?.innerHTML || '';
+  if (btnExport){
+    btnExport.disabled = true;
+    btnExport.innerHTML = `<i class="fa fa-spinner fa-spin me-1"></i>Exporting...`;
+  }
+
+  try{
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': 'Bearer ' + TOKEN,
+        'Accept': 'text/csv'
+      }
+    });
+
+    // If API returned json error
+    if (!res.ok){
+      const j = await res.json().catch(()=> ({}));
+      throw new Error(j?.message || `Export failed (${res.status})`);
+    }
+
+    const blob = await res.blob();
+
+    // ✅ filename from header if provided
+    const cd = res.headers.get('Content-Disposition') || '';
+    let filename = `bubble_game_results_${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.csv`;
+    const m1 = /filename\*=UTF-8''([^;]+)/i.exec(cd);
+    const m2 = /filename="?([^"]+)"?/i.exec(cd);
+    if (m1?.[1]) filename = decodeURIComponent(m1[1]);
+    else if (m2?.[1]) filename = m2[1];
+
+    const a = document.createElement('a');
+    const href = URL.createObjectURL(blob);
+    a.href = href;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+
+    setTimeout(()=> URL.revokeObjectURL(href), 1200);
+
+    ok('Export downloaded');
+  }catch(e){
+    console.error(e);
+    err(e.message || 'Export failed');
+  }finally{
+    if (btnExport){
+      btnExport.disabled = false;
+      btnExport.innerHTML = oldHtml || `<i class="fa fa-file-export me-1"></i>Export`;
+    }
+  }
+}
+
+btnExport?.addEventListener('click', (e)=>{
+  e.preventDefault();
+  downloadExportCSV();
+});
 
   async function runBulkAction(){
     if (!bulk.mode) return;

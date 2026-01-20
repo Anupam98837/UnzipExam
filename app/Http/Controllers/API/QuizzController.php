@@ -847,6 +847,79 @@ public function myQuizzes(Request $r)
     $perPage = max(1, min(50, (int) $r->query('per_page', 12)));
     $search  = trim((string) $r->query('q', ''));
 
+    /* ============================================================
+     | ✅ ONLY ASSIGNED QUIZZES
+     |============================================================ */
+
+    // Try to resolve an assignment table automatically
+    $assignTable = null;
+    $candidates = [
+        'quizz_assignments',
+        'quiz_assignments',
+        'quizz_assigned_users',
+        'quiz_assigned_users',
+        'quizz_user_assignments',
+        'quiz_user_assignments',
+    ];
+
+    foreach ($candidates as $t) {
+        try {
+            if (\Illuminate\Support\Facades\Schema::hasTable($t)) {
+                $assignTable = $t;
+                break;
+            }
+        } catch (\Throwable $e) {
+            // ignore
+        }
+    }
+
+    // If there is no assignment table, then "only assigned" => nothing
+    if (!$assignTable) {
+        return response()->json([
+            'success'    => true,
+            'data'       => [],
+            'pagination' => [
+                'total'        => 0,
+                'per_page'     => $perPage,
+                'current_page' => $page,
+                'last_page'    => 0,
+            ],
+        ]);
+    }
+
+    // Detect common column names safely
+    $quizIdCol = \Illuminate\Support\Facades\Schema::hasColumn($assignTable, 'quiz_id')
+        ? 'quiz_id'
+        : (\Illuminate\Support\Facades\Schema::hasColumn($assignTable, 'quizz_id') ? 'quizz_id' : 'quiz_id');
+
+    $userIdCol = \Illuminate\Support\Facades\Schema::hasColumn($assignTable, 'user_id')
+        ? 'user_id'
+        : (\Illuminate\Support\Facades\Schema::hasColumn($assignTable, 'student_id') ? 'student_id' : 'user_id');
+
+    // Assigned quiz ids for this user (DISTINCT)
+    $assignedSub = DB::table($assignTable . ' as asg')
+        ->distinct()
+        ->select("asg.$quizIdCol as quiz_id")
+        ->where("asg.$userIdCol", $userId);
+
+    // optional safety filters (only apply if columns exist)
+    if (\Illuminate\Support\Facades\Schema::hasColumn($assignTable, 'deleted_at')) {
+        $assignedSub->whereNull('asg.deleted_at');
+    }
+    if (\Illuminate\Support\Facades\Schema::hasColumn($assignTable, 'status')) {
+        $assignedSub->where('asg.status', '=', 'active');
+    }
+    if (\Illuminate\Support\Facades\Schema::hasColumn($assignTable, 'is_active')) {
+        $assignedSub->whereIn('asg.is_active', [1, true, '1', 'yes']);
+    }
+    if (\Illuminate\Support\Facades\Schema::hasColumn($assignTable, 'publish_to_student')) {
+        $assignedSub->where(function ($w) {
+            $w->where('asg.publish_to_student', 1)
+              ->orWhere('asg.publish_to_student', true)
+              ->orWhere('asg.publish_to_student', 'yes');
+        });
+    }
+
     // ---- Subquery: latest attempt per quiz for this user ----
     $attemptSub = DB::table('quizz_attempts')
         ->select('quiz_id', DB::raw('MAX(id) as latest_id'))
@@ -860,6 +933,11 @@ public function myQuizzes(Request $r)
         ->groupBy('quiz_id');
 
     $q = DB::table('quizz as q')
+        // ✅ ONLY quizzes that are assigned to this user
+        ->joinSub($assignedSub, 'asq', function ($join) {
+            $join->on('asq.quiz_id', '=', 'q.id');
+        })
+
         // join latest attempt
         ->leftJoinSub($attemptSub, 'la', function ($join) {
             $join->on('la.quiz_id', '=', 'q.id');
@@ -874,24 +952,7 @@ public function myQuizzes(Request $r)
 
         // only active, non-deleted quizzes
         ->whereNull('q.deleted_at')
-        ->where('q.status', '=', 'active')
-
-        // visibility: public OR the user has attempt/result
-        ->where(function ($w) use ($userId) {
-            $w->where('q.is_public', '=', 'yes')
-              ->orWhereExists(function ($sq) use ($userId) {
-                  $sq->select(DB::raw(1))
-                     ->from('quizz_attempts as qa2')
-                     ->whereColumn('qa2.quiz_id', 'q.id')
-                     ->where('qa2.user_id', '=', $userId);
-              })
-              ->orWhereExists(function ($sq) use ($userId) {
-                  $sq->select(DB::raw(1))
-                     ->from('quizz_results as qr2')
-                     ->whereColumn('qr2.quiz_id', 'q.id')
-                     ->where('qr2.user_id', '=', $userId);
-              });
-        });
+        ->where('q.status', '=', 'active');
 
     // Optional text search
     if ($search !== '') {
@@ -989,6 +1050,5 @@ public function myQuizzes(Request $r)
         ],
     ]);
 }
-
 
 }

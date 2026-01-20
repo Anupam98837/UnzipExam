@@ -770,24 +770,30 @@ document.addEventListener('DOMContentLoaded', function () {
       : '<span class="qz-chip"><i class="fa-solid fa-lock"></i>Private</span>';
   }
 
-  // ✅ NEW: sort helper (Oldest → Newest)
-  function parseDateSafe(v){
-    if(!v) return null;
-    const d = new Date(v);
-    if (isNaN(d.getTime())) return null;
-    return d;
+  // ✅ NEW: Assignment time parser (oldest → newest sorting)
+  function parseAnyDate(input) {
+    if (!input) return null;
+    try {
+      const d = new Date(input);
+      if (!isNaN(d.getTime())) return d;
+    } catch (e) {}
+    return null;
   }
-  function sortOldestFirst(items){
-    if(!Array.isArray(items)) return items || [];
-    return items.slice().sort((a,b)=>{
-      const da = parseDateSafe(a?.created_at);
-      const db = parseDateSafe(b?.created_at);
-      // missing dates go last
-      if(!da && !db) return 0;
-      if(!da) return 1;
-      if(!db) return -1;
-      return da.getTime() - db.getTime(); // ✅ oldest first
-    });
+
+  function getAssignmentDate(item) {
+    // priority: assigned_at then created_at (fallback)
+    const candidates = [
+      item.assigned_at,
+      item.assignment_time,
+      item.assigned_on,
+      item.assignedAt,
+      item.created_at
+    ];
+    for (const c of candidates) {
+      const d = parseAnyDate(c);
+      if (d) return d;
+    }
+    return new Date(0); // very old fallback
   }
 
   // =======================
@@ -853,7 +859,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
     listEl.innerHTML = '';
 
-    if (!items || !items.length) {
+    // ✅ Sort items by ASSIGNMENT TIME oldest → newest
+    const sortedItems = Array.isArray(items)
+      ? [...items].sort((a, b) => getAssignmentDate(a).getTime() - getAssignmentDate(b).getTime())
+      : [];
+
+    if (!sortedItems.length) {
       S.els.empty.classList.remove('d-none');
       S.els.pagination.classList.add('d-none');
       return;
@@ -873,7 +884,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const frag = document.createDocumentFragment();
 
-    items.forEach(item => {
+    sortedItems.forEach(item => {
       const card = document.createElement('article');
       card.className = 'qz-card';
 
@@ -954,6 +965,9 @@ document.addEventListener('DOMContentLoaded', function () {
           ? '<i class="fa-solid fa-gamepad"></i>'
           : '<i class="fa-solid fa-graduation-cap"></i>';
 
+      const assignedDate = item.assigned_at ? new Date(item.assigned_at) : (item.created_at ? new Date(item.created_at) : null);
+      const assignedLabel = item.assigned_at ? 'Assigned' : 'Added';
+
       card.innerHTML = `
         <div class="qz-card-top">
           <div class="qz-avatar">${iconHtml}</div>
@@ -985,7 +999,7 @@ document.addEventListener('DOMContentLoaded', function () {
           </button>
 
           <span class="sub">
-            Added ${item.created_at ? new Date(item.created_at).toLocaleDateString() : ''}
+            ${assignedLabel} ${assignedDate ? assignedDate.toLocaleDateString() : ''}
           </span>
         </div>
       `;
@@ -1052,10 +1066,6 @@ document.addEventListener('DOMContentLoaded', function () {
     params.set('per_page', 9);
     if ((S.q || '').trim() !== '') params.set('q', (S.q || '').trim());
 
-    // ✅ NEW: ask backend to sort (safe if ignored)
-    params.set('sort', 'created_at');
-    params.set('order', 'asc'); // oldest → newest
-
     try {
       const res = await fetch(api + '?' + params.toString(), {
         method: 'GET',
@@ -1077,13 +1087,10 @@ document.addEventListener('DOMContentLoaded', function () {
         throw new Error(json.message || json.error || 'Failed to load list.');
       }
 
-      // ✅ NEW: frontend sorting oldest → newest
-      const itemsRaw   = json.data || [];
-      const items      = sortOldestFirst(itemsRaw);
-
+      const items      = json.data || [];
       const pagination = json.pagination || {};
 
-      renderCards(tab, items);
+      renderCards(tab, items); // ✅ sorting happens inside renderCards now
       updatePagination(
         tab,
         pagination.total || items.length,

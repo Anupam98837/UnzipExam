@@ -1,5 +1,4 @@
 {{-- resources/views/modules/doorGame/exam.blade.php --}}
-{{-- resources/views/modules/doorGame/exam.blade.php --}}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -15,7 +14,18 @@
   <link rel="stylesheet" href="{{ asset('assets/css/common/main.css') }}">
 
   <style>
-   
+    /* =========================================================
+      Door Game Exam UI (Scoped) — UPDATED (Professional Game Feel)
+      ✅ Changes applied:
+        - Arrows are around the USER (not board edges)
+        - Barriers are NOT shown (logic still blocks)
+        - Arrow turns RED + disabled if barrier/boundary OR target cell already visited
+        - Visited cells highlighted
+        - Player after key: PURPLE (not multicolor)
+        - Door icon color: BLACK (with visibility outline)
+        - More game-like effects: glow/pulse, shake on blocked, sparkle on key, win confetti burst, smooth camera follow, subtle click sfx
+    ========================================================= */
+
     .dgx-exam{
       --dgx-ink: #0f172a;
       --dgx-muted: #64748b;
@@ -30,8 +40,8 @@
       --dgx-success: #22c55e;
       --dgx-warn: #f59e0b;
 
-      --dgx-purple: #a855f7;
-      --dgx-black: #0b0f18;
+      --dgx-purple: #a855f7; /* ✅ player powered purple */
+      --dgx-black: #0b0f18;  /* ✅ door black */
 
       --dgx-radius: 18px;
       --dgx-radius2: 26px;
@@ -119,8 +129,11 @@
     .dgx-btn:active{ transform: translateY(0px); }
     .dgx-btn.danger{ background: rgba(239,68,68,.18); border-color: rgba(239,68,68,.28); }
 
-    /* ✅ FULLWIDTH MAIN AREA (no right column anymore) */
-    .dgx-grid{ display:block; }
+    .dgx-grid{ display:grid; gap:14px; align-items:start; }
+    @media (max-width: 1080px){
+      .dgx-grid{ grid-template-columns: 1fr; }
+      .dgx-title h1{ max-width: 92vw; }
+    }
 
     .dgx-card{
       background: var(--dgx-card);
@@ -213,8 +226,9 @@
       display:inline-flex; align-items:center; gap:8px; white-space:nowrap;
     }
 
-    /* ✅ Board becomes FULL WIDTH */
-    .dgx-boardWrap{ display:grid; grid-template-columns: 1fr; gap:14px; align-items:stretch; }
+    /* ===== Board ===== */
+    .dgx-boardWrap{ display:grid; grid-template-columns: 1fr 260px; gap:14px; align-items:stretch; }
+    @media (max-width: 900px){ .dgx-boardWrap{ grid-template-columns: 1fr; } }
 
     .dgx-board{
       position: relative;
@@ -305,7 +319,10 @@
     }
     html.theme-dark .dgx-ico.user{ color: #cbd5e1; opacity:.95; }
 
-    .dgx-playerPowered .dgx-ico.user{ opacity: 1; }
+    .dgx-playerPowered .dgx-ico.user{
+      opacity: 1;
+    }
+
     .dgx-ico.key{ color: #f59e0b; filter: drop-shadow(0 14px 18px rgba(245,158,11,.22)); }
 
     .dgx-ico.doorClosed,
@@ -342,7 +359,9 @@
       100%{ transform: translateY(0); }
     }
     .dgx-cell.is-current:hover,
-    .dgx-cell.is-current:active{ transform: none !important; }
+    .dgx-cell.is-current:active{
+      transform: none !important;
+    }
 
     .dgx-cell.is-next{
       outline: 2px dashed color-mix(in srgb, #22c55e 40%, transparent);
@@ -365,7 +384,13 @@
 
     .dgx-bar{ display:none !important; }
 
-    .dgx-uArrows{ position:absolute; inset:0; z-index: 1025; pointer-events:none; transform: translateZ(0); }
+    .dgx-uArrows{
+      position:absolute;
+      inset:0;
+      z-index: 1025;
+      pointer-events:none;
+      transform: translateZ(0);
+    }
     .dgx-uArrow{
       pointer-events:auto;
       position:absolute;
@@ -393,19 +418,25 @@
       color:#e5e7eb;
       box-shadow: 0 16px 34px rgba(0,0,0,.55);
     }
+
     .dgx-uArrow.up{    top:-18px; left:50%;   --tx:-50%; --ty:0px; }
     .dgx-uArrow.down{  bottom:-18px; left:50%;--tx:-50%; --ty:0px; }
     .dgx-uArrow.left{  left:-18px; top:50%;   --tx:0px;  --ty:-50%; }
     .dgx-uArrow.right{ right:-18px; top:50%;  --tx:0px;  --ty:-50%; }
 
-    .dgx-uArrow:hover{ transform: translate3d(var(--tx), calc(var(--ty) - 1px), 0); }
-    .dgx-uArrow:active{ transform: translate3d(var(--tx), var(--ty), 0) scale(.98); }
+    .dgx-uArrow:hover{
+      transform: translate3d(var(--tx), calc(var(--ty) - 1px), 0);
+    }
+    .dgx-uArrow:active{
+      transform: translate3d(var(--tx), var(--ty), 0) scale(.98);
+    }
 
     .dgx-uArrow.blocked{
       background: rgba(239,68,68,.70);
       border-color: rgba(239,68,68,.35);
       color:#fff;
     }
+
     .dgx-uArrow.disabled{
       opacity: .48;
       cursor:not-allowed;
@@ -413,7 +444,9 @@
       filter: saturate(.95);
     }
     .dgx-uArrow.disabled:hover,
-    .dgx-uArrow.disabled:active{ transform: translate3d(var(--tx), var(--ty), 0); }
+    .dgx-uArrow.disabled:active{
+      transform: translate3d(var(--tx), var(--ty), 0);
+    }
 
     .dgx-cell.fx-shake{ animation: dgxShake .35s ease; }
     @keyframes dgxShake{
@@ -459,7 +492,22 @@
       z-index: 70;
     }
 
-    .dgx-confettiLayer{ position:absolute; inset:0; pointer-events:none; z-index: 90; overflow: visible; }
+    .dgx-confettiLayer{
+      position:absolute;
+      inset:0;
+      pointer-events:none;
+      z-index: 90;
+      overflow: visible;
+    }
+
+    .dgx-side{
+      position: sticky;
+      top: 86px;
+      display:flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    @media (max-width: 1080px){ .dgx-side{ position: static; } }
 
     .dgx-panel{ padding:14px 16px; display:flex; flex-direction:column; gap:10px; }
     .dgx-panel .hd{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
@@ -517,19 +565,7 @@
 
     .dgx-footnote{ text-align:center; color: var(--dgx-muted); font-size: 12px; font-weight: 850; padding: 2px 0 10px; }
 
-    /* ✅ NEW: Side cards row (inline) below topbar */
-    .dgx-sideRow{
-      display:flex;
-      gap:14px;
-      align-items:stretch;
-      flex-wrap:wrap;
-    }
-    .dgx-sideRow .dgx-card{
-      flex: 1 1 360px;
-      min-width: 280px;
-    }
-
-    /* ✅ Intro Modal Cards */
+    /* ✅ Intro Modal Cards (Bubble Game style) */
     .dgx-introCard{
       border: 1px solid var(--dgx-line);
       background: rgba(2,6,23,.02);
@@ -567,7 +603,9 @@
       background: linear-gradient(90deg, transparent, rgba(255,255,255,.55), transparent);
       animation: dgxShimmer 1.2s infinite;
     }
-    @keyframes dgxShimmer{ 100%{ transform:translateX(100%); } }
+    @keyframes dgxShimmer{
+      100%{ transform:translateX(100%); }
+    }
   </style>
 </head>
 
@@ -586,7 +624,7 @@
         </div>
       </div>
 
-      <div class="dgx-actions">
+      <div class="dgx-actions d-none">
         <a class="dgx-btn" href="/dashboard" id="dgxQuitBtn"><i class="fa-solid fa-house"></i> Dashboard</a>
         <button class="dgx-btn danger" id="dgxResetBtn" type="button" style="display:none">
           <i class="fa-solid fa-rotate-left"></i> Reset Attempt
@@ -594,43 +632,60 @@
       </div>
     </div>
 
-    {{-- ✅ RIGHT PANEL MOVED BELOW TOPBAR (INLINE CARDS) --}}
-    <div class="dgx-sideRow">
-
-      <div class="dgx-card">
-        <div class="dgx-panel">
-          <div class="hd">
-            <div class="t"><i class="fa-solid fa-map-location-dot"></i> Legend</div>
-            <span class="dgx-keypill"><i class="fa-solid fa-gamepad"></i> Controls</span>
-          </div>
-
-          <div class="dgx-note" style="display:flex; flex-direction:column; gap:10px">
-            <div><i class="fa-solid fa-user me-2"></i> Player</div>
-            <div><i class="fa-solid fa-key me-2" style="color:#f59e0b"></i> Key (collect all)</div>
-            <div><i class="fa-solid fa-door-closed me-2" style="color:#000"></i> Door (black)</div>
-            <div><span class="badge" style="background:#ef4444">!</span> Red arrow = blocked / visited</div>
-            <div><span class="badge" style="background:#a855f7">•</span> Visited path highlight</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="dgx-card">
-        <div class="dgx-panel">
-          <div class="hd">
-            <div class="t"><i class="fa-solid fa-clipboard-check"></i> Attempt</div>
-            <span class="dgx-keypill" id="dgxAttemptNo"><i class="fa-solid fa-hashtag"></i> 1</span>
-          </div>
-          <div class="dgx-note" id="dgxAttemptNote">
-            Collect all keys, then reach the door before time runs out. Barriers are hidden but still block movement.
-          </div>
-        </div>
-      </div>
-
-    </div>
-
-    {{-- Main (Left becomes FULL WIDTH) --}}
+    {{-- Main --}}
     <div class="dgx-grid">
+ {{-- Right: Info Panel --}}
+      <div class="dgx-side">
+        <div class="dgx-card">
+          <div class="dgx-panel">
+            <div class="hd">
+              <div class="t"><i class="fa-solid fa-map-location-dot"></i> Legend</div>
+              <span class="dgx-keypill"><i class="fa-solid fa-gamepad"></i> Controls</span>
+            </div>
 
+            <div class="dgx-note" style="display:flex; flex-direction:column; gap:10px">
+              <div><i class="fa-solid fa-user me-2"></i> Player</div>
+              <div><i class="fa-solid fa-key me-2" style="color:#f59e0b"></i> Key (collect all)</div>
+              <div><i class="fa-solid fa-door-closed me-2" style="color:#000"></i> Door (black)</div>
+              <div><span class="badge" style="background:#ef4444">!</span> Red arrow = blocked / visited</div>
+              <div><span class="badge" style="background:#a855f7">•</span> Visited path highlight</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="dgx-card d-none">
+          <div class="dgx-panel">
+            <div class="hd">
+              <div class="t"><i class="fa-solid fa-clipboard-check"></i> Attempt</div>
+              <span class="dgx-keypill" id="dgxAttemptNo"><i class="fa-solid fa-hashtag"></i> 1</span>
+            </div>
+            <div class="dgx-note" id="dgxAttemptNote">
+              Collect all keys, then reach the door before time runs out. Barriers are hidden but still block movement.
+            </div>
+          </div>
+        </div>
+
+        <div class="dgx-card d-none">
+          <div class="dgx-panel">
+            <div class="hd">
+              <div class="t"><i class="fa-solid fa-wand-magic-sparkles"></i> Quick Actions</div>
+              <span class="dgx-keypill"><i class="fa-solid fa-keyboard"></i> Keyboard</span>
+            </div>
+            <div class="dgx-actions2">
+              <button class="dgx-btn2 danger" id="dgxGiveUpBtn" type="button">
+                <i class="fa-solid fa-flag"></i> Give Up
+              </button>
+              <button class="dgx-btn2" id="dgxCenterBtn" type="button">
+                <i class="fa-solid fa-crosshairs"></i> Center
+              </button>
+            </div>
+            <div class="dgx-note">
+              Give Up will mark as fail and enable submit (still saves your move-log).
+            </div>
+          </div>
+        </div>
+      </div>
+      {{-- Left: Board Card --}}
       <div class="dgx-card">
         <div class="dgx-card-hd">
           <div class="dgx-instr">
@@ -662,8 +717,6 @@
           </div>
 
           <div class="dgx-boardWrap">
-
-            {{-- Board full width --}}
             <div class="dgx-board" id="dgxBoardWrap">
               <div id="dgxBoard" class="dgx-gridBoard" style="--n:3">
                 <div class="dgx-loader">
@@ -673,7 +726,6 @@
               </div>
             </div>
 
-            {{-- ✅ Status card moved BELOW board (so board stays wide) --}}
             <div class="dgx-card" style="border-radius:22px">
               <div class="dgx-panel">
                 <div class="hd">
@@ -714,7 +766,6 @@
                 </div>
               </div>
             </div>
-
           </div>
 
           <div class="dgx-footnote">
@@ -723,6 +774,7 @@
         </div>
       </div>
 
+     
     </div>
   </div>
 </div>
@@ -791,7 +843,15 @@
 
 <script>
 (() => {
-   function getGameUuidFromUrl() {
+  /* =========================================================
+    Door Game Play Script — UPDATED
+      ✅ Added:
+        - Bootstrap Intro Modal (Description + Instructions)
+        - Game & Timer start ONLY after clicking Start/Resume
+        - Prevent keyboard/cell movement before modal start
+  ========================================================= */
+
+  function getGameUuidFromUrl() {
     const urlParams = new URLSearchParams(window.location.search);
     return (urlParams.get('game') || urlParams.get('game_uuid') || urlParams.get('uuid') || '').trim();
   }
@@ -896,12 +956,6 @@
   }
 
   function nowMs(){ return Math.round(performance.now()); }
-function setInstructionFromMeta(meta){
-  const instrRaw = (meta?.instructions_html || meta?.instructions || meta?.instruction || meta?.description_html || meta?.description || '').toString().trim();
-  elInstruction.textContent = instrRaw
-    ? instrRaw.replace(/<[^>]*>?/gm, '').trim().slice(0, 220)
-    : 'Collect all keys, then reach the door. (Barriers are hidden but still block movement.)';
-}
 
   // ✅ Safe HTML rendering (allowlist)
   function sanitizeHtmlAllowList(inputHtml){
@@ -1680,16 +1734,11 @@ function setInstructionFromMeta(meta){
           btn.className = `dgx-uArrow ${dir}`;
           btn.innerHTML = `<i class="fa-solid ${icon}"></i>`;
 
-          const toId = nextIdByDir(state.userId, dir);
+          const blockedByBarrier = dirBlocked(state.userId, dir);
+          const shouldDisable = ended || blockedByBarrier || !GAME_ACTIVE;
 
-const blockedByBarrier = dirBlocked(state.userId, dir);
-const blockedByVisited = (toId && state.visited.has(Number(toId)));
-
-const shouldDisable = ended || !GAME_ACTIVE || blockedByBarrier || blockedByVisited;
-
-if(blockedByBarrier || blockedByVisited) btn.classList.add('blocked');
-if(shouldDisable) btn.classList.add('disabled');
-
+          if(blockedByBarrier) btn.classList.add('blocked');
+          if(shouldDisable) btn.classList.add('disabled');
 
           btn.addEventListener('click', (e) => {
             e.preventDefault();
@@ -1857,7 +1906,6 @@ if(shouldDisable) btn.classList.add('disabled');
 
     // ✅ if restored attempt: resume EXACT state (timer starts now)
     if(restoredFromCache){
-        setInstructionFromMeta(GAME_META || state.game || {});
       setRunState(
         state.status === 'in_progress' ? 'Playing' : (state.status === 'win' ? 'Completed' : 'Stopped'),
         state.status === 'win' ? 'success' : (state.status === 'in_progress' ? 'primary' : 'danger')
@@ -1922,7 +1970,7 @@ if(shouldDisable) btn.classList.add('disabled');
       elKeysNeed.textContent = String(state.keys.size);
       elKeysTotal.textContent = String(state.keys.size);
       elKeysGot.textContent = String(state.keysCollected.size);
-    setInstructionFromMeta(state.game || {});
+
       setRunState('Ready', 'muted');
       elResult.textContent =
         (state.status === 'win') ? 'Win' :
@@ -2021,6 +2069,5 @@ if(shouldDisable) btn.classList.add('disabled');
   boot();
 })();
 </script>
-
 </body>
 </html>

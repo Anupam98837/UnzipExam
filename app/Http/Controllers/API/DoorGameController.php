@@ -694,7 +694,7 @@ class DoorGameController extends Controller
 
         return null;
     }
-    public function myDoorGames(Request $r)
+   public function myDoorGames(Request $r)
 {
     // ✅ Allow student/admin/super_admin
     if ($resp = $this->requireRole($r, ['student','admin','super_admin'])) return $resp;
@@ -729,6 +729,17 @@ class DoorGameController extends Controller
         ->whereNull('deleted_at')
         ->groupBy('door_game_id');
 
+    // ✅ NEW: assignment info (latest assigned_at for this user)
+    $assignSub = DB::table('user_door_game_assignments as uga')
+        ->select([
+            'uga.door_game_id',
+            DB::raw('MAX(uga.assigned_at) as assigned_at'),
+        ])
+        ->where('uga.user_id', '=', $userId)
+        ->where('uga.status', '=', 'active')
+        ->whereNull('uga.deleted_at')
+        ->groupBy('uga.door_game_id');
+
     $q = DB::table('door_game as dg')
         ->leftJoinSub($resultSub, 'lr', function ($join) {
             $join->on('lr.door_game_id', '=', 'dg.id');
@@ -737,20 +748,17 @@ class DoorGameController extends Controller
         ->leftJoinSub($attemptStatSub, 'ats', function ($join) {
             $join->on('ats.door_game_id', '=', 'dg.id');
         })
+        // ✅ JOIN assignment subquery so we can return assigned_at
+        ->leftJoinSub($assignSub, 'asgn', function ($join) {
+            $join->on('asgn.door_game_id', '=', 'dg.id');
+        })
         ->whereNull('dg.deleted_at')
         ->where('dg.status', '=', 'active');
 
     // ✅ STUDENT VISIBILITY: only assigned games
-    // 🔁 change table name if yours differs
     if (!in_array($role, ['admin','super_admin'], true)) {
-        $q->whereExists(function ($sq) use ($userId) {
-            $sq->select(DB::raw(1))
-                ->from('user_door_game_assignments as uga')
-                ->whereColumn('uga.door_game_id', 'dg.id')
-                ->where('uga.user_id', '=', $userId)
-                ->where('uga.status', '=', 'active')
-                ->whereNull('uga.deleted_at');
-        });
+        // assignment must exist for student
+        $q->whereNotNull('asgn.assigned_at');
     }
 
     // Optional text search
@@ -771,6 +779,9 @@ class DoorGameController extends Controller
         'dg.time_limit_sec',
         'dg.status',
         'dg.created_at',
+
+        // ✅ NEW assigned_at
+        'asgn.assigned_at as assigned_at',
 
         // attempt stats
         DB::raw('COALESCE(ats.attempts_count, 0) as attempts_count'),
@@ -808,9 +819,6 @@ class DoorGameController extends Controller
         $canAttempt = !$maxReached;
 
         // ✅ my_status:
-        // - if latest result exists and its status is in_progress => in_progress
-        // - else if any result exists => completed
-        // - else upcoming
         $latestStatus = (string) ($row->result_status ?? '');
         if ($row->result_id && $latestStatus === 'in_progress') {
             $myStatus = 'in_progress';
@@ -820,22 +828,27 @@ class DoorGameController extends Controller
             $myStatus = 'upcoming';
         }
 
-        // total_time for UI (minutes) — your door game uses time_limit_sec
+        // total_time for UI (minutes) — uses time_limit_sec
         $totalMinutes = null;
         $limitSec = (int) ($row->time_limit_sec ?? 0);
         if ($limitSec > 0) $totalMinutes = (int) ceil($limitSec / 60);
 
-        // total_questions is not meaningful for door game; keep 0 for UI compatibility
+        // total_questions not meaningful for door game; keep 0
         $totalQuestions = 0;
 
         return [
             'id'              => (int) $row->id,
             'uuid'            => (string) $row->uuid,
 
+            // ✅ NEW: assignment timestamp
+            'assigned_at'     => $row->assigned_at
+                ? \Carbon\Carbon::parse($row->assigned_at)->toDateTimeString()
+                : null,
+
             // UI fields
             'title'           => (string) ($row->title ?? 'Door Game'),
             'excerpt'         => (string) ($row->description ?? ''),
-            'total_time'      => $totalMinutes, // minutes for UI display
+            'total_time'      => $totalMinutes,
             'total_questions' => $totalQuestions,
 
             // extra info useful for door game UI
@@ -863,14 +876,14 @@ class DoorGameController extends Controller
 
             // Result info (if exists)
             'result' => $row->result_id ? [
-                'id'           => (int) $row->result_id,
-                'created_at'   => $row->result_created_at
+                'id'            => (int) $row->result_id,
+                'created_at'    => $row->result_created_at
                     ? \Carbon\Carbon::parse($row->result_created_at)->toDateTimeString()
                     : null,
-                'score'        => $row->result_score !== null ? (int) $row->result_score : null,
-                'attempt_no'   => $row->result_attempt_no !== null ? (int) $row->result_attempt_no : null,
-                'status'       => (string) ($row->result_status ?? null),
-                'time_taken_ms'=> $row->result_time_taken_ms !== null ? (int) $row->result_time_taken_ms : null,
+                'score'         => $row->result_score !== null ? (int) $row->result_score : null,
+                'attempt_no'    => $row->result_attempt_no !== null ? (int) $row->result_attempt_no : null,
+                'status'        => (string) ($row->result_status ?? null),
+                'time_taken_ms' => $row->result_time_taken_ms !== null ? (int) $row->result_time_taken_ms : null,
             ] : null,
         ];
     })->values();
@@ -886,5 +899,6 @@ class DoorGameController extends Controller
         ],
     ]);
 }
+
 
 }

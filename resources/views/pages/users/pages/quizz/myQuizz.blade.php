@@ -436,6 +436,10 @@
           <tr>
             <th style="min-width:320px;">Title</th>
             <th style="min-width:50px;">Duration</th>
+
+            {{-- ✅ NEW COLUMN --}}
+            <th style="min-width:170px;">Assigned At</th>
+
             <th style="min-width:50px;">Instructions</th>
             <th style="min-width:50px;">Status</th>
             <th style="min-width:50px;">Attempts</th>
@@ -550,6 +554,60 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   // =======================
+  // ✅ Date helpers (Safari + Edge safe)
+  // =======================
+  function parseAnyDate(input) {
+    if (!input) return null;
+
+    if (input instanceof Date && !isNaN(input.getTime())) return input;
+
+    const str = String(input).trim();
+    if (!str) return null;
+
+    // Laravel: "YYYY-MM-DD HH:mm:ss" OR "YYYY-MM-DDTHH:mm:ss"
+    const m = str.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/);
+    if (m) {
+      const y  = parseInt(m[1], 10);
+      const mo = parseInt(m[2], 10) - 1;
+      const d  = parseInt(m[3], 10);
+      const h  = parseInt(m[4], 10);
+      const mi = parseInt(m[5], 10);
+      const s  = parseInt(m[6] || '0', 10);
+
+      const dt = new Date(y, mo, d, h, mi, s); // local time
+      if (!isNaN(dt.getTime())) return dt;
+    }
+
+    const d2 = new Date(str);
+    return isNaN(d2.getTime()) ? null : d2;
+  }
+
+  function formatDateTime(d){
+    if (!d) return '—';
+    try{
+      return d.toLocaleString();
+    }catch(e){
+      return '—';
+    }
+  }
+
+  function getAssignmentDate(item) {
+    // priority: assigned_at then created_at (fallback)
+    const candidates = [
+      item.assigned_at,
+      item.assignment_time,
+      item.assigned_on,
+      item.assignedAt,
+      item.created_at
+    ];
+    for (const c of candidates) {
+      const d = parseAnyDate(c);
+      if (d) return d;
+    }
+    return new Date(0);
+  }
+
+  // =======================
   // UI helpers
   // =======================
   function sanitize(text) {
@@ -636,35 +694,35 @@ document.addEventListener('DOMContentLoaded', function () {
     const n = parseInt(v, 10);
     return (isNaN(n) || n <= 0) ? 1 : n;
   }
-function pickUsedAttempts(item) {
-  // Try numeric counters first (if API provides)
-  const candidates = [
-    item.my_attempts,
-    item.attempts_used,
-    item.attempts_taken,
-    item.attempt_count,
-    item.latest_attempt_no,
-    item.used_attempts,
-    (item.result && item.result.attempt_no ? item.result.attempt_no : null),
-  ];
 
-  for (const v of candidates) {
-    if (v !== undefined && v !== null && v !== '') {
-      const n = parseInt(v, 10);
-      if (!isNaN(n)) return n;
+  function pickUsedAttempts(item) {
+    // Try numeric counters first (if API provides)
+    const candidates = [
+      item.my_attempts,
+      item.attempts_used,
+      item.attempts_taken,
+      item.attempt_count,
+      item.latest_attempt_no,
+      item.used_attempts,
+      (item.result && item.result.attempt_no ? item.result.attempt_no : null),
+    ];
+
+    for (const v of candidates) {
+      if (v !== undefined && v !== null && v !== '') {
+        const n = parseInt(v, 10);
+        if (!isNaN(n)) return n;
+      }
     }
+
+    // ✅ QUIZ fallback: your quiz API uses `attempt` / `result` / `my_status`
+    if (item.type === 'quiz') {
+      if (item.my_status === 'completed') return 1;
+      if (item.attempt && (item.attempt.id || item.attempt.status)) return 1;
+      if (item.result && item.result.id) return 1;
+    }
+
+    return 0;
   }
-
-  // ✅ QUIZ fallback: your quiz API uses `attempt` / `result` / `my_status`
-  if (item.type === 'quiz') {
-    if (item.my_status === 'completed') return 1;
-    if (item.attempt && (item.attempt.id || item.attempt.status)) return 1;
-    if (item.result && item.result.id) return 1;
-  }
-
-  return 0;
-}
-
 
   function computeRemainingAttempts(item, allowed, used) {
     if (item.remaining_attempts !== undefined && item.remaining_attempts !== null) {
@@ -683,8 +741,8 @@ function pickUsedAttempts(item) {
     const used    = pickUsedAttempts(item);
     const remaining = computeRemainingAttempts(item, allowed, used);
 
-// ✅ "No Attempts left" for Quizzes + Games + Door
-const enforceAttemptLimit = (type === 'quiz' || type === 'game' || type === 'door');
+    // ✅ "No Attempts left" for Quizzes + Games + Door
+    const enforceAttemptLimit = (type === 'quiz' || type === 'game' || type === 'door');
 
     const allowContinueEvenIfMax = (enforceAttemptLimit && myStatus === 'in_progress');
 
@@ -819,7 +877,10 @@ const enforceAttemptLimit = (type === 'quiz' || type === 'game' || type === 'doo
 
       const allowed = meta.allowed;
       const used = meta.used;
-      const remaining = meta.remaining;
+
+      // ✅ Assigned At (date + time)
+      const assignedDate = getAssignmentDate(row);
+      const assignedText = formatDateTime(assignedDate);
 
       const addedText = row.created_at ? new Date(row.created_at).toLocaleDateString() : '';
       const hasInstructions = !!(pickInstructions(row) || '').trim();
@@ -841,6 +902,9 @@ const enforceAttemptLimit = (type === 'quiz' || type === 'game' || type === 'doo
         </td>
 
         <td class="qz-num">${sanitize(durationText)}</td>
+
+        {{-- ✅ NEW COLUMN CELL --}}
+        <td class="qz-num">${sanitize(assignedText)}</td>
 
         <td>
           <button type="button"
@@ -971,46 +1035,49 @@ const enforceAttemptLimit = (type === 'quiz' || type === 'game' || type === 'doo
   }
 
   function normalizeItem(item, type) {
-  return {
-    type: type, // quiz | game | door
-    uuid: item.uuid || item.id || null,
-    title: item.title || item.name || 'Item',
-    instructions: pickInstructions(item),
-    excerpt: item.excerpt || '',
-    description: item.description || '',
-    status: item.status || 'active',
-    my_status: item.my_status || item.myStatus || 'Pending',
-    is_public: item.is_public ?? item.public ?? 0,
+    return {
+      type: type, // quiz | game | door
+      uuid: item.uuid || item.id || null,
+      title: item.title || item.name || 'Item',
+      instructions: pickInstructions(item),
+      excerpt: item.excerpt || '',
+      description: item.description || '',
+      status: item.status || 'active',
+      my_status: item.my_status || item.myStatus || 'Pending',
+      is_public: item.is_public ?? item.public ?? 0,
 
-    total_time: item.total_time ?? item.total_time_minutes ?? item.duration ?? null,
+      total_time: item.total_time ?? item.total_time_minutes ?? item.duration ?? null,
 
-    // ✅ keep raw attempt + result for quiz logic
-    attempt: item.attempt ?? null,
-    result: item.result ?? null,
+      // ✅ keep raw attempt + result for quiz logic
+      attempt: item.attempt ?? null,
+      result: item.result ?? null,
 
-    // ✅ quizzes use total_attempts in API response
-    total_attempts: item.total_attempts ?? null,
+      // ✅ quizzes use total_attempts in API response
+      total_attempts: item.total_attempts ?? null,
 
-    max_attempts_allowed: item.max_attempts_allowed,
-    max_attempts: item.max_attempts,
-    max_attempt: item.max_attempt,
-    attempts_allowed: item.attempts_allowed,
-    total_attempts_allowed: item.total_attempts_allowed,
+      max_attempts_allowed: item.max_attempts_allowed,
+      max_attempts: item.max_attempts,
+      max_attempt: item.max_attempt,
+      attempts_allowed: item.attempts_allowed,
+      total_attempts_allowed: item.total_attempts_allowed,
 
-    my_attempts: item.my_attempts,
-    attempts_used: item.attempts_used,
-    attempts_taken: item.attempts_taken,
-    attempt_count: item.attempt_count,
-    latest_attempt_no: item.latest_attempt_no,
-    used_attempts: item.used_attempts,
-    remaining_attempts: item.remaining_attempts,
+      my_attempts: item.my_attempts,
+      attempts_used: item.attempts_used,
+      attempts_taken: item.attempts_taken,
+      attempt_count: item.attempt_count,
+      latest_attempt_no: item.latest_attempt_no,
+      used_attempts: item.used_attempts,
+      remaining_attempts: item.remaining_attempts,
 
-    max_attempt_reached: item.max_attempt_reached,
-    can_attempt: item.can_attempt,
+      max_attempt_reached: item.max_attempt_reached,
+      can_attempt: item.can_attempt,
 
-    created_at: item.created_at || null
-  };
-}
+      // ✅ NEW: capture assigned_at from API
+      assigned_at: item.assigned_at || null,
+
+      created_at: item.created_at || null
+    };
+  }
 
   async function fetchAll() {
     const token = requireAuthToken();
@@ -1037,11 +1104,11 @@ const enforceAttemptLimit = (type === 'quiz' || type === 'game' || type === 'doo
       (gm.data || []).forEach(i => merged.push(normalizeItem(i, 'game')));
       (dr.data || []).forEach(i => merged.push(normalizeItem(i, 'door')));
 
-      // newest first
+      // ✅ SORT: assigned_at (oldest -> newest), fallback created_at
       merged.sort((a,b) => {
-        const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
-        const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
-        return tb - ta;
+        const ta = getAssignmentDate(a).getTime();
+        const tb = getAssignmentDate(b).getTime();
+        return ta - tb;
       });
 
       state.all = merged;
@@ -1092,4 +1159,3 @@ const enforceAttemptLimit = (type === 'quiz' || type === 'game' || type === 'doo
 });
 </script>
 @endpush
- 

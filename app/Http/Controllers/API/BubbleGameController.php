@@ -537,7 +537,6 @@ public function myBubbleGames(Request $r)
         ->groupBy('bubble_game_id');
 
     // ✅ NEW: attempts stats per game for this user
-    // We keep BOTH COUNT(*) and MAX(attempt_no) to be super safe.
     $attemptStatSub = DB::table('bubble_game_results')
         ->select([
             'bubble_game_id',
@@ -547,6 +546,17 @@ public function myBubbleGames(Request $r)
         ->where('user_id', $userId)
         ->whereNull('deleted_at')
         ->groupBy('bubble_game_id');
+
+    // ✅ NEW: assignment info (latest assigned_at for this user)
+    $assignSub = DB::table('user_bubble_game_assignments as uga')
+        ->select([
+            'uga.bubble_game_id',
+            DB::raw('MAX(uga.assigned_at) as assigned_at'),
+        ])
+        ->where('uga.user_id', '=', $userId)
+        ->where('uga.status', '=', 'active')
+        ->whereNull('uga.deleted_at')
+        ->groupBy('uga.bubble_game_id');
 
     $q = DB::table('bubble_game as bg')
         ->leftJoinSub($qCountSub, 'qc', function ($join) {
@@ -559,19 +569,16 @@ public function myBubbleGames(Request $r)
         ->leftJoinSub($attemptStatSub, 'ats', function ($join) {
             $join->on('ats.bubble_game_id', '=', 'bg.id');
         })
+        // ✅ JOIN assignment subquery so we can return assigned_at
+        ->leftJoinSub($assignSub, 'asgn', function ($join) {
+            $join->on('asgn.bubble_game_id', '=', 'bg.id');
+        })
         ->whereNull('bg.deleted_at')
         ->where('bg.status', '=', 'active');
 
     // ✅ STUDENT VISIBILITY: only assigned games (active assignment, not deleted)
     if (!in_array($role, ['admin','super_admin'], true)) {
-        $q->whereExists(function ($sq) use ($userId) {
-            $sq->select(DB::raw(1))
-                ->from('user_bubble_game_assignments as uga')
-                ->whereColumn('uga.bubble_game_id', 'bg.id')
-                ->where('uga.user_id', '=', $userId)
-                ->where('uga.status', '=', 'active')
-                ->whereNull('uga.deleted_at');
-        });
+        $q->whereNotNull('asgn.assigned_at'); // assignment must exist for student
     }
 
     // Optional text search
@@ -598,6 +605,9 @@ public function myBubbleGames(Request $r)
         // ✅ NEW attempt stats
         DB::raw('COALESCE(ats.attempts_count, 0) as attempts_count'),
         DB::raw('COALESCE(ats.max_attempt_no, 0) as max_attempt_no'),
+
+        // ✅ NEW assignment timestamp
+        'asgn.assigned_at as assigned_at',
 
         // latest result
         'bgr.id         as result_id',
@@ -637,13 +647,16 @@ public function myBubbleGames(Request $r)
         $canAttempt = !$maxReached;
 
         // ✅ my_status:
-        // We keep it simple: if any result exists => completed else upcoming
-        // (Continue/in_progress depends on your gameplay logic; if you later add it, UI supports it.)
         $myStatus = $row->result_id ? 'completed' : 'upcoming';
 
         return [
             'id'              => (int) $row->id,
             'uuid'            => (string) $row->uuid,
+
+            // ✅ assignment timestamp
+            'assigned_at'     => $row->assigned_at
+                ? \Carbon\Carbon::parse($row->assigned_at)->toDateTimeString()
+                : null,
 
             // UI fields
             'title'           => (string) ($row->title ?? 'Bubble Game'),

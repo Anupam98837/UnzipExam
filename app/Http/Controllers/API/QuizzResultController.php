@@ -21,7 +21,7 @@ class QuizzResultController extends Controller
      *  - sort (-result_created_at, percentage, marks_obtained, student_name, quiz_name, attempt_number)
      *  - page, per_page
      */
-   public function index(Request $request)
+ public function index(Request $request)
 {
     // Pagination
     $page    = max(1, (int) $request->query('page', 1));
@@ -118,6 +118,10 @@ class QuizzResultController extends Controller
     $attemptUuids  = $toStrList($request->query('attempt_uuid'));
     $attemptStats  = $toStrList($request->query('attempt_status'));
 
+    // ✅ ✅ ✅ FIX ADDED: folder filters (ID + Name)
+    $folderIds     = $toIntList($request->query('folder_id'));         // supports csv/array
+    $folderNames   = $toStrList($request->query('folder_name'));       // supports csv/array
+
     // publish filter + alias only_published
     $publish = $request->query('publish_to_student', null);
     $onlyPublished = $request->query('only_published', null);
@@ -167,7 +171,12 @@ class QuizzResultController extends Controller
         ->join('quizz_attempts as a', 'a.id', '=', 'r.attempt_id')
         ->join('quizz as qz', 'qz.id', '=', 'r.quiz_id')
         ->join('users as u', 'u.id', '=', 'r.user_id')
-        ->leftJoin('user_folders as uf', 'uf.id', '=', 'u.user_folder_id');
+
+        // ✅ ✅ ✅ FIX: folder join + deleted_at safe
+        ->leftJoin('user_folders as uf', function ($j) {
+            $j->on('uf.id', '=', 'u.user_folder_id')
+              ->whereNull('uf.deleted_at');
+        });
 
     // Soft delete guards
     $query->whereNull('u.deleted_at')
@@ -187,11 +196,34 @@ class QuizzResultController extends Controller
     if (!empty($quizUuids))     $query->whereIn('qz.uuid', $quizUuids);
     if (!empty($studentIds))    $query->whereIn('r.user_id', $studentIds);
 
-    // emails: exact OR (if you want partial match, tell me)
-    if (!empty($studentEmails)) $query->whereIn('u.email', $studentEmails);
+    // ✅ ✅ ✅ FIX: email filter should work with partial matching + multi terms
+    if (!empty($studentEmails)) {
+        $query->where(function ($w) use ($studentEmails) {
+            foreach ($studentEmails as $t) {
+                $w->orWhere('u.email', 'like', "%{$t}%");
+            }
+        });
+    }
 
     if (!empty($attemptUuids))  $query->whereIn('a.uuid', $attemptUuids);
     if (!empty($attemptStats))  $query->whereIn('a.status', $attemptStats);
+
+    // ✅ ✅ ✅ FIX: folder_id filter
+    if (!empty($folderIds)) {
+        $query->where(function ($w) use ($folderIds) {
+            $w->whereIn('u.user_folder_id', $folderIds)
+              ->orWhereIn('uf.id', $folderIds);
+        });
+    }
+
+    // ✅ ✅ ✅ FIX: folder_name filter (LIKE multi)
+    if (!empty($folderNames)) {
+        $query->where(function ($w) use ($folderNames) {
+            foreach ($folderNames as $t) {
+                $w->orWhere('uf.title', 'like', "%{$t}%");
+            }
+        });
+    }
 
     if ($publish01 !== null) {
         $query->where('r.publish_to_student', $publish01);
@@ -309,9 +341,9 @@ class QuizzResultController extends Controller
                     : null,
             ],
             'student' => [
-                'id'           => (int) $r->student_id,
-                'name'         => (string) ($r->student_name ?? ''),
-                'email'        => (string) ($r->student_email ?? ''),
+                'id'              => (int) $r->student_id,
+                'name'            => (string) ($r->student_name ?? ''),
+                'email'           => (string) ($r->student_email ?? ''),
                 'user_folder_id'   => $r->user_folder_id !== null ? (int) $r->user_folder_id : null,
                 'user_folder_name' => (string) ($r->user_folder_name ?? ''),
             ],
@@ -356,6 +388,11 @@ class QuizzResultController extends Controller
             'student_email'      => $studentEmails,
             'attempt_uuid'       => $attemptUuids,
             'attempt_status'     => $attemptStats,
+
+            // ✅ ✅ ✅ FIX: return folder filters too
+            'folder_id'          => $folderIds,
+            'folder_name'        => $folderNames,
+
             'publish_to_student' => $publish01,
             'only_published'     => $onlyPublished,
             'min_percentage'     => $minPct,
@@ -589,8 +626,9 @@ class QuizzResultController extends Controller
             ],
         ], 200);
     }
-     public function export(Request $request)
-    {
+   public function export(Request $request)
+{
+    try {
         // ========= Helpers (same as index) =========
         $clean = function ($v) {
             if ($v === null) return null;
@@ -668,6 +706,29 @@ class QuizzResultController extends Controller
             return (int)$v;
         };
 
+        // ========= Safe table/column checks =========
+        $hasUserDeletedAt = false;
+        $hasQuizDeletedAt = false;
+
+        $hasFolderTable = false;
+        $hasFolderDeletedAt = false;
+
+        $hasPhoneNumber = false;
+        $hasPhoneNo = false;
+
+        try {
+            $hasUserDeletedAt = Schema::hasColumn('users', 'deleted_at');
+            $hasQuizDeletedAt = Schema::hasColumn('quizz', 'deleted_at');
+
+            $hasFolderTable = Schema::hasTable('user_folders');
+            if ($hasFolderTable) {
+                $hasFolderDeletedAt = Schema::hasColumn('user_folders', 'deleted_at');
+            }
+
+            $hasPhoneNumber = Schema::hasColumn('users', 'phone_number');
+            $hasPhoneNo     = Schema::hasColumn('users', 'phone_no');
+        } catch (\Throwable $e) {}
+
         // ========= Search =========
         $qText = $clean($request->query('q', ''));
 
@@ -727,12 +788,19 @@ class QuizzResultController extends Controller
         $query = DB::table('quizz_results as r')
             ->join('quizz_attempts as a', 'a.id', '=', 'r.attempt_id')
             ->join('quizz as qz', 'qz.id', '=', 'r.quiz_id')
-            ->join('users as u', 'u.id', '=', 'r.user_id')
-            ->leftJoin('user_folders as uf', 'uf.id', '=', 'u.user_folder_id');
+            ->join('users as u', 'u.id', '=', 'r.user_id');
 
-        // Soft delete guards
-        $query->whereNull('u.deleted_at')
-              ->whereNull('qz.deleted_at');
+        // ✅ Folder join safe
+        if ($hasFolderTable) {
+            $query->leftJoin('user_folders as uf', function ($j) use ($hasFolderDeletedAt) {
+                $j->on('uf.id', '=', 'u.user_folder_id');
+                if ($hasFolderDeletedAt) $j->whereNull('uf.deleted_at');
+            });
+        }
+
+        // ✅ Soft delete guards (SAFE)
+        if ($hasUserDeletedAt) $query->whereNull('u.deleted_at');
+        if ($hasQuizDeletedAt) $query->whereNull('qz.deleted_at');
 
         // Search
         if ($qText !== null) {
@@ -747,7 +815,16 @@ class QuizzResultController extends Controller
         if (!empty($quizIds))       $query->whereIn('r.quiz_id', $quizIds);
         if (!empty($quizUuids))     $query->whereIn('qz.uuid', $quizUuids);
         if (!empty($studentIds))    $query->whereIn('r.user_id', $studentIds);
-        if (!empty($studentEmails)) $query->whereIn('u.email', $studentEmails);
+
+        // ✅ email terms should be OR like (more flexible)
+        if (!empty($studentEmails)) {
+            $query->where(function ($w) use ($studentEmails) {
+                foreach ($studentEmails as $t) {
+                    $w->orWhere('u.email', 'like', "%{$t}%");
+                }
+            });
+        }
+
         if (!empty($attemptUuids))  $query->whereIn('a.uuid', $attemptUuids);
         if (!empty($attemptStats))  $query->whereIn('a.status', $attemptStats);
 
@@ -787,47 +864,37 @@ class QuizzResultController extends Controller
             }
         }
 
-        // ========= Fetch All Results (no pagination for export) =========
-        $rows = $query
-            ->orderBy($orderByCol, $dir)
-            ->orderBy('r.id', 'desc')
-            ->select([
-                'r.marks_obtained',
-                'r.percentage',
-                'r.attempt_number',
+        // ========= Select Fields (SAFE PHONE + SAFE FOLDER) =========
+        $phoneSelect = DB::raw('NULL as phone_no');
+        if ($hasPhoneNumber) $phoneSelect = DB::raw('u.phone_number as phone_no');
+        else if ($hasPhoneNo) $phoneSelect = DB::raw('u.phone_no as phone_no');
 
-                'qz.quiz_name',
+        $folderSelect = DB::raw('NULL as user_folder_name');
+        if ($hasFolderTable) $folderSelect = DB::raw('uf.title as user_folder_name');
 
-                'u.name as student_name',
-                'u.email as student_email',
-                'u.phone_no',
-
-                'uf.title as user_folder_name',
-            ])
-            ->get();
-
-        if ($rows->count() === 0) {
+        // ✅ quick existence check (cheap)
+        if (!$query->clone()->limit(1)->exists()) {
             return response()->json([
                 'success' => false,
                 'message' => 'No results found to export',
             ], 404);
         }
 
-        // ========= Generate CSV =========
+        // ========= Generate CSV (STREAM) =========
         $filename = 'quiz_results_' . Carbon::now()->format('Y-m-d_His') . '.csv';
 
         $headers = [
             'Content-Type' => 'text/csv; charset=UTF-8',
             'Content-Disposition' => 'attachment; filename="' . $filename . '"',
             'Pragma' => 'no-cache',
-            'Cache-Control' => 'must-revalidate, post-check=0, pre-check=0',
+            'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
             'Expires' => '0',
         ];
 
-        $callback = function() use ($rows) {
+        $callback = function () use ($query, $orderByCol, $dir, $phoneSelect, $folderSelect) {
             $file = fopen('php://output', 'w');
 
-            // Add BOM for UTF-8 Excel compatibility
+            // BOM for Excel
             fprintf($file, chr(0xEF).chr(0xBB).chr(0xBF));
 
             // CSV Headers
@@ -842,23 +909,48 @@ class QuizzResultController extends Controller
                 'Attempt Number',
             ]);
 
-            // CSV Data Rows
-            foreach ($rows as $r) {
-                fputcsv($file, [
-                    $r->student_name ?? '',
-                    $r->phone_no ?? '',
-                    $r->student_email ?? '',
-                    $r->user_folder_name ?? '',
-                    $r->quiz_name ?? '',
-                    $r->marks_obtained,
-                    number_format($r->percentage ?? 0, 2),
-                    $r->attempt_number ?? 0,
-                ]);
-            }
+            // ✅ Chunked export (memory safe)
+            $query
+                ->orderBy($orderByCol, $dir)
+                ->orderBy('r.id', 'desc')
+                ->select([
+                    'r.id',
+                    'r.marks_obtained',
+                    'r.percentage',
+                    'r.attempt_number',
+                    'qz.quiz_name',
+                    'u.name as student_name',
+                    'u.email as student_email',
+                    $phoneSelect,
+                    $folderSelect,
+                ])
+                ->chunkById(500, function ($rows) use ($file) {
+                    foreach ($rows as $r) {
+                        fputcsv($file, [
+                            $r->student_name ?? '',
+                            $r->phone_no ?? '',
+                            $r->student_email ?? '',
+                            $r->user_folder_name ?? '',
+                            $r->quiz_name ?? '',
+                            (int)($r->marks_obtained ?? 0),
+                            number_format((float)($r->percentage ?? 0), 2),
+                            (int)($r->attempt_number ?? 0),
+                        ]);
+                    }
+                }, 'r.id');
 
             fclose($file);
         };
 
         return response()->stream($callback, 200, $headers);
+
+    } catch (\Throwable $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Server error while exporting results',
+            'error' => $e->getMessage(),
+        ], 500);
     }
+}
+
 }

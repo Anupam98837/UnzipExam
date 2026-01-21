@@ -965,7 +965,7 @@ const BUBBLE_EXPORT_API = '/api/bubble-game/result/export';
   const bulk = {
     mode: false,
     filtersActive: false,
-filters: { game_id:'', attempt_status:'', publish_to_student:'', from:'', to:'', folder_name:'' },
+filters: { game_id:'', attempt_status:'', publish_to_student:'', from:'', to:'', folder_id:'' },
     selected: new Map(), // id -> {pub, uuid}
   };
 
@@ -1092,6 +1092,10 @@ async function patchPublishAny(resultId, resultUuid, publishVal){
 /* ============================================================
  * ✅ EXPORT (CSV Download with Bearer Token)
  * ============================================================ */
+/* ============================================================
+ * ✅ EXPORT (CSV Download with Bearer Token) — FIXED
+ *   ✅ Uses folder_id (not folder_name) so filtered export works
+ * ============================================================ */
 function buildExportParams(scope){
   const usp = new URLSearchParams();
 
@@ -1115,7 +1119,9 @@ function buildExportParams(scope){
 
   if (fGameUuid && fGameUuid.value.trim()) usp.set('game_uuid', fGameUuid.value.trim());
   if (fStudentEmail && fStudentEmail.value.trim()) usp.set('student_email', fStudentEmail.value.trim());
-  if (fFolderName && fFolderName.value.trim()) usp.set('folder_name', fFolderName.value.trim());
+
+  // ✅ ✅ FIX: Folder dropdown value is folder_id (numeric)
+  if (fFolderName && fFolderName.value) usp.set('folder_id', fFolderName.value);
 
   // ✅ If bulk mode active, export that filtered selection list
   if (bulk.mode && bulk.filtersActive){
@@ -1124,7 +1130,9 @@ function buildExportParams(scope){
     if (bulk.filters.publish_to_student !== '') usp.set('publish_to_student', bulk.filters.publish_to_student);
     if (bulk.filters.from) usp.set('from', bulk.filters.from);
     if (bulk.filters.to) usp.set('to', bulk.filters.to);
-    if (bulk.filters.folder_name) usp.set('folder_name', bulk.filters.folder_name);
+
+    // ✅ ✅ FIX: bulk folder should be folder_id also
+    if (bulk.filters.folder_id) usp.set('folder_id', bulk.filters.folder_id);
   }
 
   // tab specific (published/unpublished)
@@ -1241,7 +1249,7 @@ btnExport?.addEventListener('click', (e)=>{
 
       // ✅ exit bulk mode after action
       bulk.filtersActive = false;
-bulk.filters = { game_id:'', attempt_status:'', publish_to_student:'', from:'', to:'', folder_name:'' };
+bulk.filters = { game_id:'', attempt_status:'', publish_to_student:'', from:'', to:'', folder_id:'' };
 
       clearBulkSelection();
       setBulkMode(false);
@@ -1274,28 +1282,36 @@ bulk.filters = { game_id:'', attempt_status:'', publish_to_student:'', from:'', 
     if (!Array.isArray(folders) || folders.length === 0) return;
 
     // ✅ normalize names (title/name/folder_name)
-    const names = folders
-      .map(f => (f?.title || f?.name || f?.folder_name || '').trim())
-      .filter(Boolean);
+    const normalized = folders
+  .map(f => ({
+    id: f?.id ?? '',
+    title: (f?.title || f?.name || f?.folder_name || '').trim()
+  }))
+  .filter(x => x.id && x.title);
 
-    // ✅ unique + sort
-    const unique = Array.from(new Set(names)).sort((a, b) => a.localeCompare(b));
+// ✅ unique by id
+const map = new Map();
+normalized.forEach(x => map.set(String(x.id), x.title));
 
-    const fill = (sel) => {
-      if (!sel) return;
-      // keep first option ("All folders") only
-      while (sel.options.length > 1) sel.remove(1);
+const finalList = Array.from(map.entries())
+  .map(([id, title]) => ({ id, title }))
+  .sort((a, b) => a.title.localeCompare(b.title));
 
-      unique.forEach(n => {
-        const opt = document.createElement('option');
-        opt.value = n;          // ✅ value = folder_name
-        opt.textContent = n;
-        sel.appendChild(opt);
-      });
-    };
+const fill = (sel) => {
+  if (!sel) return;
+  while (sel.options.length > 1) sel.remove(1);
 
-    fill(fFolderName);
-    fill(bm.folder);
+  finalList.forEach(f => {
+    const opt = document.createElement('option');
+    opt.value = f.id;          // ✅ NOW value = folder_id
+    opt.textContent = f.title; // ✅ show title to user
+    sel.appendChild(opt);
+  });
+};
+
+fill(fFolderName);
+fill(bm.folder);
+
 
   } catch (e) {
     console.error('Failed to load folders:', e);
@@ -1353,7 +1369,7 @@ bulk.filters = { game_id:'', attempt_status:'', publish_to_student:'', from:'', 
 
     if (fGameUuid && fGameUuid.value.trim()) usp.set('game_uuid', fGameUuid.value.trim());
     if (fStudentEmail && fStudentEmail.value.trim()) usp.set('student_email', fStudentEmail.value.trim());
-    if (fFolderName && fFolderName.value.trim()) usp.set('folder_name', fFolderName.value.trim());
+if (fFolderName && fFolderName.value) usp.set('folder_id', fFolderName.value);
 
     // ✅ Bulk filters override
     if (bulk.mode && bulk.filtersActive){
@@ -1362,7 +1378,7 @@ bulk.filters = { game_id:'', attempt_status:'', publish_to_student:'', from:'', 
       if (bulk.filters.publish_to_student !== '') usp.set('publish_to_student', bulk.filters.publish_to_student);
       if (bulk.filters.from) usp.set('from', bulk.filters.from);
       if (bulk.filters.to) usp.set('to', bulk.filters.to);
-      if (bulk.filters.folder_name) usp.set('folder_name', bulk.filters.folder_name);
+if (bulk.filters.folder_id) usp.set('folder_id', bulk.filters.folder_id);
 
     }
 
@@ -1701,7 +1717,7 @@ filterModalEl?.addEventListener('hidden.bs.modal', ()=>{
     if (bm.publish?.value !== '') usp.set('publish_to_student', bm.publish.value);
     if (bm.from?.value) usp.set('from', bm.from.value);
     if (bm.to?.value) usp.set('to', bm.to.value);
-    if (bm.folder?.value) usp.set('folder_name', bm.folder.value);
+if (bm.folder?.value) usp.set('folder_id', bm.folder.value);
 
     if (q && q.value.trim()) usp.set('q', q.value.trim());
     return usp.toString();
@@ -1784,7 +1800,7 @@ const hasSafe = !!(bm.game?.value || bm.status?.value || (bm.publish?.value !== 
       publish_to_student: (bm.publish?.value !== '') ? bm.publish.value : '',
       from: bm.from?.value || '',
       to: bm.to?.value || '',
-        folder_name: bm.folder?.value || '',
+folder_id: bm.folder?.value || '',
     };
 
     clearBulkSelection();

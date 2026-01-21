@@ -242,7 +242,7 @@ private function normalizeRole(?string $role): string
     $gameUuids     = $toStrList($request->query('game_uuid'));
     $userIds       = $toIntList($request->query('user_id'));
     $attemptNos    = $toIntList($request->query('attempt_no'));
-    $folderIds     = $toIntList($request->query('folder_id'));
+    // $folderIds     = $toIntList($request->query('folder_id'));
     $folderNames   = $toStrList($request->query('folder_name'));
     $emailTerms    = $toStrList($request->query('student_email'));
 
@@ -257,6 +257,19 @@ private function normalizeRole(?string $role): string
     if ($role !== 'student') {
         $publish01 = $toBool01($request->query('publish_to_student'));
     }
+    // ✅ folder_id filter (robust + supports both folder_id & user_folder_id)
+$folderIds      = $toIntList($request->query('folder_id'));
+$userFolderIds  = $toIntList($request->query('user_folder_id'));
+
+$mergedFolderIds = array_values(array_unique(array_merge($folderIds, $userFolderIds)));
+
+if (!empty($mergedFolderIds)) {
+    $query->where(function ($w) use ($mergedFolderIds) {
+        $w->whereIn('u.user_folder_id', $mergedFolderIds)
+          ->orWhereIn('uf.id', $mergedFolderIds);
+    });
+}
+
 
     // ✅ Apply filters together (AND)
     if (!empty($gameIds))   $query->whereIn('r.bubble_game_id', $gameIds);
@@ -283,7 +296,10 @@ private function normalizeRole(?string $role): string
 
     // ✅ folder_id filter
     if (!empty($folderIds)) {
-        $query->whereIn('u.user_folder_id', $folderIds);
+$query->where(function($w) use ($folderIds){
+    $w->whereIn('u.user_folder_id', $folderIds)
+      ->orWhereIn('uf.id', $folderIds);
+});
     }
 
     // ✅ my_results (token safe)
@@ -1724,240 +1740,6 @@ private function userAssignedToBubbleGame(int $userId, int $gameId): bool
         ->where('status', 'active')
         ->exists();
 }
-/**
- * EXPORT Bubble Game Result (DOCX preferred, fallback HTML)
- * GET /api/bubble-game-results/export/{resultKey}?format=docx|html
- *
- * - student: can export ONLY own result
- * - admin/super_admin: can export any
- * - instructor/examiner: (optional) assignment check (TEMP uses user_bubble_game_assignments)
- */
-public function export(Request $request, string $resultKey)
-{
-    if ($resp = $this->requireRole($request, ['student','instructor','examiner','admin','super_admin'])) {
-        return $resp;
-    }
-
-    $actor = $this->actor($request);
-    $role  = $this->normalizeRole($actor['role'] ?? '');
-    $userId= (int) ($actor['id'] ?? 0);
-
-    if ($userId <= 0) {
-        return response()->json(['success'=>false,'message'=>'Unauthorized'], 401);
-    }
-
-    // ---------- 1) Load result + game + student ----------
-    $row = DB::table('bubble_game_results as r')
-        ->join('bubble_game as g', 'g.id', '=', 'r.bubble_game_id')
-        ->join('users as u', 'u.id', '=', 'r.user_id')
-        ->whereNull('r.deleted_at')
-        ->whereNull('g.deleted_at')
-        ->where(function ($w) use ($resultKey) {
-            if (is_numeric($resultKey)) {
-                $w->where('r.id', (int)$resultKey);
-            } else {
-                $w->where('r.uuid', (string)$resultKey);
-            }
-        })
-        ->select([
-            'r.id as result_id',
-            'r.uuid as result_uuid',
-            'r.user_id',
-            'r.bubble_game_id',
-            'r.attempt_no',
-            'r.score',
-            'r.user_answer_json',
-            'r.created_at as result_created_at',
-
-            'g.id as game_id',
-            'g.uuid as game_uuid',
-            'g.title as game_title',
-            'g.description as game_description',
-            'g.max_attempts',
-            'g.per_question_time_sec',
-            'g.allow_skip',
-
-            'u.name as student_name',
-            'u.email as student_email',
-        ])
-        ->first();
-
-    if (!$row) {
-        return response()->json(['success'=>false,'message'=>'Result not found'], 404);
-    }
-
-    // ---------- 2) Ownership / assignment guards ----------
-    if ($role === 'student' && (int)$row->user_id !== $userId) {
-        return response()->json(['success'=>false,'message'=>'Forbidden'], 403);
-    }
-
-    // TEMP assignment check for instructor/examiner (remove if you don't want)
-    if (in_array($role, ['instructor','examiner'], true)) {
-        $assigned = DB::table('user_bubble_game_assignments')
-            ->where('bubble_game_id', (int)$row->game_id)
-            ->where('user_id', $userId)
-            ->whereNull('deleted_at')
-            ->where('status', 'active')
-            ->exists();
-
-        if (!$assigned) {
-            return response()->json(['success'=>false,'message'=>'You are not assigned to this bubble game'], 403);
-        }
-    }
-
-    // ---------- 3) Decode snapshot ----------
-    try {
-        $snapshot = json_decode($row->user_answer_json ?? '[]', true) ?: [];
-    } catch (\Throwable $e) {
-        $snapshot = [];
-    }
-
-    $snapByUuid = [];
-    foreach ($snapshot as $s) {
-        if (!empty($s['question_uuid'])) $snapByUuid[(string)$s['question_uuid']] = $s;
-    }
-
-    // ---------- 4) Load questions ----------
-    $questions = DB::table('bubble_game_questions')
-        ->where('bubble_game_id', (int)$row->game_id)
-        ->orderBy('order_no')
-        ->get();
-
-    // Build export rows
-    $items = [];
-    $totalCorrect = 0;
-    $totalWrong   = 0;
-    $totalSkipped = 0;
-
-    foreach ($questions as $q) {
-        $qUuid = (string)$q->uuid;
-        $snap  = $snapByUuid[$qUuid] ?? null;
-
-        $isCorrect = ($snap['is_correct'] ?? null) === 'yes';
-        $isSkipped = ($snap['is_skipped'] ?? null) === 'yes';
-
-        if ($isSkipped) $totalSkipped++;
-        else if ($isCorrect) $totalCorrect++;
-        else if (($snap['is_correct'] ?? null) !== null) $totalWrong++;
-
-        $correctSeq = $q->answer_sequence_json ? json_decode($q->answer_sequence_json, true) : null;
-        $selected   = $snap['selected'] ?? null;
-
-        $items[] = [
-            'no'            => (int)($q->order_no ?? 0),
-            'question'      => (string)($q->title ?? ''),
-            'type'          => (string)($q->select_type ?? ''),
-            'your_answer'   => is_array($selected) ? json_encode($selected, JSON_UNESCAPED_UNICODE) : (string)($selected ?? '—'),
-            'correct_order' => $correctSeq !== null
-                                ? (is_array($correctSeq) ? json_encode($correctSeq, JSON_UNESCAPED_UNICODE) : (string)$correctSeq)
-                                : '—',
-            'is_correct'    => $snap['is_correct'] ?? null,
-            'is_skipped'    => $snap['is_skipped'] ?? null,
-            'spent_time_sec'=> $snap['spent_time_sec'] ?? null,
-        ];
-    }
-
-    $format = strtolower((string)$request->query('format', 'docx'));
-    $safeName = 'bubble_game_result_'.$row->result_id;
-
-    // ---------- 5) DOCX via PhpWord if available ----------
-    if ($format === 'docx') {
-        if (class_exists(\PhpOffice\PhpWord\PhpWord::class)) {
-            $phpWord = new \PhpOffice\PhpWord\PhpWord();
-            $section = $phpWord->addSection();
-
-            $section->addText('Bubble Game Result', ['bold'=>true,'size'=>16]);
-            $section->addTextBreak(1);
-
-            $section->addText('Game: '.$row->game_title, ['bold'=>true]);
-            $section->addText('Student: '.$row->student_name.' ('.$row->student_email.')', ['size'=>11]);
-            $section->addText('Attempt #: '.$row->attempt_no, ['size'=>11]);
-            $section->addText('Score: '.$row->score, ['size'=>11]);
-            $section->addText('Result At: '.($row->result_created_at ? \Carbon\Carbon::parse($row->result_created_at)->toDayDateTimeString() : '—'), ['size'=>11]);
-            $section->addTextBreak(1);
-
-            $section->addText("Correct: {$totalCorrect}   Wrong: {$totalWrong}   Skipped: {$totalSkipped}", ['size'=>11]);
-            $section->addTextBreak(1);
-
-            $table = $section->addTable(['borderSize'=>6,'borderColor'=>'cccccc','cellMargin'=>60]);
-            $table->addRow();
-            foreach (['Q#','Question','Your Answer','Correct Order','Correct?','Skipped?','Time(sec)'] as $col) {
-                $table->addCell(2000)->addText($col, ['bold'=>true]);
-            }
-
-            foreach ($items as $it) {
-                $table->addRow();
-                $table->addCell(700)->addText((string)$it['no']);
-                $table->addCell(6000)->addText(strip_tags($it['question']));
-                $table->addCell(4000)->addText($it['your_answer'] !== '' ? $it['your_answer'] : '—');
-                $table->addCell(4000)->addText($it['correct_order'] !== '' ? $it['correct_order'] : '—');
-                $table->addCell(1400)->addText((string)($it['is_correct'] ?? '—'));
-                $table->addCell(1400)->addText((string)($it['is_skipped'] ?? '—'));
-                $table->addCell(1400)->addText($it['spent_time_sec'] !== null ? (string)$it['spent_time_sec'] : '—');
-            }
-
-            $tmp = tempnam(sys_get_temp_dir(), 'bgr_').'.docx';
-            $phpWord->save($tmp, 'Word2007');
-
-            return response()->download($tmp, $safeName.'.docx')->deleteFileAfterSend(true);
-        }
-
-        // fallback to HTML if PhpWord not installed
-        $format = 'html';
-    }
-
-    // ---------- 6) HTML fallback (Word-compatible if you want) ----------
-    $html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>'.$safeName.'</title>
-    <style>
-      body{font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#111}
-      h1{font-size:18px;margin:0 0 8px}
-      .meta{margin:0 0 10px}
-      table{border-collapse:collapse;width:100%}
-      th,td{border:1px solid #ccc;padding:6px;vertical-align:top}
-      th{background:#f5f5f5}
-      .muted{color:#555}
-    </style></head><body>';
-
-    $html .= '<h1>Bubble Game Result</h1>';
-    $html .= '<div class="meta"><b>Game:</b> '.htmlspecialchars($row->game_title).'<br>';
-    $html .= '<b>Student:</b> '.htmlspecialchars($row->student_name).' ('.htmlspecialchars($row->student_email).')<br>';
-    $html .= '<b>Attempt #:</b> '.(int)$row->attempt_no.'<br>';
-    $html .= '<b>Score:</b> '.(int)$row->score.'<br>';
-    $html .= '<b>Result At:</b> '.($row->result_created_at ? htmlspecialchars(Carbon::parse($row->result_created_at)->toDayDateTimeString()) : '—').'<br>';
-    $html .= '<b>Correct:</b> '.$totalCorrect.' &nbsp; <b>Wrong:</b> '.$totalWrong.' &nbsp; <b>Skipped:</b> '.$totalSkipped.'</div>';
-
-    $html .= '<table><thead><tr>
-        <th style="width:60px">Q#</th>
-        <th>Question</th>
-        <th>Your Answer</th>
-        <th>Correct Order</th>
-        <th style="width:80px">Correct?</th>
-        <th style="width:80px">Skipped?</th>
-        <th style="width:90px">Time(sec)</th>
-      </tr></thead><tbody>';
-
-    foreach ($items as $it) {
-        $html .= '<tr>';
-        $html .= '<td>'.(int)$it['no'].'</td>';
-        $html .= '<td>'.htmlspecialchars(strip_tags((string)$it['question'])).'</td>';
-        $html .= '<td>'.htmlspecialchars((string)($it['your_answer'] ?? '—')).'</td>';
-        $html .= '<td>'.htmlspecialchars((string)($it['correct_order'] ?? '—')).'</td>';
-        $html .= '<td>'.htmlspecialchars((string)($it['is_correct'] ?? '—')).'</td>';
-        $html .= '<td>'.htmlspecialchars((string)($it['is_skipped'] ?? '—')).'</td>';
-        $html .= '<td>'.htmlspecialchars($it['spent_time_sec'] !== null ? (string)$it['spent_time_sec'] : '—').'</td>';
-        $html .= '</tr>';
-    }
-    $html .= '</tbody></table>';
-    $html .= '<p class="muted">Exported on '.htmlspecialchars(now()->toDateTimeString()).'</p>';
-    $html .= '</body></html>';
-
-    // If you want Word download: change content-type + filename to .doc
-    return response($html, 200, [
-        'Content-Type' => 'text/html; charset=utf-8',
-        'Content-Disposition' => 'attachment; filename="'.$safeName.'.html"',
-    ]);
-}
-
   // ✅ NEW: Publish / Unpublish (single)
     public function setPublishToStudent(Request $request, string $resultKey)
     {
@@ -2072,8 +1854,8 @@ public function export(Request $request, string $resultKey)
  * GET /api/bubble-game/result/export
  *
  * Export filtered bubble game results as CSV
- * 
- * Supports all the same filters as index():
+ *
+ * Supports all same filters as index():
  *  - bubble_game_id, game_uuid, user_id, student_email
  *  - folder_id, folder_name, attempt_no
  *  - q, search, from, to
@@ -2081,7 +1863,7 @@ public function export(Request $request, string $resultKey)
  *  - min_percentage, max_percentage
  *  - my_results
  *  - sort
- * 
+ *
  * Exported columns:
  *  - Student Name
  *  - Email
@@ -2099,7 +1881,7 @@ public function exportResults(Request $request)
         // ✅ token-safe actor
         $actor  = $this->actor($request);
         $role   = $this->normalizeRole($actor['role'] ?? '');
-        $userId = (int)($actor['id'] ?? 0);
+        $userId = (int) ($actor['id'] ?? 0);
 
         /*
         |--------------------------------------------------------------------------
@@ -2180,7 +1962,7 @@ public function exportResults(Request $request)
 
         /*
         |--------------------------------------------------------------------------
-        | ✅ Accuracy % expression
+        | ✅ Accuracy % expression (same as index)
         |--------------------------------------------------------------------------
         */
         $pctExpr = "(CASE
@@ -2197,30 +1979,38 @@ public function exportResults(Request $request)
         $query = DB::table('bubble_game_results as r')
             ->join('bubble_game as g', 'r.bubble_game_id', '=', 'g.id')
             ->join('users as u', 'r.user_id', '=', 'u.id')
+
+            // ✅ folder join
             ->leftJoin('user_folders as uf', function ($j) {
                 $j->on('uf.id', '=', 'u.user_folder_id')
                   ->whereNull('uf.deleted_at');
             })
+
             ->leftJoinSub($qStats, 'qs', function ($j) {
                 $j->on('qs.bubble_game_id', '=', 'g.id');
             })
+
             ->whereNull('r.deleted_at')
             ->whereNull('u.deleted_at')
             ->whereNull('g.deleted_at')
+
             ->select([
                 'u.name as student_name',
                 'u.email as student_email',
-              'u.phone_number as phone_no',
-                
+                'u.phone_number as phone_no',
+
+                // ✅ folder title
                 'uf.title as folder_title',
-                
+
                 'g.title as game_title',
                 'g.per_question_time_sec',
-                
+
                 'r.score',
                 'r.attempt_no',
                 'r.user_answer_json',
-                
+                'r.publish_to_student',
+                'r.created_at as result_created_at',
+
                 DB::raw('COALESCE(qs.total_questions,0) as total_questions'),
                 DB::raw('COALESCE(qs.total_points,0) as total_points'),
                 DB::raw("ROUND($pctExpr, 2) as accuracy_pct"),
@@ -2238,32 +2028,37 @@ public function exportResults(Request $request)
 
         /*
         |--------------------------------------------------------------------------
-        | ✅ Apply all filters (same as index)
+        | ✅ Read Filters
         |--------------------------------------------------------------------------
         */
-        $gameIds       = $toIntList($request->query('bubble_game_id'));
-        $gameUuids     = $toStrList($request->query('game_uuid'));
-        $userIds       = $toIntList($request->query('user_id'));
-        $attemptNos    = $toIntList($request->query('attempt_no'));
-        $folderIds     = $toIntList($request->query('folder_id'));
-        $folderNames   = $toStrList($request->query('folder_name'));
-        $emailTerms    = $toStrList($request->query('student_email'));
+        $gameIds    = $toIntList($request->query('bubble_game_id'));
+        $gameUuids  = $toStrList($request->query('game_uuid'));
+        $userIds    = $toIntList($request->query('user_id'));
+        $attemptNos = $toIntList($request->query('attempt_no'));
+        $emailTerms = $toStrList($request->query('student_email'));
 
+        // ✅ min/max percentage
         $minPct = $clean($request->query('min_percentage'));
         $maxPct = $clean($request->query('max_percentage'));
         $minPct = is_numeric($minPct) ? (float)$minPct : null;
         $maxPct = is_numeric($maxPct) ? (float)$maxPct : null;
 
+        // ✅ publish filter (admin only)
         $publish01 = null;
         if ($role !== 'student') {
             $publish01 = $toBool01($request->query('publish_to_student'));
         }
 
-        // Apply filters
+        /*
+        |--------------------------------------------------------------------------
+        | ✅ Apply Filters
+        |--------------------------------------------------------------------------
+        */
         if (!empty($gameIds))   $query->whereIn('r.bubble_game_id', $gameIds);
         if (!empty($gameUuids)) $query->whereIn('g.uuid', $gameUuids);
         if (!empty($userIds))   $query->whereIn('r.user_id', $userIds);
 
+        // ✅ email LIKE (multi terms)
         if (!empty($emailTerms)) {
             $query->where(function ($w) use ($emailTerms) {
                 foreach ($emailTerms as $t) {
@@ -2272,31 +2067,49 @@ public function exportResults(Request $request)
             });
         }
 
-        if (!empty($folderNames)) {
-            $query->where(function ($w) use ($folderNames) {
-                foreach ($folderNames as $t) {
-                    $w->orWhere('uf.title', 'like', "%{$t}%");
-                }
-            });
+        /*
+        |--------------------------------------------------------------------------
+        | ✅ ✅ Folder Filter (THE REAL FIX)
+        | Priority:
+        |   1) folder_id / user_folder_id (EXACT MATCH) ✅ recommended
+        |   2) folder_name (LIKE) ✅ only if folder_id not present
+        |--------------------------------------------------------------------------
+        */
+        $folderIds      = $toIntList($request->query('folder_id'));
+        $userFolderIds  = $toIntList($request->query('user_folder_id'));
+        $mergedFolderIds = array_values(array_unique(array_merge($folderIds, $userFolderIds)));
+
+        if (!empty($mergedFolderIds)) {
+            // ✅ Best exact match
+            $query->whereIn('u.user_folder_id', $mergedFolderIds);
+        } else {
+            // ✅ ONLY apply folder_name if folder_id not used
+            $folderNames = $toStrList($request->query('folder_name'));
+            if (!empty($folderNames)) {
+                $query->where(function ($w) use ($folderNames) {
+                    foreach ($folderNames as $t) {
+                        $w->orWhere('uf.title', 'like', "%{$t}%");
+                    }
+                });
+            }
         }
 
-        if (!empty($folderIds)) {
-            $query->whereIn('u.user_folder_id', $folderIds);
-        }
-
+        // ✅ my_results
         if ($request->boolean('my_results') && $userId > 0) {
             $query->where('r.user_id', $userId);
         }
 
+        // ✅ attempt_no (multi)
         if (!empty($attemptNos)) {
             $query->whereIn('r.attempt_no', $attemptNos);
         }
 
+        // ✅ publish filter
         if ($publish01 !== null) {
             $query->where('r.publish_to_student', $publish01);
         }
 
-        // Percentage filter
+        // ✅ percentage filter
         if ($minPct !== null && $maxPct !== null) {
             if ($minPct > $maxPct) { $tmp = $minPct; $minPct = $maxPct; $maxPct = $tmp; }
             $query->whereRaw("$pctExpr BETWEEN ? AND ?", [$minPct, $maxPct]);
@@ -2305,7 +2118,7 @@ public function exportResults(Request $request)
             if ($maxPct !== null) $query->whereRaw("$pctExpr <= ?", [$maxPct]);
         }
 
-        // Date range
+        // ✅ Date range
         $from = $clean($request->query('from'));
         $to   = $clean($request->query('to'));
 
@@ -2325,7 +2138,7 @@ public function exportResults(Request $request)
             } catch (\Throwable $e) {}
         }
 
-        // Search
+        // ✅ Search (q/search)
         $search = trim((string) ($request->query('q') ?? $request->query('search') ?? ''));
         $search = $clean($search);
 
@@ -2334,7 +2147,6 @@ public function exportResults(Request $request)
                 $w->where('u.name', 'like', "%{$search}%")
                   ->orWhere('u.email', 'like', "%{$search}%")
                   ->orWhere('g.title', 'like', "%{$search}%")
-                  ->orWhere('r.uuid', 'like', "%{$search}%")
                   ->orWhere('uf.title', 'like', "%{$search}%");
             });
         }
@@ -2355,6 +2167,7 @@ public function exportResults(Request $request)
             'accuracy'           => DB::raw($pctExpr),
             'result_created_at'  => 'r.created_at',
             'attempt_no'         => 'r.attempt_no',
+            'publish_to_student' => 'r.publish_to_student',
             'folder_title'       => 'uf.title',
         ];
 
@@ -2383,20 +2196,20 @@ public function exportResults(Request $request)
         $filename = 'bubble_game_results_' . Carbon::now()->format('Y-m-d_His') . '.csv';
 
         $headers = [
-            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Type'        => 'text/csv; charset=UTF-8',
             'Content-Disposition' => 'attachment; filename="' . $filename . '"',
-            'Pragma' => 'no-cache',
-            'Cache-Control' => 'must-revalidate, post-check=0, pre-check=0',
-            'Expires' => '0',
+            'Pragma'              => 'no-cache',
+            'Cache-Control'       => 'must-revalidate, post-check=0, pre-check=0',
+            'Expires'             => '0',
         ];
 
-        $callback = function() use ($rows) {
+        $callback = function () use ($rows) {
             $file = fopen('php://output', 'w');
 
-            // Add BOM for UTF-8 Excel compatibility
+            // ✅ UTF-8 BOM for Excel
             fprintf($file, chr(0xEF).chr(0xBB).chr(0xBF));
 
-            // CSV Headers
+            // ✅ CSV headers
             fputcsv($file, [
                 'Student Name',
                 'Email',
@@ -2409,11 +2222,10 @@ public function exportResults(Request $request)
                 'Time Taken (sec)',
             ]);
 
-            // CSV Data Rows
             foreach ($rows as $r) {
-                $percentage = isset($r->accuracy_pct) ? (float)$r->accuracy_pct : 0;
-                
-                // Calculate time taken from user_answer_json
+                $percentage = isset($r->accuracy_pct) ? (float) $r->accuracy_pct : 0;
+
+                // ✅ Time taken (sum spent_time_sec)
                 $timeTakenSec = 0;
                 if (!empty($r->user_answer_json)) {
                     try {
@@ -2421,7 +2233,7 @@ public function exportResults(Request $request)
                         if (is_array($answers)) {
                             foreach ($answers as $answer) {
                                 if (isset($answer['spent_time_sec']) && is_numeric($answer['spent_time_sec'])) {
-                                    $timeTakenSec += (int)$answer['spent_time_sec'];
+                                    $timeTakenSec += (int) $answer['spent_time_sec'];
                                 }
                             }
                         }
@@ -2437,8 +2249,8 @@ public function exportResults(Request $request)
                     $r->folder_title ?? '',
                     $r->game_title ?? '',
                     number_format($percentage, 2),
-                    (int)($r->score ?? 0),
-                    (int)($r->attempt_no ?? 0),
+                    (int) ($r->score ?? 0),
+                    (int) ($r->attempt_no ?? 0),
                     $timeTakenSec,
                 ]);
             }
@@ -2452,8 +2264,9 @@ public function exportResults(Request $request)
         return response()->json([
             'success' => false,
             'message' => 'Server error while exporting results',
-            'error' => $e->getMessage(),
+            'error'   => $e->getMessage(),
         ], 500);
     }
 }
+
 }

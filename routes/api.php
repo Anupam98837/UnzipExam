@@ -62,7 +62,7 @@ Route::middleware(['checkRole:admin,super_admin,student,examiner'])->group(funct
     Route::get ('/users/{id}/quizzes',          [UserController::class, 'userQuizzes']);
     Route::post('/users/{id}/quizzes/assign',   [UserController::class, 'assignQuiz']);
     Route::post('/users/{id}/quizzes/unassign', [UserController::class, 'unassignQuiz']);
-
+    Route::post('/users/{uuid}/cv',              [UserController::class, 'uploadCvByUuid']);
     Route::post('/users/import-csv',             [UserController::class, 'importUsersCsv']);
 
 });

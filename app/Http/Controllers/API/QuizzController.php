@@ -1047,4 +1047,4 @@ public function index(Request $r)
             ],
         ]);
     }
-     }
+ }

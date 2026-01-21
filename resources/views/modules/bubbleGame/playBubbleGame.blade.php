@@ -1958,7 +1958,9 @@ function buildModalTextFromGame(game){
       confirmButtonText: 'Leave',
       cancelButtonText: 'Stay',
     });
-    if (r.isConfirmed) window.location.href = DASHBOARD_URL;
+    if (r.isConfirmed) 
+      state.suppressUnloadPrompt = true;
+      window.location.href = DASHBOARD_URL;
   });
 
   elModalStartBtn.addEventListener('click', () => {
@@ -1978,12 +1980,16 @@ function buildModalTextFromGame(game){
     });
     if (!r.isConfirmed) return;
     clearCache();
+    state.suppressUnloadPrompt = true;
+
     location.reload();
   });
 
   async function submitExamNow(isAuto=false){
     if (state.isSubmitting) return;
     state.isSubmitting = true;
+  state.suppressUnloadPrompt = true;
+
 
     try{
       [elPrevBtn, elNextBtn, elUndoBtn, elClearBtn, elSkipBtn, elSubmitBtn].forEach(b => {
@@ -2020,6 +2026,8 @@ function buildModalTextFromGame(game){
       setTimeout(() => window.location.href = DASHBOARD_URL, 900);
 
     } catch(err){
+            state.suppressUnloadPrompt = false;
+
       Swal.close();
 
       [elPrevBtn, elNextBtn, elUndoBtn, elClearBtn, elSkipBtn, elSubmitBtn].forEach(b => {
@@ -2062,13 +2070,16 @@ function buildModalTextFromGame(game){
   });
 
   function beforeUnloadHandler(e) {
-    const has = countAnswered() > 0 || state.currentSelection.length > 0;
-    if (!has) return;
+  // ✅ Do NOT show browser alert during submit/auto-submit/redirect actions
+  if (state.suppressUnloadPrompt === true) return;
 
-    e.preventDefault();
-    e.returnValue = '';
-  }
-  window.addEventListener('beforeunload', beforeUnloadHandler);
+  const has = countAnswered() > 0 || state.currentSelection.length > 0;
+  if (!has) return;
+
+  e.preventDefault();
+  e.returnValue = '';
+}
+window.addEventListener('beforeunload', beforeUnloadHandler);
 
   async function init(){
     if (!GAME_UUID){

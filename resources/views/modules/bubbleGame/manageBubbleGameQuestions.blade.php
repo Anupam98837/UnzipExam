@@ -1342,12 +1342,80 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // ✅ whenever select type changes -> auto arrange
   elements.qSelectType?.addEventListener('change', () => autoArrangeAnswers());
+  function sanitizeGameDesc(raw) {
+  if (!raw) return '';
+
+  const str = String(raw);
+
+  // If it's plain text, keep it safe and support new lines
+  const looksLikeHtml = /<\/?[a-z][\s\S]*>/i.test(str);
+  if (!looksLikeHtml) {
+    return escapeHtml(str).replace(/\n/g, '<br>');
+  }
+
+  // If it contains HTML → sanitize (allowlist)
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(str, 'text/html');
+
+  const allowedTags = new Set([
+    'B','STRONG','I','EM','U','BR',
+    'P','DIV','SPAN',
+    'UL','OL','LI',
+    'CODE','PRE','SMALL',
+    'H1','H2','H3','H4','H5','H6',
+    'A'
+  ]);
+
+  const killTags = doc.body.querySelectorAll('script,style,iframe,object,embed,link,meta');
+  killTags.forEach(n => n.remove());
+
+  const all = Array.from(doc.body.querySelectorAll('*'));
+  all.forEach(el => {
+    // remove any non-allowed tag but keep its text
+    if (!allowedTags.has(el.tagName)) {
+      const txt = doc.createTextNode(el.textContent || '');
+      el.replaceWith(txt);
+      return;
+    }
+
+    // strip unsafe attributes
+    Array.from(el.attributes).forEach(attr => {
+      const name = attr.name.toLowerCase();
+
+      // remove inline JS handlers like onclick=
+      if (name.startsWith('on')) {
+        el.removeAttribute(attr.name);
+        return;
+      }
+
+      // only allow href on <a>
+      if (el.tagName === 'A' && name === 'href') {
+        const href = (el.getAttribute('href') || '').trim();
+        if (!/^(https?:|mailto:|tel:|\/)/i.test(href)) {
+          el.removeAttribute('href');
+        } else {
+          el.setAttribute('target', '_blank');
+          el.setAttribute('rel', 'noopener noreferrer');
+        }
+        return;
+      }
+
+      // remove everything else (class/style/data-* etc)
+      el.removeAttribute(attr.name);
+    });
+  });
+
+  return (doc.body.innerHTML || '').trim();
+}
 
   // ========= Game & Questions =========
   function updateGameHeader() {
     if (!gameData) return;
     elements.gameTitle.textContent = gameData.title || 'Untitled Game';
-    elements.gameDesc.textContent = gameData.description || 'No description provided';
+const desc = gameData.description || '';
+elements.gameDesc.innerHTML = desc
+  ? sanitizeGameDesc(desc)
+  : 'No description provided';
     elements.perQuestionTime.textContent = `${gameData.per_question_time_sec || 30}s`;
     elements.maxAttempts.textContent = gameData.max_attempts || 1;
     elements.pointsCorrect.textContent = gameData.points_correct || 1;

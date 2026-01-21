@@ -2339,7 +2339,8 @@ public function export(Request $request)
         $select = [
             'u.name as student_name',
             'u.email as student_email',
-            'u.phone_no',
+            'u.phone_number as phone_no',
+
 
             'dg.title as game_title',
             'dg.time_limit_sec',

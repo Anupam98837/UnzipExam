@@ -2210,7 +2210,7 @@ public function exportResults(Request $request)
             ->select([
                 'u.name as student_name',
                 'u.email as student_email',
-                'u.phone_no',
+              'u.phone_number as phone_no',
                 
                 'uf.title as folder_title',
                 

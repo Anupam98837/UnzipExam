@@ -861,6 +861,7 @@ html.theme-dark .badge-code{
             <select class="form-select" id="userRole" required>
               <option value="">Select Role</option>
               <option value="super_admin">Super Admin</option>
+              <option value="admin">Admin</option>
               <option value="examiner">Examiner</option>
               <option value="student">Student</option>
             </select>

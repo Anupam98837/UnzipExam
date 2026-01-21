@@ -984,6 +984,11 @@ public function myQuizzes(Request $r)
                 ? \Carbon\Carbon::parse($row->created_at)->toDateTimeString()
                 : null,
 
+            // ✅ NEW: assigned_at returned at root level also
+            'assigned_at' => $row->assigned_at
+                ? \Carbon\Carbon::parse($row->assigned_at)->toDateTimeString()
+                : null,
+
             // ✅ assignment info
             'assignment' => [
                 'id'              => (int) $row->assignment_id,

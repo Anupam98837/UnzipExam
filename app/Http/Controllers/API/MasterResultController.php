@@ -272,27 +272,108 @@ private function detectDoorEfficiencyCols(string $table): array
             }
         }
 
-        // ======================================================
-        // DOOR aggregate (generic)
-        // ======================================================
-        $doorAgg = null;
+      // ======================================================
+// DOOR aggregate ✅ (door_game_results specific + SAFE)
+// ======================================================
+$doorAgg = null;
 
-        if ($tables['door']) {
-            $doorCols = $this->detectScoreCols($tables['door']);
+if ($tables['door'] === 'door_game_results') {
 
-            $doorAgg = DB::table($tables['door'] . ' as dr')
-                ->select([
-                    'dr.user_id',
-                    DB::raw('ROUND(' . $this->avgPctExpr('dr', $doorCols) . ', 2) as door_avg_pct'),
-                    DB::raw('COUNT(*) as door_attempts'),
-                    DB::raw('MAX(dr.created_at) as door_last_at'),
-                ])
-                ->groupBy('dr.user_id');
+    // ✅ Safe time taken (prefer column, fallback JSON)
+    $timeTakenExpr = "COALESCE(
+        dr.time_taken_ms,
+        CAST(JSON_EXTRACT(dr.user_answer_json,'$.timing.time_taken_ms') AS SIGNED)
+    )";
 
-            if (Schema::hasColumn($tables['door'], 'deleted_at')) {
-                $doorAgg->whereNull('dr.deleted_at');
-            }
-        }
+    // ✅ Moves count (prefer moves[], fallback path[])
+    $movesCountExpr = "COALESCE(
+        JSON_LENGTH(JSON_EXTRACT(dr.user_answer_json,'$.moves')),
+        (JSON_LENGTH(JSON_EXTRACT(dr.user_answer_json,'$.path')) - 1)
+    )";
+
+    // ✅ SIGNED avoids UNSIGNED underflow crash
+    $gridRaw  = "CAST(JSON_EXTRACT(dr.user_answer_json,'$.grid_dim') AS SIGNED)";
+    $startRaw = "CAST(JSON_EXTRACT(dr.user_answer_json,'$.start_index') AS SIGNED)";
+    $doorRaw  = "CAST(JSON_EXTRACT(dr.user_answer_json,'$.events.door.opened_at_index') AS SIGNED)";
+
+    // sanitize
+    $gridExpr  = "NULLIF($gridRaw, 0)";
+    $startSafe = "GREATEST(COALESCE($startRaw,1), 1)";
+    $doorSafe  = "GREATEST(COALESCE($doorRaw,1), 1)";
+
+    $start0 = "($startSafe - 1)";
+    $door0  = "($doorSafe - 1)";
+
+    $sr = "FLOOR($start0 / $gridExpr)";
+    $dr = "FLOOR($door0  / $gridExpr)";
+    $sc = "MOD($start0, $gridExpr)";
+    $dc = "MOD($door0,  $gridExpr)";
+
+    // shortest moves (Manhattan)
+    $shortestMovesExpr = "(ABS($sr - $dr) + ABS($sc - $dc))";
+
+    // ✅ Path efficiency
+    $pathEffExpr = "CASE
+        WHEN $gridExpr IS NULL THEN NULL
+        WHEN COALESCE($movesCountExpr,0) <= 0 THEN NULL
+        ELSE LEAST(100, ROUND(($shortestMovesExpr * 100.0) / NULLIF($movesCountExpr,0), 2))
+    END";
+
+    // ✅ Time efficiency
+    $expectedPerMoveMs = 800;
+    $expectedTimeExpr  = "($movesCountExpr * $expectedPerMoveMs)";
+
+    $timeEffExpr = "CASE
+        WHEN COALESCE($timeTakenExpr,0) <= 0 THEN NULL
+        WHEN COALESCE($movesCountExpr,0) <= 0 THEN NULL
+        ELSE LEAST(100, ROUND(($expectedTimeExpr * 100.0) / NULLIF($timeTakenExpr,0), 2))
+    END";
+
+    // ✅ Total efficiency = 0.5 time + 0.5 path
+    $totalEffExpr = "CASE
+        WHEN ($timeEffExpr) IS NULL AND ($pathEffExpr) IS NULL THEN NULL
+        ELSE ROUND((0.5 * COALESCE(($timeEffExpr),0)) + (0.5 * COALESCE(($pathEffExpr),0)), 2)
+    END";
+
+    $doorAgg = DB::table('door_game_results as dr')
+        ->select([
+            'dr.user_id',
+
+            // ✅ score is the percentage-like (0-100)
+DB::raw("ROUND(AVG(dr.score * 100), 2) as door_avg_pct"),
+            DB::raw("COUNT(*) as door_attempts"),
+            DB::raw("MAX(dr.created_at) as door_last_at"),
+
+            // ✅ Avg time (ms)
+            DB::raw("ROUND(AVG($timeTakenExpr), 0) as door_avg_time_ms"),
+
+            // ✅ Avg efficiencies
+            DB::raw("ROUND(AVG($timeEffExpr), 2) as door_time_eff"),
+            DB::raw("ROUND(AVG($pathEffExpr), 2) as door_path_eff"),
+            DB::raw("ROUND(AVG($totalEffExpr), 2) as door_total_eff"),
+        ])
+        ->whereNull('dr.deleted_at')
+        ->groupBy('dr.user_id');
+
+} elseif ($tables['door']) {
+
+    // ✅ Generic fallback
+    $doorCols = $this->detectScoreCols($tables['door']);
+
+    $doorAgg = DB::table($tables['door'] . ' as dr')
+        ->select([
+            'dr.user_id',
+            DB::raw('ROUND(' . $this->avgPctExpr('dr', $doorCols) . ', 2) as door_avg_pct'),
+            DB::raw('COUNT(*) as door_attempts'),
+            DB::raw('MAX(dr.created_at) as door_last_at'),
+        ])
+        ->groupBy('dr.user_id');
+
+    if (Schema::hasColumn($tables['door'], 'deleted_at')) {
+        $doorAgg->whereNull('dr.deleted_at');
+    }
+}
+
 
         // ======================================================
         // MAIN Query: Users + aggregates
@@ -363,9 +444,15 @@ private function detectDoorEfficiencyCols(string $table): array
             DB::raw($bubbleAgg ? 'COALESCE(ba.bubble_attempts, 0) as bubble_attempts' : '0 as bubble_attempts'),
             DB::raw($bubbleAgg ? 'ba.bubble_last_at' : 'NULL as bubble_last_at'),
 
-            DB::raw($doorAgg ? 'COALESCE(da.door_avg_pct, NULL) as door_avg_pct' : 'NULL as door_avg_pct'),
-            DB::raw($doorAgg ? 'COALESCE(da.door_attempts, 0) as door_attempts' : '0 as door_attempts'),
-            DB::raw($doorAgg ? 'da.door_last_at' : 'NULL as door_last_at'),
+DB::raw($doorAgg ? 'COALESCE(da.door_avg_pct, NULL) as door_avg_pct' : 'NULL as door_avg_pct'),
+DB::raw($doorAgg ? 'COALESCE(da.door_attempts, 0) as door_attempts' : '0 as door_attempts'),
+DB::raw($doorAgg ? 'da.door_last_at' : 'NULL as door_last_at'),
+
+DB::raw($doorAgg ? 'da.door_avg_time_ms' : 'NULL as door_avg_time_ms'),
+DB::raw($doorAgg ? 'da.door_time_eff' : 'NULL as door_time_eff'),
+DB::raw($doorAgg ? 'da.door_path_eff' : 'NULL as door_path_eff'),
+DB::raw($doorAgg ? 'da.door_total_eff' : 'NULL as door_total_eff'),
+
         ]);
 
         // overall avg% only from available values
@@ -605,28 +692,115 @@ private function detectDoorEfficiencyCols(string $table): array
         // =======================
         // DOOR attempts (generic)
         // =======================
-        $doorAttempts = [];
-        if ($tables['door']) {
-            $cols = $this->detectScoreCols($tables['door']);
-            $rowExpr = $this->rowPctExpr('dr', $cols);
+       // =======================
+// DOOR attempts ✅ FIXED (score + time + efficiencies)
+// =======================
+$doorAttempts = [];
 
-            $doorQ = DB::table($tables['door'] . ' as dr')
-                ->where('dr.user_id', $student->id);
+if ($tables['door'] === 'door_game_results') {
 
-            if (Schema::hasColumn($tables['door'], 'deleted_at')) {
-                $doorQ->whereNull('dr.deleted_at');
-            }
+    // ✅ Safe time taken (prefer column, fallback JSON)
+    $timeTakenExpr = "COALESCE(
+        dr.time_taken_ms,
+        CAST(JSON_EXTRACT(dr.user_answer_json,'$.timing.time_taken_ms') AS SIGNED)
+    )";
 
-            $doorAttempts = $doorQ
-                ->orderByDesc('dr.created_at')
-                ->limit(200)
-                ->get([
-                    DB::raw("'Door Game' as title"),
-                    DB::raw("ROUND(($rowExpr),2) as percentage"),
-                    DB::raw("'' as score_text"),
-                    DB::raw('DATE_FORMAT(dr.created_at, "%Y-%m-%d %H:%i") as attempted_at'),
-                ]);
-        }
+    // ✅ Moves count (prefer moves[], fallback path[])
+    $movesCountExpr = "COALESCE(
+        JSON_LENGTH(JSON_EXTRACT(dr.user_answer_json,'$.moves')),
+        (JSON_LENGTH(JSON_EXTRACT(dr.user_answer_json,'$.path')) - 1)
+    )";
+
+    // ✅ Use SIGNED + sanitize to prevent underflow crash
+    $gridRaw  = "CAST(JSON_EXTRACT(dr.user_answer_json,'$.grid_dim') AS SIGNED)";
+    $startRaw = "CAST(JSON_EXTRACT(dr.user_answer_json,'$.start_index') AS SIGNED)";
+    $doorRaw  = "CAST(JSON_EXTRACT(dr.user_answer_json,'$.events.door.opened_at_index') AS SIGNED)";
+
+    $gridExpr  = "NULLIF($gridRaw, 0)";
+    $startSafe = "GREATEST(COALESCE($startRaw,1), 1)";
+    $doorSafe  = "GREATEST(COALESCE($doorRaw,1), 1)";
+
+    $start0 = "($startSafe - 1)";
+    $door0  = "($doorSafe - 1)";
+
+    $sr = "FLOOR($start0 / $gridExpr)";
+    $dr = "FLOOR($door0  / $gridExpr)";
+    $sc = "MOD($start0, $gridExpr)";
+    $dc = "MOD($door0,  $gridExpr)";
+
+    // shortest moves (Manhattan)
+    $shortestMovesExpr = "(ABS($sr - $dr) + ABS($sc - $dc))";
+
+    // ✅ Path efficiency
+    $pathEffExpr = "CASE
+        WHEN $gridExpr IS NULL THEN NULL
+        WHEN COALESCE($movesCountExpr,0) <= 0 THEN NULL
+        ELSE LEAST(100, ROUND(($shortestMovesExpr * 100.0) / NULLIF($movesCountExpr,0), 2))
+    END";
+
+    // ✅ Time efficiency
+    $expectedPerMoveMs = 800;
+    $expectedTimeExpr  = "($movesCountExpr * $expectedPerMoveMs)";
+
+    $timeEffExpr = "CASE
+        WHEN COALESCE($timeTakenExpr,0) <= 0 THEN NULL
+        WHEN COALESCE($movesCountExpr,0) <= 0 THEN NULL
+        ELSE LEAST(100, ROUND(($expectedTimeExpr * 100.0) / NULLIF($timeTakenExpr,0), 2))
+    END";
+
+    // ✅ Total efficiency = 0.5 time + 0.5 path
+    $totalEffExpr = "CASE
+        WHEN ($timeEffExpr) IS NULL AND ($pathEffExpr) IS NULL THEN NULL
+        ELSE ROUND((0.5 * COALESCE(($timeEffExpr),0)) + (0.5 * COALESCE(($pathEffExpr),0)), 2)
+    END";
+
+    $doorQ = DB::table('door_game_results as dr')
+        ->where('dr.user_id', $student->id);
+
+    if (Schema::hasColumn('door_game_results', 'deleted_at')) {
+        $doorQ->whereNull('dr.deleted_at');
+    }
+
+    $doorAttempts = $doorQ
+        ->orderByDesc('dr.created_at')
+        ->limit(200)
+        ->get([
+            'dr.id as result_id',
+            DB::raw("'Door Game' as title"),
+            DB::raw("(dr.score * 100) as percentage"),
+            DB::raw("CONCAT(dr.score,' / 1') as score_text"),
+
+            DB::raw("ROUND(($timeTakenExpr)/1000, 2) as time_taken_sec"),
+            DB::raw("ROUND(($timeEffExpr),2) as time_eff"),
+            DB::raw("ROUND(($pathEffExpr),2) as path_eff"),
+            DB::raw("ROUND(($totalEffExpr),2) as total_eff"),
+            DB::raw('DATE_FORMAT(dr.created_at, "%Y-%m-%d %H:%i") as attempted_at'),
+        ]);
+
+} elseif ($tables['door']) {
+
+    // ✅ Generic fallback (other tables)
+    $cols = $this->detectScoreCols($tables['door']);
+    $rowExpr = $this->rowPctExpr('dr', $cols);
+
+    $doorQ = DB::table($tables['door'] . ' as dr')
+        ->where('dr.user_id', $student->id);
+
+    if (Schema::hasColumn($tables['door'], 'deleted_at')) {
+        $doorQ->whereNull('dr.deleted_at');
+    }
+
+    $doorAttempts = $doorQ
+        ->orderByDesc('dr.created_at')
+        ->limit(200)
+        ->get([
+            'dr.id as result_id',
+            DB::raw("'Door Game' as title"),
+            DB::raw("ROUND(($rowExpr),2) as percentage"),
+            DB::raw("'' as score_text"),
+            DB::raw('DATE_FORMAT(dr.created_at, "%Y-%m-%d %H:%i") as attempted_at'),
+        ]);
+}
 
         return response()->json([
             'success' => true,

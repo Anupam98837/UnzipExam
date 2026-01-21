@@ -1080,7 +1080,7 @@ if (inst) {
       attempts_allowed: item.attempts_allowed,
       total_attempts_allowed: item.total_attempts_allowed,
 
-      my_attempts: item.my_attempts,
+      my_attempts: item.attempt_total_count ?? null,
       attempts_used: item.attempts_used,
       attempts_taken: item.attempts_taken,
       attempt_count: item.attempt_count,

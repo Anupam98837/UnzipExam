@@ -831,204 +831,222 @@ public function index(Request $r)
      *  - Lists quizzes visible to the logged-in student
      *  - Includes latest attempt + result for that student
      * ========================= */
-public function myQuizzes(Request $r)
-{
-    // Allow student, but also let admin/super_admin hit this if needed
-    if ($resp = $this->requireRole($r, ['student','admin','super_admin'])) return $resp;
-
-    $actor  = $this->actor($r);
-    $role   = (string) ($actor['role'] ?? '');
-    $userId = (int) ($actor['id'] ?? 0);
-
-    if (!$userId) {
-        return response()->json(['error' => 'Unable to resolve user from token'], 403);
-    }
-
-    // ✅ for admin/super_admin: allow viewing assigned quizzes for a specific student using ?user_id=
-    $targetUserId = $userId;
-    if (in_array($role, ['admin', 'super_admin'], true)) {
-        $requestedUserId = (int) $r->query('user_id', 0);
-        if ($requestedUserId > 0) {
-            $targetUserId = $requestedUserId;
+    public function myQuizzes(Request $r)
+    {
+        // Allow student, but also let admin/super_admin hit this if needed
+        if ($resp = $this->requireRole($r, ['student','admin','super_admin'])) return $resp;
+    
+        $actor  = $this->actor($r);
+        $role   = (string) ($actor['role'] ?? '');
+        $userId = (int) ($actor['id'] ?? 0);
+    
+        if (!$userId) {
+            return response()->json(['error' => 'Unable to resolve user from token'], 403);
         }
-    }
-
-    $page    = max(1, (int) $r->query('page', 1));
-    $perPage = max(1, min(50, (int) $r->query('per_page', 12)));
-    $search  = trim((string) $r->query('q', ''));
-
-    /* ============================================================
-     | ✅ Only ASSIGNED quizzes for this user
-     |============================================================ */
-
-    $assignedSub = DB::table('user_quiz_assignments as uqa')
-        ->select('uqa.quiz_id')
-        ->where('uqa.user_id', $targetUserId)
-        ->where('uqa.status', 'active')
-        ->whereNull('uqa.deleted_at')
-        ->distinct();
-
-    // ---- Subquery: latest attempt per quiz for this user ----
-    $attemptSub = DB::table('quizz_attempts')
-        ->select('quiz_id', DB::raw('MAX(id) as latest_id'))
-        ->where('user_id', $targetUserId)
-        ->groupBy('quiz_id');
-
-    // ---- Subquery: latest result per quiz for this user ----
-    $resultSub = DB::table('quizz_results')
-        ->select('quiz_id', DB::raw('MAX(id) as latest_id'))
-        ->where('user_id', $targetUserId)
-        ->groupBy('quiz_id');
-
-    $q = DB::table('quizz as q')
-        // ✅ ONLY quizzes that are assigned to this user
-        ->joinSub($assignedSub, 'asq', function ($join) {
-            $join->on('asq.quiz_id', '=', 'q.id');
-        })
-
-        // ✅ join assignment row (to show code/date if needed)
-        ->join('user_quiz_assignments as uqa', function ($join) use ($targetUserId) {
-            $join->on('uqa.quiz_id', '=', 'q.id')
-                 ->where('uqa.user_id', '=', $targetUserId)
-                 ->where('uqa.status', '=', 'active')
-                 ->whereNull('uqa.deleted_at');
-        })
-
-        // join latest attempt
-        ->leftJoinSub($attemptSub, 'la', function ($join) {
-            $join->on('la.quiz_id', '=', 'q.id');
-        })
-        ->leftJoin('quizz_attempts as qa', 'qa.id', '=', 'la.latest_id')
-
-        // join latest result
-        ->leftJoinSub($resultSub, 'lr', function ($join) {
-            $join->on('lr.quiz_id', '=', 'q.id');
-        })
-        ->leftJoin('quizz_results as qr', 'qr.id', '=', 'lr.latest_id')
-
-        // only active, non-deleted quizzes
-        ->whereNull('q.deleted_at')
-        ->where('q.status', '=', 'active');
-
-    // Optional text search
-    if ($search !== '') {
-        $q->where(function ($w) use ($search) {
-            $w->where('q.quiz_name', 'like', "%{$search}%")
-              ->orWhere('q.quiz_description', 'like', "%{$search}%");
-        });
-    }
-
-    $select = [
-        'q.id',
-        'q.uuid',
-        'q.quiz_name',
-        'q.quiz_description',
-        'q.quiz_img',
-        'q.total_time',
-        'q.total_questions',
-        'q.total_attempts',
-        'q.is_public',
-        'q.result_set_up_type',
-        'q.status',
-        'q.created_at',
-
-        // ✅ assignment details
-        'uqa.id              as assignment_id',
-        'uqa.uuid            as assignment_uuid',
-        'uqa.assignment_code as assignment_code',
-        'uqa.assigned_by     as assigned_by',
-        'uqa.assigned_at     as assigned_at',
-
-        // latest attempt (for this user)
-        'qa.id           as attempt_id',
-        'qa.status       as attempt_status',
-        'qa.started_at   as attempt_started_at',
-        'qa.submitted_at as attempt_submitted_at',
-
-        // latest result (for this user)
-        'qr.id           as result_id',
-        'qr.created_at   as result_created_at',
-    ];
-
-    $paginator = $q->select($select)
-        ->orderBy('uqa.assigned_at', 'desc')   // ✅ better ordering = recently assigned first
-        ->orderBy('q.created_at', 'desc')
-        ->paginate($perPage, ['*'], 'page', $page);
-
-    $items = collect($paginator->items())->map(function ($row) {
-        // derive a simple status for the UI: upcoming | in_progress | completed
-        $myStatus = 'upcoming';
-
-        if ($row->attempt_status === 'in_progress' || $row->attempt_status === 'started') {
-            $myStatus = 'in_progress';
-        } elseif ($row->result_id ||
-            in_array($row->attempt_status, ['submitted','finished','completed','graded'], true)) {
-            $myStatus = 'completed';
-        } elseif ($row->attempt_id) {
-            $myStatus = 'in_progress';
+    
+        // ✅ for admin/super_admin: allow viewing assigned quizzes for a specific student using ?user_id=
+        $targetUserId = $userId;
+        if (in_array($role, ['admin', 'super_admin'], true)) {
+            $requestedUserId = (int) $r->query('user_id', 0);
+            if ($requestedUserId > 0) {
+                $targetUserId = $requestedUserId;
+            }
         }
-
-        return [
-            'id'              => (int) $row->id,
-            'uuid'            => $row->uuid,
-            'title'           => $row->quiz_name,
-            'excerpt'         => $row->quiz_description,
-            'quiz_img'        => $row->quiz_img,
-            'total_time'      => $row->total_time !== null ? (int) $row->total_time : null,
-            'total_questions' => $row->total_questions !== null ? (int) $row->total_questions : null,
-            'total_attempts'  => $row->total_attempts !== null ? (int) $row->total_attempts : null,
-            'is_public'       => $row->is_public === 'yes' || $row->is_public === 1 || $row->is_public === true,
-            'result_set_up_type' => $row->result_set_up_type,
-            'status'          => $row->status,
-            'created_at'      => $row->created_at
-                ? \Carbon\Carbon::parse($row->created_at)->toDateTimeString()
-                : null,
-
-            // ✅ NEW: assigned_at returned at root level also
-            'assigned_at' => $row->assigned_at
-                ? \Carbon\Carbon::parse($row->assigned_at)->toDateTimeString()
-                : null,
-
-            // ✅ assignment info
-            'assignment' => [
-                'id'              => (int) $row->assignment_id,
-                'uuid'            => $row->assignment_uuid,
-                'assignment_code' => $row->assignment_code,
-                'assigned_by'     => $row->assigned_by ? (int) $row->assigned_by : null,
-                'assigned_at'     => $row->assigned_at
+    
+        $page    = max(1, (int) $r->query('page', 1));
+        $perPage = max(1, min(50, (int) $r->query('per_page', 12)));
+        $search  = trim((string) $r->query('q', ''));
+    
+        /* ============================================================
+         | ✅ Only ASSIGNED quizzes for this user
+         |============================================================ */
+    
+        $assignedSub = DB::table('user_quiz_assignments as uqa')
+            ->select('uqa.quiz_id')
+            ->where('uqa.user_id', $targetUserId)
+            ->where('uqa.status', 'active')
+            ->whereNull('uqa.deleted_at')
+            ->distinct();
+    
+        // ---- Subquery: latest attempt per quiz for this user ----
+        $attemptSub = DB::table('quizz_attempts')
+            ->select('quiz_id', DB::raw('MAX(id) as latest_id'))
+            ->where('user_id', $targetUserId)
+            ->groupBy('quiz_id');
+    
+        // ---- Subquery: latest result per quiz for this user ----
+        $resultSub = DB::table('quizz_results')
+            ->select('quiz_id', DB::raw('MAX(id) as latest_id'))
+            ->where('user_id', $targetUserId)
+            ->groupBy('quiz_id');
+    
+        // ✅ NEW: total attempts per quiz for this user
+        $attemptCountSub = DB::table('quizz_attempts')
+            ->select('quiz_id', DB::raw('COUNT(*) as attempt_total_count'))
+            ->where('user_id', $targetUserId)
+            ->groupBy('quiz_id');
+    
+        $q = DB::table('quizz as q')
+            // ✅ ONLY quizzes that are assigned to this user
+            ->joinSub($assignedSub, 'asq', function ($join) {
+                $join->on('asq.quiz_id', '=', 'q.id');
+            })
+    
+            // ✅ join assignment row (to show code/date if needed)
+            ->join('user_quiz_assignments as uqa', function ($join) use ($targetUserId) {
+                $join->on('uqa.quiz_id', '=', 'q.id')
+                     ->where('uqa.user_id', '=', $targetUserId)
+                     ->where('uqa.status', '=', 'active')
+                     ->whereNull('uqa.deleted_at');
+            })
+    
+            // join latest attempt
+            ->leftJoinSub($attemptSub, 'la', function ($join) {
+                $join->on('la.quiz_id', '=', 'q.id');
+            })
+            ->leftJoin('quizz_attempts as qa', 'qa.id', '=', 'la.latest_id')
+    
+            // ✅ NEW: join attempt total count
+            ->leftJoinSub($attemptCountSub, 'ac', function ($join) {
+                $join->on('ac.quiz_id', '=', 'q.id');
+            })
+    
+            // join latest result
+            ->leftJoinSub($resultSub, 'lr', function ($join) {
+                $join->on('lr.quiz_id', '=', 'q.id');
+            })
+            ->leftJoin('quizz_results as qr', 'qr.id', '=', 'lr.latest_id')
+    
+            // only active, non-deleted quizzes
+            ->whereNull('q.deleted_at')
+            ->where('q.status', '=', 'active');
+    
+        // Optional text search
+        if ($search !== '') {
+            $q->where(function ($w) use ($search) {
+                $w->where('q.quiz_name', 'like', "%{$search}%")
+                  ->orWhere('q.quiz_description', 'like', "%{$search}%");
+            });
+        }
+    
+        $select = [
+            'q.id',
+            'q.uuid',
+            'q.quiz_name',
+            'q.quiz_description',
+            'q.quiz_img',
+            'q.total_time',
+            'q.total_questions',
+            'q.total_attempts',
+            'q.is_public',
+            'q.result_set_up_type',
+            'q.status',
+            'q.created_at',
+    
+            // ✅ assignment details
+            'uqa.id              as assignment_id',
+            'uqa.uuid            as assignment_uuid',
+            'uqa.assignment_code as assignment_code',
+            'uqa.assigned_by     as assigned_by',
+            'uqa.assigned_at     as assigned_at',
+    
+            // latest attempt (for this user)
+            'qa.id           as attempt_id',
+            'qa.status       as attempt_status',
+            'qa.started_at   as attempt_started_at',
+            'qa.submitted_at as attempt_submitted_at',
+    
+            // ✅ NEW: total attempt count from attempts DB (per user + quiz)
+            DB::raw('COALESCE(ac.attempt_total_count, 0) as attempt_total_count'),
+    
+            // latest result (for this user)
+            'qr.id           as result_id',
+            'qr.created_at   as result_created_at',
+        ];
+    
+        $paginator = $q->select($select)
+            ->orderBy('uqa.assigned_at', 'desc')   // ✅ better ordering = recently assigned first
+            ->orderBy('q.created_at', 'desc')
+            ->paginate($perPage, ['*'], 'page', $page);
+    
+        $items = collect($paginator->items())->map(function ($row) {
+            // derive a simple status for the UI: upcoming | in_progress | completed
+            $myStatus = 'upcoming';
+    
+            if ($row->attempt_status === 'in_progress' || $row->attempt_status === 'started') {
+                $myStatus = 'in_progress';
+            } elseif ($row->result_id ||
+                in_array($row->attempt_status, ['submitted','finished','completed','graded'], true)) {
+                $myStatus = 'completed';
+            } elseif ($row->attempt_id) {
+                $myStatus = 'in_progress';
+            }
+    
+            return [
+                'id'              => (int) $row->id,
+                'uuid'            => $row->uuid,
+                'title'           => $row->quiz_name,
+                'excerpt'         => $row->quiz_description,
+                'quiz_img'        => $row->quiz_img,
+                'total_time'      => $row->total_time !== null ? (int) $row->total_time : null,
+                'total_questions' => $row->total_questions !== null ? (int) $row->total_questions : null,
+                'total_attempts'  => $row->total_attempts !== null ? (int) $row->total_attempts : null,
+                'is_public'       => $row->is_public === 'yes' || $row->is_public === 1 || $row->is_public === true,
+                'result_set_up_type' => $row->result_set_up_type,
+                'status'          => $row->status,
+                'created_at'      => $row->created_at
+                    ? \Carbon\Carbon::parse($row->created_at)->toDateTimeString()
+                    : null,
+    
+                // ✅ NEW: assigned_at returned at root level also
+                'assigned_at' => $row->assigned_at
                     ? \Carbon\Carbon::parse($row->assigned_at)->toDateTimeString()
                     : null,
+    
+                // ✅ NEW: total attempt count (from quizz_attempts table)
+                'attempt_total_count' => isset($row->attempt_total_count) ? (int) $row->attempt_total_count : 0,
+    
+                // ✅ assignment info
+                'assignment' => [
+                    'id'              => (int) $row->assignment_id,
+                    'uuid'            => $row->assignment_uuid,
+                    'assignment_code' => $row->assignment_code,
+                    'assigned_by'     => $row->assigned_by ? (int) $row->assigned_by : null,
+                    'assigned_at'     => $row->assigned_at
+                        ? \Carbon\Carbon::parse($row->assigned_at)->toDateTimeString()
+                        : null,
+                ],
+    
+                // computed status from this student's perspective
+                'my_status' => $myStatus, // upcoming | in_progress | completed
+    
+                'attempt' => $row->attempt_id ? [
+                    'id'           => (int) $row->attempt_id,
+                    'status'       => $row->attempt_status,
+                    'started_at'   => $row->attempt_started_at,
+                    'submitted_at' => $row->attempt_submitted_at,
+                ] : null,
+    
+                'result'  => $row->result_id ? [
+                    'id'         => (int) $row->result_id,
+                    'created_at' => $row->result_created_at
+                        ? \Carbon\Carbon::parse($row->result_created_at)->toDateTimeString()
+                        : null,
+                ] : null,
+            ];
+        })->values();
+    
+        return response()->json([
+            'success'    => true,
+            'data'       => $items,
+            'pagination' => [
+                'total'        => (int) $paginator->total(),
+                'per_page'     => (int) $paginator->perPage(),
+                'current_page' => (int) $paginator->currentPage(),
+                'last_page'    => (int) $paginator->lastPage(),
             ],
-
-            // computed status from this student's perspective
-            'my_status' => $myStatus, // upcoming | in_progress | completed
-
-            'attempt' => $row->attempt_id ? [
-                'id'           => (int) $row->attempt_id,
-                'status'       => $row->attempt_status,
-                'started_at'   => $row->attempt_started_at,
-                'submitted_at' => $row->attempt_submitted_at,
-            ] : null,
-
-            'result'  => $row->result_id ? [
-                'id'         => (int) $row->result_id,
-                'created_at' => $row->result_created_at
-                    ? \Carbon\Carbon::parse($row->result_created_at)->toDateTimeString()
-                    : null,
-            ] : null,
-        ];
-    })->values();
-
-    return response()->json([
-        'success'    => true,
-        'data'       => $items,
-        'pagination' => [
-            'total'        => (int) $paginator->total(),
-            'per_page'     => (int) $paginator->perPage(),
-            'current_page' => (int) $paginator->currentPage(),
-            'last_page'    => (int) $paginator->lastPage(),
-        ],
-    ]);
-}
+        ]);
+    }
+    
 
 }

@@ -218,7 +218,7 @@
               <th style="min-width:140px">Total Attempts</th>
               <th style="min-width:170px">Overall</th>
               <th style="min-width:160px">Last Activity</th>
-              <th style="min-width:90px" class="text-end">View</th>
+              <th style="display:none;min-width:90px" class="text-end">View</th>
             </tr>
           </thead>
           <tbody id="mrTbody"></tbody>
@@ -621,7 +621,7 @@
             <i class="fa-solid fa-eye"></i>
           </button>
 
-          <button class="btn btn-light btn-sm border" title="View latest result"
+          <button class="btn btn-light btn-sm border " title="View latest result"
             ${(!directUrl || disabled) ? 'disabled' : ''}
             data-action="view_latest"
             data-url="${safeText(directUrl)}">
@@ -736,15 +736,6 @@
           <td>${totalAttemptsCell(totalAttempts)}</td>
           <td>${overallCell(overall)}</td>
           <td>${safeText(lastAt)}</td>
-
-          <td class="text-end">
-            <button class="btn btn-light btn-sm border" title="View all details"
-              data-action="open_modal"
-              data-type="quiz"
-              data-uuid="${safeText(row.user_uuid)}">
-              <i class="fa-solid fa-chart-line"></i>
-            </button>
-          </td>
         </tr>
       `);
     });

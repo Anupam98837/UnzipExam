@@ -320,7 +320,6 @@
       <div id="sm-admin-quizzes" class="w3-submenu" role="group" aria-label="Quizzes submenu">
         <a href="/quizz/create" class="w3-link">Create Quiz</a>
         <a href="/quizz/manage" class="w3-link">Manage Quizzes</a>
-        <a href="/quizz/results" class="w3-link">Results</a>
       </div>
     </div>
   <div class="w3-nav-section">
@@ -336,7 +335,6 @@
       <div id="sm-admin-bubble-games" class="w3-submenu" role="group" aria-label="Bubble Games submenu">
         <a href="/bubble-games/create" class="w3-link">Create Game</a>
         <a href="/bubble-games/manage" class="w3-link">Manage Games</a>
-        <a href="/graphical-test/results" class="w3-link">Results</a>
       </div>
     </div>
 
@@ -349,10 +347,28 @@
       <div id="sm-admin-door-games" class="w3-submenu" role="group" aria-label="Door Games submenu">
         <a href="/door-games/create" class="w3-link">Create Game</a>
         <a href="/door-games/manage" class="w3-link">Manage Games</a>
-        <a href="/decision-making-test/results" class="w3-link">Results</a>
+      </div>
+    </div>
+
+    <div class="w3-nav-section">
+      <div class="w3-section-title"><i class="fa-solid fa-square-poll-horizontal"></i>Results</div>
+      <div class="w3-section-rule"></div>
+    </div>
+
+    <div class="w3-group">
+      <a href="#" class="w3-link w3-toggle" data-target="sm-results" aria-expanded="false">
+        <i class="fa-solid fa-square-poll-horizontal"></i><span>Results</span>
+        <i class="fa fa-chevron-down w3-chev"></i>
+      </a>
+      <div id="sm-results" class="w3-submenu" role="group" aria-label="Results submenu">
+        <a href="/results" class="w3-link">Overall Results</a>
+        <a href="/quizz/results" class="w3-link">Quiz Results</a>
+        <a href="/graphical-test/results" class="w3-link">Bubble Results</a>
+        <a href="/decision-making-test/results" class="w3-link">Door Results</a>
       </div>
     </div>
     
+
     <!-- ✅ END NEW -->
     <div class="w3-nav-section">
       <div class="w3-section-title"><i class="fa-solid fa-graduation-cap"></i> MENU PRIVILEGES</div>

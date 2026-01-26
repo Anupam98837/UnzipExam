@@ -32,6 +32,29 @@
     return;
   }
 
+  // Wait for DOM if needed
+  if (document.readyState === 'loading') {
+    await new Promise(resolve => document.addEventListener('DOMContentLoaded', resolve, { once: true }));
+  }
+
+  const dashAdmin    = document.getElementById('dashAdmin');
+  const dashExaminer = document.getElementById('dashExaminer');
+  const dashStudent  = document.getElementById('dashStudent');
+
+  // Check if panels exist
+  if (!dashAdmin || !dashExaminer || !dashStudent) {
+    console.error('[DASH] Missing dashboard panels');
+    return;
+  }
+
+  // Helper: show only one panel
+  const showPanel = (panel) => {
+    dashAdmin.style.display = 'none';
+    dashExaminer.style.display = 'none';
+    dashStudent.style.display = 'none';
+    panel.style.display = 'block';
+  };
+
   // Helper: publish role globally
   const publishRole = (role) => {
     document.body.setAttribute('data-role', role);
@@ -39,6 +62,16 @@
     try {
       window.dispatchEvent(new CustomEvent('dash:role', { detail: { role } }));
     } catch (e) {}
+  };
+
+  // Normalize role (important fix ✅)
+  const normalizeRole = (role) => {
+    const r = String(role || '').trim().toLowerCase();
+
+    // ✅ super_admin should behave like admin
+    if (r === 'super_admin' || r === 'superadmin' || r === 'super-admin') return 'admin';
+
+    return r;
   };
 
   // Get role from API
@@ -57,7 +90,7 @@
 
       const data = await res.json();
       if (data?.status === 'success' && data?.role) {
-        return String(data.role).trim().toLowerCase();
+        return normalizeRole(data.role);
       }
       return '';
     } catch (e) {
@@ -65,21 +98,6 @@
       return '';
     }
   };
-
-  // Wait for DOM if needed
-  if (document.readyState === 'loading') {
-    await new Promise(resolve => document.addEventListener('DOMContentLoaded', resolve, { once: true }));
-  }
-
-  const dashAdmin = document.getElementById('dashAdmin');
-  const dashExaminer = document.getElementById('dashExaminer');
-  const dashStudent = document.getElementById('dashStudent');
-
-  // Check if panels exist
-  if (!dashAdmin || !dashExaminer || !dashStudent) {
-    console.error('[DASH] Missing dashboard panels');
-    return;
-  }
 
   // Get token
   const token = sessionStorage.getItem('token') || localStorage.getItem('token');
@@ -100,52 +118,49 @@
   // Publish role
   publishRole(role);
 
+  // Small safe wait (ensures DOM + Blade pushed scripts are ready)
+  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
   // Show appropriate dashboard and initialize
   if (role === 'admin') {
-    dashAdmin.style.display = 'block';
+    showPanel(dashAdmin);
     console.log('[DASH] Showing admin dashboard');
-    
-    // Wait a bit for the included script to load
-    setTimeout(() => {
-      if (typeof initializeAdminDashboard === 'function') {
-        console.log('[DASH] Initializing admin dashboard');
-        initializeAdminDashboard();
-      } else {
-        console.error('[DASH] initializeAdminDashboard not found');
-      }
-    }, 100);
-    
+
+    if (typeof window.initializeAdminDashboard === 'function') {
+      console.log('[DASH] Initializing admin dashboard');
+      window.initializeAdminDashboard();
+    } else {
+      console.error('[DASH] initializeAdminDashboard not found');
+    }
+
   } else if (role === 'examiner') {
-    dashExaminer.style.display = 'block';
+    showPanel(dashExaminer);
     console.log('[DASH] Showing examiner dashboard');
-    
-    setTimeout(() => {
-      if (typeof initializeExaminerDashboard === 'function') {
-        console.log('[DASH] Initializing examiner dashboard');
-        initializeExaminerDashboard();
-      } else {
-        console.error('[DASH] initializeExaminerDashboard not found');
-      }
-    }, 100);
-    
+
+    if (typeof window.initializeExaminerDashboard === 'function') {
+      console.log('[DASH] Initializing examiner dashboard');
+      window.initializeExaminerDashboard();
+    } else {
+      console.error('[DASH] initializeExaminerDashboard not found');
+    }
+
   } else if (role === 'student') {
-    dashStudent.style.display = 'block';
+    showPanel(dashStudent);
     console.log('[DASH] Showing student dashboard');
-    
-    setTimeout(() => {
-      if (typeof initializeStudentDashboard === 'function') {
-        console.log('[DASH] Initializing student dashboard');
-        initializeStudentDashboard();
-      } else {
-        console.error('[DASH] initializeStudentDashboard not found');
-      }
-    }, 100);
-    
+
+    if (typeof window.initializeStudentDashboard === 'function') {
+      console.log('[DASH] Initializing student dashboard');
+      window.initializeStudentDashboard();
+    } else {
+      console.error('[DASH] initializeStudentDashboard not found');
+    }
+
   } else {
     window.location.replace('/');
+    return;
   }
 
   console.log('[DASH] Dashboard initialized for role:', role);
 })();
-</script>
+</script> 
 @endpush

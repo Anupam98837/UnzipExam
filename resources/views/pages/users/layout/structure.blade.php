@@ -349,6 +349,19 @@
         <a href="/door-games/manage" class="w3-link">Manage Games</a>
       </div>
     </div>
+    {{-- ✅ NEW: Path Games --}}
+<div class="w3-group">
+  <a href="#" class="w3-link w3-toggle" data-target="sm-admin-path-games" aria-expanded="false">
+    <i class="fa-solid fa-route"></i><span>Path Games</span>
+    <i class="fa fa-chevron-down w3-chev"></i>
+  </a>
+
+  <div id="sm-admin-path-games" class="w3-submenu" role="group" aria-label="Path Games submenu">
+    <a href="/path-games/create" class="w3-link">Create Game</a>
+    <a href="/path-games/manage" class="w3-link">Manage Games</a>
+  </div>
+</div>
+{{-- ✅ END Path Games --}}
 
     <div class="w3-nav-section">
       <div class="w3-section-title"><i class="fa-solid fa-square-poll-horizontal"></i>Results</div>
@@ -365,6 +378,8 @@
         <a href="/quizz/results" class="w3-link">Quiz Results</a>
         <a href="/graphical-test/results" class="w3-link">Bubble Results</a>
         <a href="/decision-making-test/results" class="w3-link">Door Results</a>
+          <a href="/path-finding-test/results" class="w3-link">Path Results</a>
+
       </div>
     </div>
     
@@ -450,6 +465,25 @@
       </div>
     </div>
     <!-- ✅ END NEW -->
+  {{-- ✅ NEW: Path Games --}}
+<div class="w3-group">
+  <a href="javascript:void(0)"
+     class="w3-link w3-toggle"
+     data-target="sm-examiner-path-games"
+     aria-expanded="false"
+     aria-controls="sm-examiner-path-games">
+    <i class="fa-solid fa-route"></i><span>Path Games</span>
+    <i class="fa fa-chevron-down w3-chev"></i>
+  </a>
+
+  <div id="sm-examiner-path-games" class="w3-submenu" role="group" aria-label="Path Games submenu">
+    <a href="/path-games/create" class="w3-link">Create Game</a>
+    <a href="/path-games/manage" class="w3-link">Manage Games</a>
+        <a href="/path-finding-test/result/manage" class="w3-link">Results</a>
+
+  </div>
+</div>
+{{-- ✅ END Path Games --}}
 
   </nav>
 </div>

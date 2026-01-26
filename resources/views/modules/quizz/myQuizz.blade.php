@@ -406,7 +406,7 @@
           <span class="qz-count-pill d-none" id="qzTotalCount">0</span>
         </h1>
         <div class="qz-head-sub">
-          All your quizzes, bubble games, and door games are listed here in one place.
+          All your quizzes, bubble games, door games <b>and path games</b> are listed here in one place.
         </div>
       </div>
 
@@ -443,7 +443,6 @@
             <th style="min-width:50px;">Instructions</th>
             <th style="min-width:50px;">Status</th>
             <th style="min-width:50px;">Attempts</th>
-            <!-- <th style="min-width:120px;">Remaining</th> -->
             <th style="min-width:30px; text-align:right;">Action</th>
           </tr>
           </thead>
@@ -503,10 +502,16 @@ document.addEventListener('DOMContentLoaded', function () {
   const API_GAMES   = '/api/bubble-games/my';
   const API_DOOR    = '/api/door-games/my';
 
+  // ✅ NEW: PATH GAMES
+  const API_PATH    = '/api/path-games/my';
+
   // Start routes
   const START_QUIZ_ROUTE = '/exam/';                 // /exam/{quiz_uuid}
   const START_GAME_ROUTE = '/tests/play?game=';      // bubble games play
   const START_DOOR_ROUTE = '/door-tests/play?game='; // door games play
+
+  // ✅ NEW: PATH START ROUTE (change if your path play url is different)
+  const START_PATH_ROUTE = '/path-tests/play?game='; // path games play
 
   // =======================
   // DOM
@@ -617,12 +622,6 @@ document.addEventListener('DOMContentLoaded', function () {
     return div.innerHTML;
   }
 
-  function nl2brSafe(text) {
-    // escape then convert new lines to <br>
-    const safe = sanitize(text || '');
-    return safe.replace(/\n/g, '<br>');
-  }
-
   function myStatusBadge(status) {
     if (status === 'completed') {
       return '<span class="qz-chip qz-chip-success"><i class="fa-solid fa-circle-check"></i>Completed</span>';
@@ -633,28 +632,23 @@ document.addEventListener('DOMContentLoaded', function () {
     return '<span class="qz-chip"><i class="fa-regular fa-clock"></i>Pending</span>';
   }
 
-  function itemStatusBadge(status) {
-    if (status === 'active') {
-      return '<span class="qz-chip qz-chip-primary"><i class="fa-solid fa-signal"></i>Active</span>';
-    }
-    if (status === 'archived') {
-      return '<span class="qz-chip qz-chip-warn"><i class="fa-solid fa-box-archive"></i>Archived</span>';
-    }
-    if (status === 'inactive') {
-      return '<span class="qz-chip qz-chip-warn"><i class="fa-solid fa-ban"></i>Inactive</span>';
-    }
-    return '';
-  }
-
   function typeChip(type) {
     if (type === 'door') return '<span class="qz-chip"><i class="fa-solid fa-door-open"></i>Door</span>';
     if (type === 'game') return '<span class="qz-chip"><i class="fa-solid fa-gamepad"></i>Game</span>';
+
+    // ✅ NEW: PATH
+    if (type === 'path') return '<span class="qz-chip"><i class="fa-solid fa-route"></i>Path</span>';
+
     return '<span class="qz-chip"><i class="fa-solid fa-graduation-cap"></i>Quiz</span>';
   }
 
   function iconHtml(type) {
     if (type === 'door') return '<i class="fa-solid fa-door-open"></i>';
     if (type === 'game') return '<i class="fa-solid fa-gamepad"></i>';
+
+    // ✅ NEW: PATH
+    if (type === 'path') return '<i class="fa-solid fa-route"></i>';
+
     return '<i class="fa-solid fa-graduation-cap"></i>';
   }
 
@@ -670,15 +664,27 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   function toDurationText(item) {
+    // priority: total_time (minutes) then time_limit_sec
     const t = item.total_time ?? item.total_time_minutes ?? item.duration ?? null;
-    if (t === null || t === undefined || t === '') return '—';
-    const n = parseInt(t, 10);
-    if (!isNaN(n) && n > 0) return n + ' min';
-    return String(t);
+
+    if (t !== null && t !== undefined && t !== '') {
+      const n = parseInt(t, 10);
+      if (!isNaN(n) && n > 0) return n + ' min';
+      return String(t);
+    }
+
+    // fallback: time_limit_sec (seconds -> minutes)
+    const sec = item.time_limit_sec ?? item.time_limit ?? null;
+    if (sec !== null && sec !== undefined && sec !== '') {
+      const s = parseInt(sec, 10);
+      if (!isNaN(s) && s > 0) return Math.ceil(s / 60) + ' min';
+    }
+
+    return '—';
   }
 
   function pickInstructions(item) {
-    return item.instructions || item.excerpt || item.description || item.note || '';
+    return item.instructions_html || item.instructions || item.excerpt || item.description || item.note || '';
   }
 
   function pickAllowedAttempts(item) {
@@ -691,12 +697,12 @@ document.addEventListener('DOMContentLoaded', function () {
       item.allowed_attempts ??
       item.total_attempts ??
       1;
+
     const n = parseInt(v, 10);
     return (isNaN(n) || n <= 0) ? 1 : n;
   }
 
   function pickUsedAttempts(item) {
-    // Try numeric counters first (if API provides)
     const candidates = [
       item.my_attempts,
       item.attempts_used,
@@ -714,7 +720,7 @@ document.addEventListener('DOMContentLoaded', function () {
       }
     }
 
-    // ✅ QUIZ fallback: your quiz API uses `attempt` / `result` / `my_status`
+    // QUIZ fallback
     if (item.type === 'quiz') {
       if (item.my_status === 'completed') return 1;
       if (item.attempt && (item.attempt.id || item.attempt.status)) return 1;
@@ -732,7 +738,7 @@ document.addEventListener('DOMContentLoaded', function () {
     return Math.max((allowed || 0) - (used || 0), 0);
   }
 
-  // ✅ "No Attempts left" ONLY for Games & Door (NOT quizzes)
+  // ✅ "No Attempts left" for Quiz + Game + Door + Path
   function computeActionMeta(type, item) {
     const myStatus = item.my_status || 'Pending';
     const status   = item.status || 'active';
@@ -741,9 +747,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const used    = pickUsedAttempts(item);
     const remaining = computeRemainingAttempts(item, allowed, used);
 
-    // ✅ "No Attempts left" for Quizzes + Games + Door
-    const enforceAttemptLimit = (type === 'quiz' || type === 'game' || type === 'door');
-
+    const enforceAttemptLimit = (type === 'quiz' || type === 'game' || type === 'door' || type === 'path');
     const allowContinueEvenIfMax = (enforceAttemptLimit && myStatus === 'in_progress');
 
     const apiMaxReached = toBool(item.max_attempt_reached);
@@ -775,27 +779,16 @@ document.addEventListener('DOMContentLoaded', function () {
     if (type === 'game') startUrl = START_GAME_ROUTE + encodeURIComponent(item.uuid);
     if (type === 'door') startUrl = START_DOOR_ROUTE + encodeURIComponent(item.uuid);
 
+    // ✅ NEW: PATH
+    if (type === 'path') startUrl = START_PATH_ROUTE + encodeURIComponent(item.uuid);
+
     return { myStatus, status, allowed, used, remaining, label, isDisabled, title, startUrl, maxAttemptReached };
   }
 
   // =======================
   // Instructions Modal
   // =======================
-  function nl2brWithDOMPurify(text) {
-  if (!text) return '';
-  
-  // Convert newlines to <br>
-  const withBreaks = text.replace(/\n/g, '<br>');
-  
-  // Sanitize while allowing safe tags
-  return DOMPurify.sanitize(withBreaks, {
-    ALLOWED_TAGS: ['b', 'strong', 'i', 'em', 'u', 'br', 'p', 'ul', 'ol', 'li'],
-    ALLOWED_ATTR: []
-  });
-}
-
-// ✅ UPDATE YOUR FUNCTION
-function openInsModal(row) {
+  function openInsModal(row) {
     if (!row) return;
 
     const duration = toDurationText(row);
@@ -807,18 +800,17 @@ function openInsModal(row) {
       ${created ? `<span><i class="fa-regular fa-calendar"></i> Added ${sanitize(created)}</span>` : ''}
     `;
 
-   const inst = pickInstructions(row);
+    const inst = pickInstructions(row);
+    if (inst) {
+      insContent.innerHTML = String(inst).replace(/\n/g, '<br>');
+    } else {
+      insContent.innerHTML = '<span class="text-muted">No instructions available.</span>';
+    }
 
-if (inst) {
-  // Just convert newlines to <br> and render the HTML as-is
-  insContent.innerHTML = inst.replace(/\n/g, '<br>');
-} else {
-  insContent.innerHTML = '<span class="text-muted">No instructions available.</span>';
-}
     insModal.classList.add('show');
     insModal.setAttribute('aria-hidden', 'false');
     document.body.classList.add('modal-open');
-}
+  }
 
   function closeInsModal() {
     insModal.classList.remove('show');
@@ -826,12 +818,10 @@ if (inst) {
     document.body.classList.remove('modal-open');
   }
 
-  // Close clicks
   document.querySelectorAll('[data-close="ins-modal"]').forEach(el => {
     el.addEventListener('click', closeInsModal);
   });
 
-  // ESC close
   document.addEventListener('keydown', function(e){
     if (e.key === 'Escape' && insModal.classList.contains('show')) closeInsModal();
   });
@@ -897,7 +887,6 @@ if (inst) {
       const allowed = meta.allowed;
       const used = meta.used;
 
-      // ✅ Assigned At (date + time)
       const assignedDate = getAssignmentDate(row);
       const assignedText = formatDateTime(assignedDate);
 
@@ -957,7 +946,6 @@ if (inst) {
         </td>
       `;
 
-      // Start
       const startBtn = tr.querySelector('[data-action="start"]');
       if (startBtn) {
         startBtn.addEventListener('click', () => {
@@ -967,7 +955,6 @@ if (inst) {
         });
       }
 
-      // Instructions modal open
       const viewBtn = tr.querySelector('[data-action="view-instructions"]');
       if (viewBtn) {
         viewBtn.addEventListener('click', () => {
@@ -1054,10 +1041,16 @@ if (inst) {
   }
 
   function normalizeItem(item, type) {
+    const timeSec = item.time_limit_sec ?? item.time_limit ?? null;
+    const durationMin = (timeSec && !isNaN(parseInt(timeSec, 10)))
+      ? Math.ceil(parseInt(timeSec, 10) / 60)
+      : null;
+
     return {
-      type: type, // quiz | game | door
+      type: type, // quiz | game | door | path
       uuid: item.uuid || item.id || null,
       title: item.title || item.name || 'Item',
+
       instructions: pickInstructions(item),
       excerpt: item.excerpt || '',
       description: item.description || '',
@@ -1065,13 +1058,13 @@ if (inst) {
       my_status: item.my_status || item.myStatus || 'Pending',
       is_public: item.is_public ?? item.public ?? 0,
 
-      total_time: item.total_time ?? item.total_time_minutes ?? item.duration ?? null,
+      total_time: item.total_time ?? item.total_time_minutes ?? item.duration ?? durationMin,
 
-      // ✅ keep raw attempt + result for quiz logic
+      time_limit_sec: item.time_limit_sec ?? null,
+
       attempt: item.attempt ?? null,
       result: item.result ?? null,
 
-      // ✅ quizzes use total_attempts in API response
       total_attempts: item.total_attempts ?? null,
 
       max_attempts_allowed: item.max_attempts_allowed,
@@ -1091,9 +1084,7 @@ if (inst) {
       max_attempt_reached: item.max_attempt_reached,
       can_attempt: item.can_attempt,
 
-      // ✅ NEW: capture assigned_at from API
       assigned_at: item.assigned_at || null,
-
       created_at: item.created_at || null
     };
   }
@@ -1107,14 +1098,17 @@ if (inst) {
     errEl.textContent = '';
 
     try {
-      const [qz, gm, dr] = await Promise.all([
+      const [qz, gm, dr, pg] = await Promise.all([
         fetchOne(API_QUIZZES, token).catch(e => ({ ok:false, data:[], _err:e })),
         fetchOne(API_GAMES, token).catch(e => ({ ok:false, data:[], _err:e })),
         fetchOne(API_DOOR, token).catch(e => ({ ok:false, data:[], _err:e })),
+
+        // ✅ NEW: PATH fetch
+        fetchOne(API_PATH, token).catch(e => ({ ok:false, data:[], _err:e })),
       ]);
 
-      if (!qz.ok && !gm.ok && !dr.ok) {
-        const firstErr = (qz._err || gm._err || dr._err);
+      if (!qz.ok && !gm.ok && !dr.ok && !pg.ok) {
+        const firstErr = (qz._err || gm._err || dr._err || pg._err);
         throw firstErr || new Error('Failed to load items.');
       }
 
@@ -1122,6 +1116,7 @@ if (inst) {
       (qz.data || []).forEach(i => merged.push(normalizeItem(i, 'quiz')));
       (gm.data || []).forEach(i => merged.push(normalizeItem(i, 'game')));
       (dr.data || []).forEach(i => merged.push(normalizeItem(i, 'door')));
+      (pg.data || []).forEach(i => merged.push(normalizeItem(i, 'path'))); // ✅ NEW
 
       // ✅ SORT: assigned_at (oldest -> newest), fallback created_at
       merged.sort((a,b) => {
@@ -1135,11 +1130,11 @@ if (inst) {
 
       applySearchAndPagination(true);
 
-      // partial load warning (optional)
       const partialErrors = [];
       if (!qz.ok && qz._err) partialErrors.push('Quizzes');
       if (!gm.ok && gm._err) partialErrors.push('Games');
       if (!dr.ok && dr._err) partialErrors.push('Door Games');
+      if (!pg.ok && pg._err) partialErrors.push('Path Games');
 
       if (partialErrors.length) {
         errEl.textContent = partialErrors.join(', ') + ' failed to load (showing available items).';

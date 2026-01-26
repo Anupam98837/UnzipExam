@@ -9,6 +9,10 @@ use Illuminate\Support\Facades\Schema;
 
 class StudentResultController extends Controller
 {
+    // ✅ Cache schema checks (HUGE SPEED BOOST)
+    private static array $tableCache = [];
+    private static array $colCache   = [];
+
     private function actor(Request $request): array
     {
         return [
@@ -18,17 +22,34 @@ class StudentResultController extends Controller
         ];
     }
 
+    private function hasTable(string $table): bool
+    {
+        if (!array_key_exists($table, self::$tableCache)) {
+            self::$tableCache[$table] = Schema::hasTable($table);
+        }
+        return self::$tableCache[$table];
+    }
+
+    private function hasColumn(string $table, string $col): bool
+    {
+        $key = "{$table}.{$col}";
+        if (!array_key_exists($key, self::$colCache)) {
+            self::$colCache[$key] = $this->hasTable($table) && Schema::hasColumn($table, $col);
+        }
+        return self::$colCache[$key];
+    }
+
     private function firstExistingTable(array $candidates): ?string
     {
         foreach ($candidates as $t) {
-            if (Schema::hasTable($t)) return $t;
+            if ($this->hasTable($t)) return $t;
         }
         return null;
     }
 
     private function safeCol(?string $table, string $alias, string $col, string $fallbackSql = "NULL"): string
     {
-        if ($table && Schema::hasTable($table) && Schema::hasColumn($table, $col)) {
+        if ($table && $this->hasColumn($table, $col)) {
             return "{$alias}.{$col}";
         }
         return $fallbackSql;
@@ -36,33 +57,44 @@ class StudentResultController extends Controller
 
     private function safeRCol(string $table, string $alias, string $col, string $fallbackSql = "NULL"): string
     {
-        if (Schema::hasTable($table) && Schema::hasColumn($table, $col)) {
+        if ($this->hasColumn($table, $col)) {
             return "{$alias}.{$col}";
         }
         return $fallbackSql;
     }
 
+    // ✅ Build union queries fast (NO users join)
     private function buildQueries(int $userId): array
     {
         $queries = [];
 
-        // ✅ master tables (your project uses singular mostly)
         $doorGameTable   = $this->firstExistingTable(['door_game', 'door_games']);
         $bubbleGameTable = $this->firstExistingTable(['bubble_game', 'bubble_games']);
         $quizTable       = $this->firstExistingTable(['quizz', 'quizzes', 'quiz']);
+        $pathGameTable   = $this->firstExistingTable(['path_games', 'path_game']);
 
-        // ==========================
+        // ==========================================
         // ✅ Door Game Results
-        // ==========================
-        if (Schema::hasTable('door_game_results')) {
+        // ==========================================
+        if ($this->hasTable('door_game_results')) {
 
-            $hasPub = Schema::hasColumn('door_game_results', 'publish_to_student');
+            $hasPub    = $this->hasColumn('door_game_results', 'publish_to_student');
+            $hasStatus = $this->hasColumn('door_game_results', 'status');
 
-            $door = DB::table('door_game_results as r')
-                ->join('users as u', 'u.id', '=', 'r.user_id');
+            $door = DB::table('door_game_results as r');
 
             if ($doorGameTable) {
                 $door->leftJoin($doorGameTable . ' as g', 'g.id', '=', 'r.door_game_id');
+            }
+
+            if ($this->hasColumn('door_game_results', 'deleted_at')) $door->whereNull('r.deleted_at');
+
+            $door->where('r.user_id', $userId);
+
+            if ($hasPub) {
+                $door->where('r.publish_to_student', 1);
+            } elseif ($hasStatus) {
+                $door->where('r.status', '!=', 'in_progress');
             }
 
             $door->selectRaw("
@@ -73,41 +105,39 @@ class StudentResultController extends Controller
 
                 r.id as result_id,
                 r.uuid as result_uuid,
-
                 " . $this->safeRCol('door_game_results', 'r', 'attempt_no', "1") . " as attempt_no,
                 " . $this->safeRCol('door_game_results', 'r', 'score', "0") . " as score,
                 " . $this->safeRCol('door_game_results', 'r', 'accuracy', "NULL") . " as accuracy,
 
-                " . ($hasPub ? "r.publish_to_student" : "0") . " as publish_to_student,
-                COALESCE(" . $this->safeRCol('door_game_results', 'r', 'result_created_at', "NULL") . ", r.created_at) as result_created_at,
-
-                u.id as student_id,
-                " . (Schema::hasColumn('users','uuid')  ? "u.uuid"  : "NULL") . " as student_uuid,
-                " . (Schema::hasColumn('users','name')  ? "u.name"  : "NULL") . " as student_name,
-                " . (Schema::hasColumn('users','email') ? "u.email" : "NULL") . " as student_email
+                " . ($hasPub ? "r.publish_to_student" : "1") . " as publish_to_student,
+                COALESCE(" . $this->safeRCol('door_game_results', 'r', 'result_created_at', "NULL") . ", r.created_at) as result_created_at
             ");
-
-            $door->where('r.user_id', $userId);
-
-            // ✅ Only published
-            if ($hasPub) $door->where('r.publish_to_student', 1);
-            else $door->whereRaw("0=1");
 
             $queries[] = $door;
         }
 
-        // ==========================
+        // ==========================================
         // ✅ Bubble Game Results
-        // ==========================
-        if (Schema::hasTable('bubble_game_results')) {
+        // ==========================================
+        if ($this->hasTable('bubble_game_results')) {
 
-            $hasPub = Schema::hasColumn('bubble_game_results', 'publish_to_student');
+            $hasPub    = $this->hasColumn('bubble_game_results', 'publish_to_student');
+            $hasStatus = $this->hasColumn('bubble_game_results', 'status');
 
-            $bubble = DB::table('bubble_game_results as r')
-                ->join('users as u', 'u.id', '=', 'r.user_id');
+            $bubble = DB::table('bubble_game_results as r');
 
             if ($bubbleGameTable) {
                 $bubble->leftJoin($bubbleGameTable . ' as g', 'g.id', '=', 'r.bubble_game_id');
+            }
+
+            if ($this->hasColumn('bubble_game_results', 'deleted_at')) $bubble->whereNull('r.deleted_at');
+
+            $bubble->where('r.user_id', $userId);
+
+            if ($hasPub) {
+                $bubble->where('r.publish_to_student', 1);
+            } elseif ($hasStatus) {
+                $bubble->where('r.status', '!=', 'in_progress');
             }
 
             $bubble->selectRaw("
@@ -118,42 +148,39 @@ class StudentResultController extends Controller
 
                 r.id as result_id,
                 r.uuid as result_uuid,
-
                 " . $this->safeRCol('bubble_game_results', 'r', 'attempt_no', "1") . " as attempt_no,
                 " . $this->safeRCol('bubble_game_results', 'r', 'score', "0") . " as score,
                 " . $this->safeRCol('bubble_game_results', 'r', 'accuracy', "NULL") . " as accuracy,
 
-                " . ($hasPub ? "r.publish_to_student" : "0") . " as publish_to_student,
-                COALESCE(" . $this->safeRCol('bubble_game_results', 'r', 'result_created_at', "NULL") . ", r.created_at) as result_created_at,
-
-                u.id as student_id,
-                " . (Schema::hasColumn('users','uuid')  ? "u.uuid"  : "NULL") . " as student_uuid,
-                " . (Schema::hasColumn('users','name')  ? "u.name"  : "NULL") . " as student_name,
-                " . (Schema::hasColumn('users','email') ? "u.email" : "NULL") . " as student_email
+                " . ($hasPub ? "r.publish_to_student" : "1") . " as publish_to_student,
+                COALESCE(" . $this->safeRCol('bubble_game_results', 'r', 'result_created_at', "NULL") . ", r.created_at) as result_created_at
             ");
-
-            $bubble->where('r.user_id', $userId);
-
-            // ✅ Only published
-            if ($hasPub) $bubble->where('r.publish_to_student', 1);
-            else $bubble->whereRaw("0=1");
 
             $queries[] = $bubble;
         }
 
-        // ==========================
+        // ==========================================
         // ✅ Quizz Results
-        // ==========================
-        if (Schema::hasTable('quizz_results')) {
+        // ==========================================
+        if ($this->hasTable('quizz_results')) {
 
-            $hasPub = Schema::hasColumn('quizz_results', 'publish_to_student');
+            $hasPub    = $this->hasColumn('quizz_results', 'publish_to_student');
+            $hasStatus = $this->hasColumn('quizz_results', 'status');
 
-            $quizz = DB::table('quizz_results as r')
-                ->join('users as u', 'u.id', '=', 'r.user_id');
+            $quizz = DB::table('quizz_results as r');
 
-            // ✅ join quiz master
-            if ($quizTable && Schema::hasColumn('quizz_results', 'quiz_id')) {
+            if ($quizTable && $this->hasColumn('quizz_results', 'quiz_id')) {
                 $quizz->leftJoin($quizTable . ' as g', 'g.id', '=', 'r.quiz_id');
+            }
+
+            if ($this->hasColumn('quizz_results', 'deleted_at')) $quizz->whereNull('r.deleted_at');
+
+            $quizz->where('r.user_id', $userId);
+
+            if ($hasPub) {
+                $quizz->where('r.publish_to_student', 1);
+            } elseif ($hasStatus) {
+                $quizz->where('r.status', '!=', 'in_progress');
             }
 
             $quizz->selectRaw("
@@ -169,22 +196,54 @@ class StudentResultController extends Controller
                 " . $this->safeRCol('quizz_results', 'r', 'marks_obtained', "0") . " as score,
                 " . $this->safeRCol('quizz_results', 'r', 'percentage', "NULL") . " as accuracy,
 
-                " . ($hasPub ? "r.publish_to_student" : "0") . " as publish_to_student,
-                COALESCE(" . $this->safeRCol('quizz_results', 'r', 'released_at', "NULL") . ", r.created_at) as result_created_at,
-
-                u.id as student_id,
-                " . (Schema::hasColumn('users','uuid')  ? "u.uuid"  : "NULL") . " as student_uuid,
-                " . (Schema::hasColumn('users','name')  ? "u.name"  : "NULL") . " as student_name,
-                " . (Schema::hasColumn('users','email') ? "u.email" : "NULL") . " as student_email
+                " . ($hasPub ? "r.publish_to_student" : "1") . " as publish_to_student,
+                COALESCE(" . $this->safeRCol('quizz_results', 'r', 'released_at', "NULL") . ", r.created_at) as result_created_at
             ");
 
-            $quizz->where('r.user_id', $userId);
-
-            // ✅ Only published
-            if ($hasPub) $quizz->where('r.publish_to_student', 1);
-            else $quizz->whereRaw("0=1");
-
             $queries[] = $quizz;
+        }
+
+        // ==========================================
+        // ✅ Path Game Results ✅ ADDED
+        // ==========================================
+        if ($this->hasTable('path_game_results')) {
+
+            $hasPub    = $this->hasColumn('path_game_results', 'publish_to_student');
+            $hasStatus = $this->hasColumn('path_game_results', 'status');
+
+            $path = DB::table('path_game_results as r');
+
+            if ($pathGameTable) {
+                $path->leftJoin($pathGameTable . ' as g', 'g.id', '=', 'r.path_game_id');
+            }
+
+            if ($this->hasColumn('path_game_results', 'deleted_at')) $path->whereNull('r.deleted_at');
+
+            $path->where('r.user_id', $userId);
+
+            if ($hasPub) {
+                $path->where('r.publish_to_student', 1);
+            } elseif ($hasStatus) {
+                $path->where('r.status', '!=', 'in_progress');
+            }
+
+            $path->selectRaw("
+                'path_game' as module,
+                " . ($pathGameTable ? "g.id" : "r.path_game_id") . " as game_id,
+                " . $this->safeCol($pathGameTable, 'g', 'uuid', "NULL") . " as game_uuid,
+                " . $this->safeCol($pathGameTable, 'g', 'title', "CONCAT('Path Game #', r.path_game_id)") . " as game_title,
+
+                r.id as result_id,
+                r.uuid as result_uuid,
+                " . $this->safeRCol('path_game_results', 'r', 'attempt_no', "1") . " as attempt_no,
+                " . $this->safeRCol('path_game_results', 'r', 'score', "0") . " as score,
+                NULL as accuracy,
+
+                " . ($hasPub ? "r.publish_to_student" : "1") . " as publish_to_student,
+                r.created_at as result_created_at
+            ");
+
+            $queries[] = $path;
         }
 
         return $queries;
@@ -202,6 +261,17 @@ class StudentResultController extends Controller
                 'message' => 'Unable to resolve user from token.'
             ], 403);
         }
+
+        // ✅ Fetch student info ONLY ONCE (no union joins)
+        $student = DB::table('users')
+            ->select([
+                'id',
+                $this->hasColumn('users','uuid') ? 'uuid' : DB::raw("NULL as uuid"),
+                $this->hasColumn('users','name') ? 'name' : DB::raw("NULL as name"),
+                $this->hasColumn('users','email') ? 'email' : DB::raw("NULL as email"),
+            ])
+            ->where('id', $userId)
+            ->first();
 
         $page    = max(1, (int) $request->query('page', 1));
         $perPage = min(100, max(10, (int) $request->query('per_page', 20)));
@@ -222,7 +292,7 @@ class StudentResultController extends Controller
             ]);
         }
 
-        // ✅ UNION ALL
+        // ✅ UNION ALL only once
         $base = array_shift($queries);
         foreach ($queries as $qq) {
             $base->unionAll($qq);
@@ -230,46 +300,39 @@ class StudentResultController extends Controller
 
         $outer = DB::query()->fromSub($base, 'x');
 
-        // ✅ search only by game title (no folder anymore)
         if ($search !== '') {
             $outer->where('x.game_title', 'like', "%{$search}%");
         }
 
         $outer->orderByDesc('x.result_created_at');
 
-        // ✅ Count query
-        $queries2 = $this->buildQueries($userId);
-        $base2 = array_shift($queries2);
-        foreach ($queries2 as $qq) {
-            $base2->unionAll($qq);
-        }
-
-        $countQ = DB::query()->fromSub($base2, 'x');
+        // ✅ Count without rebuilding union
+        $countQ = DB::query()->fromSub($base, 'x');
         if ($search !== '') {
             $countQ->where('x.game_title', 'like', "%{$search}%");
         }
-
         $total = (int) $countQ->count();
+
         $items = $outer->forPage($page, $perPage)->get();
 
-        $data = $items->map(function ($x) {
+        $data = $items->map(function ($x) use ($student) {
             $rid = $x->result_uuid;
 
-            // ✅ view_url mapping
             $viewUrl = '#';
             if ($x->module === 'door_game')   $viewUrl = "/decision-making-test/results/{$rid}/view";
             if ($x->module === 'quizz')       $viewUrl = "/exam/results/{$rid}/view";
             if ($x->module === 'bubble_game') $viewUrl = "/test/results/{$rid}/view";
+            if ($x->module === 'path_game')   $viewUrl = "/path-games/results/{$rid}/view";
 
             return [
                 'module' => $x->module,
                 'view_url' => $viewUrl,
 
                 'student' => [
-                    'id'    => (int) $x->student_id,
-                    'uuid'  => $x->student_uuid,
-                    'name'  => $x->student_name,
-                    'email' => $x->student_email,
+                    'id'    => (int) ($student->id ?? 0),
+                    'uuid'  => $student->uuid ?? null,
+                    'name'  => $student->name ?? null,
+                    'email' => $student->email ?? null,
                 ],
 
                 'game' => [
@@ -281,7 +344,7 @@ class StudentResultController extends Controller
                 'result' => [
                     'id' => (int) $x->result_id,
                     'uuid' => $x->result_uuid,
-                    'attempt_no' => (int) ($x->attempt_no ?? 0),
+                    'attempt_no' => (int) ($x->attempt_no ?? 1),
                     'score' => $x->score,
                     'accuracy' => $x->accuracy,
                     'publish_to_student' => (int) $x->publish_to_student,

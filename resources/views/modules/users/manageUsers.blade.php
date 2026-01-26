@@ -477,6 +477,12 @@ html.theme-dark .badge-code{
               <i class="fa fa-door-open me-1"></i> Door Games
             </button>
           </li>
+          <li class="nav-item">
+  <button class="nav-link" data-bs-toggle="tab" data-bs-target="#baTabPath" type="button">
+    <i class="fa fa-route me-1"></i> Path Games
+  </button>
+</li>
+
         </ul>
 
         {{-- Loader --}}
@@ -637,6 +643,37 @@ html.theme-dark .badge-code{
                   </button>
                 </div>
               </div>
+              {{-- PATH GAMES --}}
+<div class="tab-pane fade" id="baTabPath">
+  <div class="ba-box">
+    <div class="fw-semibold mb-2"><i class="fa fa-route me-1"></i>Bulk Path Games Assignment</div>
+
+    <label class="form-label small text-muted mb-1">Select Path Game</label>
+    <select id="baPathSelect" class="form-select">
+      <option value="">Loading path games...</option>
+    </select>
+
+    <div class="d-flex gap-3 mt-3">
+      <div class="form-check">
+        <input class="form-check-input" type="radio" name="baPathMode" id="baPathAssign" value="assign" checked>
+        <label class="form-check-label" for="baPathAssign">Assign</label>
+      </div>
+      <div class="form-check">
+        <input class="form-check-input" type="radio" name="baPathMode" id="baPathUnassign" value="unassign">
+        <label class="form-check-label" for="baPathUnassign">Unassign</label>
+      </div>
+    </div>
+
+    <div class="alert alert-light small mt-3 mb-0">
+      <i class="fa fa-circle-info me-1"></i>
+      Already assigned users will be skipped automatically.
+    </div>
+
+    <button class="btn btn-primary mt-3 w-100" id="baApplyPath">
+      <i class="fa fa-check me-1"></i> Apply Path Game in Bulk
+    </button>
+  </div>
+</div>
 
             </div><!-- /tab-content -->
           </div>
@@ -1135,6 +1172,62 @@ html.theme-dark .badge-code{
     </div>
   </div>
 </div>
+{{-- ================= Manage User Path Games Modal ================= --}}
+<div class="modal fade" id="userPathGamesModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title h5 mb-0">Manage Path Games</div>
+          <div class="small text-muted">
+            Assign / Unassign path games for <span id="upg_user_name" class="fw-semibold">—</span>
+          </div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body">
+        <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
+          <div class="d-flex gap-2 align-items-center">
+            <div class="input-group">
+              <span class="input-group-text"><i class="fa fa-search"></i></span>
+              <input type="text" id="upg_search" class="form-control" placeholder="Search path games...">
+            </div>
+
+            <select id="upg_filter" class="form-select" style="max-width:220px;">
+              <option value="all">All</option>
+              <option value="assigned">Assigned</option>
+              <option value="unassigned">Unassigned</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table align-middle">
+            <thead class="sticky-top bg-body">
+              <tr>
+                <th>Path Game</th>
+                <th style="width:120px;">Duration</th>
+                <th style="width:120px;">Questions</th>
+                <th style="width:120px;">Status</th>
+                <th style="width:120px;">Public</th>
+                <th style="width:220px;">Code</th>
+                <th style="width:120px;" class="text-center">Assign</th>
+              </tr>
+            </thead>
+            <tbody id="upg_rows">
+              <tr id="upg_loader">
+                <td colspan="7" class="p-3 text-center text-muted">
+                  <i class="fa fa-circle-notch fa-spin me-2"></i>Loading path games...
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div><!-- /modal-body -->
+    </div>
+  </div>
+</div>
 
 {{-- ================= Upload CV Modal ================= --}}
 <div class="modal fade" id="uploadCvModal" tabindex="-1" aria-hidden="true">
@@ -1328,6 +1421,14 @@ const filterModal = bootstrap.Modal.getOrCreateInstance(filterModalEl);
   const udg_loader           = document.getElementById('udg_loader');
   const udg_search           = document.getElementById('udg_search');
   const udg_filter           = document.getElementById('udg_filter');
+// path games modal
+const userPathGamesModalEl = document.getElementById('userPathGamesModal');
+const userPathGamesModal   = new bootstrap.Modal(userPathGamesModalEl);
+const upg_user_name        = document.getElementById('upg_user_name');
+const upg_rows             = document.getElementById('upg_rows');
+const upg_loader           = document.getElementById('upg_loader');
+const upg_search           = document.getElementById('upg_search');
+const upg_filter           = document.getElementById('upg_filter');
 
   // Toasts
   const toastOk  = new bootstrap.Toast(document.getElementById('toastSuccess'));
@@ -1372,6 +1473,11 @@ const filterModal = bootstrap.Modal.getOrCreateInstance(filterModalEl);
   const cvUserUuidInput = document.getElementById('cv_user_uuid');
   const cvFileInput     = document.getElementById('cvFileInput');
   const cvUploadBtn     = document.getElementById('cvUploadBtn');
+
+  const baPathSelect = document.getElementById('baPathSelect');
+const baApplyPath  = document.getElementById('baApplyPath');
+
+let bulkPathCatalog = [];
 
   let bulkUsersLoaded = false;
   let bulkUsers = [];
@@ -1581,15 +1687,18 @@ filterModalEl.addEventListener('hidden.bs.modal', cleanupModalBackdrops);
 
     // ✅ Use your EXISTING endpoints (already used in per-user manage modals)
     try{
-      const [rq, rb, rd] = await Promise.all([
-        fetch(`/api/users/${uid}/quizzes`, { headers: authHeaders({'Accept':'application/json'}) }),
-        fetch(`/api/users/${uid}/bubble-games`, { headers: authHeaders({'Accept':'application/json'}) }),
-        fetch(`/api/users/${uid}/door-games`, { headers: authHeaders({'Accept':'application/json'}) }),
-      ]);
+      const [rq, rb, rd, rp] = await Promise.all([
+  fetch(`/api/users/${uid}/quizzes`, { headers: authHeaders({'Accept':'application/json'}) }),
+  fetch(`/api/users/${uid}/bubble-games`, { headers: authHeaders({'Accept':'application/json'}) }),
+  fetch(`/api/users/${uid}/door-games`, { headers: authHeaders({'Accept':'application/json'}) }),
+  fetch(`/api/users/${uid}/path-games`, { headers: authHeaders({'Accept':'application/json'}) }),
+]);
+
 
       const jq = await rq.json().catch(()=> ({}));
       const jb = await rb.json().catch(()=> ({}));
       const jd = await rd.json().catch(()=> ({}));
+      const jp = await rp.json().catch(()=> ({}));
 
       if (rq.ok){
         const list = Array.isArray(jq.data) ? jq.data : [];
@@ -1614,18 +1723,28 @@ filterModalEl.addEventListener('hidden.bs.modal', cleanupModalBackdrops);
           name: x.door_game_name ?? x.game_name ?? x.title ?? x.name ?? ('Door Game ' + (x.id ?? ''))
         })).filter(x => x.id != null);
       }
+      if (rp.ok){
+  const list = Array.isArray(jp.data) ? jp.data : [];
+  bulkPathCatalog = list.map(x => ({
+    id: x.path_game_id ?? x.game_id ?? x.id,
+    name: x.path_game_name ?? x.game_name ?? x.title ?? x.name ?? ('Path Game ' + (x.id ?? ''))
+  })).filter(x => x.id != null);
+}
 
       bulkCatalogLoaded = true;
 
       fillSelect(baQuizSelect, bulkQuizCatalog, 'quiz');
       fillSelect(baBubbleSelect, bulkBubbleCatalog, 'bubble game');
       fillSelect(baDoorSelect, bulkDoorCatalog, 'door game');
+      fillSelect(baPathSelect, bulkPathCatalog, 'path game');
 
     }catch(e){
       bulkCatalogLoaded = true;
       fillSelect(baQuizSelect, [], 'quiz');
       fillSelect(baBubbleSelect, [], 'bubble game');
       fillSelect(baDoorSelect, [], 'door game');
+      fillSelect(baPathSelect, [], 'path game');
+
       err(e.message || 'Failed to load catalogs');
     }
   }
@@ -1677,6 +1796,11 @@ filterModalEl.addEventListener('hidden.bs.modal', cleanupModalBackdrops);
       mode = getMode('baDoorMode');
       if (!itemId){ Swal.fire('Door game required','Please select a door game first.','info'); return; }
     }
+  if (type === 'path'){
+  itemId = normId(baPathSelect.value || '');
+  mode = getMode('baPathMode');
+  if (!itemId){ Swal.fire('Path game required','Please select a path game first.','info'); return; }
+}
 
     const {isConfirmed} = await Swal.fire({
       title: `Bulk ${mode} ?`,
@@ -1714,6 +1838,13 @@ filterModalEl.addEventListener('hidden.bs.modal', cleanupModalBackdrops);
           : `/api/users/${uid}/door-games/unassign`;
         payload = { door_game_id: itemId };
       }
+      if (type === 'path'){
+  url = mode === 'assign'
+    ? `/api/users/${uid}/path-games/assign`
+    : `/api/users/${uid}/path-games/unassign`;
+  payload = { path_game_id: itemId };
+}
+
 
       const res = await fetch(url, {
         method:'POST',
@@ -1810,6 +1941,7 @@ filterModalEl.addEventListener('hidden.bs.modal', cleanupModalBackdrops);
   baApplyQuiz?.addEventListener('click', ()=> applyBulk('quiz'));
   baApplyBubble?.addEventListener('click', ()=> applyBulk('bubble'));
   baApplyDoor?.addEventListener('click', ()=> applyBulk('door'));
+  baApplyPath?.addEventListener('click', ()=> applyBulk('path'));
 
   // open modal hook
   if (btnBulkAssign){
@@ -1898,6 +2030,9 @@ filterModalEl.addEventListener('hidden.bs.modal', cleanupModalBackdrops);
 
     let udg_userId  = null;
   let udg_data    = [];
+
+  let upg_userId = null;
+let upg_data   = [];
 
   let folderFilter = '';
   let foldersCache = [];
@@ -2387,33 +2522,42 @@ filterModalEl.addEventListener('hidden.bs.modal', cleanupModalBackdrops);
           </li>`;
 
     if (CAN_WRITE){
-      actions += `
-          <li>
-            <button type="button" class="dropdown-item" data-action="edit">
-              <i class="fa fa-pen-to-square"></i> Edit
-            </button>
-          </li>
-          <li>
-            <button type="button" class="dropdown-item" data-action="upload_cv">
-              <i class="fa fa-file-arrow-up"></i> Upload CV
-            </button>
-          </li>
-          <li>
-            <button type="button" class="dropdown-item" data-action="quizzes">
-              <i class="fa fa-question-circle"></i> Manage Quizzes
-            </button>
-          </li>
-          <li>
-            <button type="button" class="dropdown-item" data-action="bubble">
-              <i class="fa fa-gamepad"></i> Manage Bubble Games
-            </button>
-          </li>
-          <li>
-            <button type="button" class="dropdown-item" data-action="door">
-              <i class="fa fa-door-open"></i> Manage Door Games
-            </button>
-          </li>`;
-    }
+  actions += `
+      <li>
+        <button type="button" class="dropdown-item" data-action="edit">
+          <i class="fa fa-pen-to-square"></i> Edit
+        </button>
+      </li>
+      <li>
+        <button type="button" class="dropdown-item" data-action="upload_cv">
+          <i class="fa fa-file-arrow-up"></i> Upload CV
+        </button>
+      </li>
+      <li>
+        <button type="button" class="dropdown-item" data-action="quizzes">
+          <i class="fa fa-question-circle"></i> Manage Quizzes
+        </button>
+      </li>
+      <li>
+        <button type="button" class="dropdown-item" data-action="bubble">
+          <i class="fa fa-gamepad"></i> Manage Bubble Games
+        </button>
+      </li>
+      <li>
+        <button type="button" class="dropdown-item" data-action="door">
+          <i class="fa fa-door-open"></i> Manage Door Games
+        </button>
+      </li>
+
+      <!-- ✅ ADD HERE -->
+      <li>
+        <button type="button" class="dropdown-item" data-action="path">
+          <i class="fa fa-route"></i> Manage Path Games
+        </button>
+      </li>
+  `;
+}
+
 
     if (CAN_DELETE){
       actions += `
@@ -2854,7 +2998,15 @@ document.addEventListener('click', (e) => {
       }
       openUserBubbleGames(id);
     
-    }else if (act === 'door'){
+    }
+    else if (act === 'path'){
+  if (!CAN_WRITE){
+    err('You do not have permission to manage path games');
+    return;
+  }
+  openUserPathGames(id);
+}
+else if (act === 'door'){
   if (!CAN_WRITE){
     err('You do not have permission to manage door games');
     return;
@@ -3207,7 +3359,163 @@ document.addEventListener('click', (e) => {
       });
     });
   }
-      /* =================== USER DOOR GAMES =================== */
+    /* =================== USER PATH GAMES =================== */
+async function openUserPathGames(id){
+  upg_userId = parseInt(id,10);
+  const targetUser = usersCache.find(u => String(u.id) === String(id));
+  upg_user_name.textContent = targetUser?.name || ('User #'+id);
+
+  upg_search.value = '';
+  upg_filter.value = 'all';
+  upg_rows.innerHTML = '';
+  upg_loader.style.display = '';
+
+  userPathGamesModal.show();
+
+  try{
+    const res = await fetch(`/api/users/${id}/path-games`, {
+      headers: authHeaders({'Accept':'application/json'})
+    });
+    const j = await res.json().catch(()=> ({}));
+    if (!res.ok) throw new Error(j.message || 'Failed to load path games');
+
+    upg_data = Array.isArray(j.data) ? j.data : [];
+    renderUserPathGames();
+  }catch(e){
+    console.error('User path games load error', e);
+    upg_rows.innerHTML =
+      `<tr><td colspan="7" class="p-3 text-danger text-center">${esc(e.message || 'Failed to load path games')}</td></tr>`;
+  }finally{
+    upg_loader.style.display = 'none';
+  }
+}
+
+function renderUserPathGames(){
+  upg_rows.querySelectorAll('tr:not(#upg_loader)').forEach(tr => tr.remove());
+
+  let list = upg_data.slice();
+  const qText = upg_search.value.trim().toLowerCase();
+  const filter = upg_filter.value;
+
+  if (qText){
+    list = list.filter(x => {
+      const nm = (x.path_game_name || x.game_name || x.title || '').toLowerCase();
+      return nm.includes(qText);
+    });
+  }
+
+  if (filter === 'assigned'){
+    list = list.filter(x => !!x.assigned);
+  }else if (filter === 'unassigned'){
+    list = list.filter(x => !x.assigned);
+  }
+
+  if (!list.length){
+    upg_rows.innerHTML =
+      `<tr><td colspan="7" class="p-3 text-center text-muted">No path games.</td></tr>`;
+    return;
+  }
+
+  const frag = document.createDocumentFragment();
+  list.forEach(gm => {
+    const assigned = !!gm.assigned;
+    const status  = (gm.status || '').toLowerCase();
+    const isPublic = (gm.is_public || '').toLowerCase();
+    const code = gm.assignment_code || '';
+
+    const statusBadge = status === 'active'
+      ? `<span class="badge badge-soft-active text-uppercase">${esc(status)}</span>`
+      : `<span class="badge badge-soft-inactive text-uppercase">${esc(status||'-')}</span>`;
+
+    const publicBadge = (isPublic === 'yes' || isPublic === 'public')
+      ? `<span class="badge bg-success-subtle text-success border border-success-subtle">Yes</span>`
+      : `<span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">No</span>`;
+
+    const codeHtml = code
+      ? `<button type="button" class="badge-code js-copy-assignment" data-code="${esc(code)}" title="Click to copy assignment code">
+           <span>${esc(code)}</span>
+           <i class="fa-regular fa-copy"></i>
+         </button>`
+      : '<span class="text-muted small">—</span>';
+
+    const name = gm.path_game_name || gm.game_name || gm.title || '';
+    const duration = (gm.duration_min ?? gm.total_time ?? gm.duration ?? null);
+    const questions = (gm.total_questions ?? gm.questions_count ?? null);
+    const gameId = (gm.path_game_id ?? gm.game_id ?? gm.id ?? '');
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="fw-semibold">${esc(name)}</td>
+      <td>${duration != null ? esc(String(duration)) : '—'}</td>
+      <td>${questions != null ? esc(String(questions)) : '—'}</td>
+      <td>${statusBadge}</td>
+      <td>${publicBadge}</td>
+      <td>${codeHtml}</td>
+      <td class="text-center">
+        <div class="form-check form-switch d-inline-block m-0">
+          <input class="form-check-input upg-toggle" type="checkbox" data-gid="${esc(String(gameId))}" ${assigned?'checked':''}>
+        </div>
+      </td>
+    `;
+    frag.appendChild(tr);
+  });
+
+  upg_rows.appendChild(frag);
+
+  upg_rows.querySelectorAll('.upg-toggle').forEach(ch => {
+    ch.addEventListener('change', async ()=>{
+      const gid = ch.dataset.gid;
+      const assigned = !!ch.checked;
+      await toggleUserPathGame(gid, assigned, ch);
+    });
+  });
+}
+
+async function toggleUserPathGame(gameId, assigned, checkboxEl){
+  if (!upg_userId || !gameId) return;
+
+  try{
+    const url = assigned
+      ? `/api/users/${upg_userId}/path-games/assign`
+      : `/api/users/${upg_userId}/path-games/unassign`;
+
+    const res = await fetch(url, {
+      method:'POST',
+      headers: authHeaders({'Content-Type':'application/json','Accept':'application/json'}),
+      body: JSON.stringify({ path_game_id: gameId })
+    });
+
+    const j = await res.json().catch(()=> ({}));
+    if (!res.ok) throw new Error(firstError(j) || 'Operation failed');
+
+    const item = upg_data.find(x => String(x.path_game_id ?? x.game_id ?? x.id) === String(gameId));
+    if (assigned){
+      const code = j.data?.assignment_code || item?.assignment_code || '';
+      if (item){
+        item.assigned = true;
+        item.assignment_code = code;
+        item.status = 'active';
+      }
+      ok('Path game assigned to user');
+    }else{
+      if (item){
+        item.assigned = false;
+        item.assignment_code = null;
+        item.status = 'revoked';
+      }
+      ok('Path game unassigned from user');
+    }
+
+    renderUserPathGames();
+  }catch(e){
+    if (checkboxEl) checkboxEl.checked = !assigned;
+    err(e.message || 'Failed to update path game assignment');
+  }
+}
+
+upg_search.addEventListener('input', debounce(renderUserPathGames, 250));
+upg_filter.addEventListener('change', renderUserPathGames);
+
   /* =================== USER DOOR GAMES =================== */
   async function openUserDoorGames(id){
     udg_userId = parseInt(id,10);

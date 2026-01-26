@@ -1749,6 +1749,7 @@ public function getProfile(Request $request)
             ->where('id', $id)
             ->whereNull('deleted_at')
             ->first();
+            
 
         if (!$user) {
             return response()->json([
@@ -2174,6 +2175,280 @@ public function userDoorGames(Request $request, int $id)
         'status' => 'success',
         'data'   => $data,
     ]);
+}
+/**
+ * GET /api/users/{id}/path-games
+ * For ADMIN / SUPER_ADMIN.
+ * Returns all path games + whether this user is assigned to each.
+ */
+public function userPathGames(Request $request, int $id)
+{
+    // ✅ Only admin / super_admin
+    // if ($resp = $this->requireRole($request, ['admin','super_admin'])) return $resp;
+
+    $user = DB::table('users')
+        ->where('id', $id)
+        ->whereNull('deleted_at')
+        ->first();
+
+    if (!$user) {
+        return response()->json([
+            'status'  => 'error',
+            'message' => 'User not found',
+        ], 404);
+    }
+
+    // ✅ All path games (excluding soft-deleted)
+    $games = DB::table('path_games')
+        ->whereNull('deleted_at')
+        ->orderBy('title')
+        ->get();
+
+    // ✅ Existing assignments
+    $assignments = DB::table('user_path_game_assignments')
+        ->where('user_id', $id)
+        ->whereNull('deleted_at')
+        ->get()
+        ->keyBy('path_game_id');
+
+    $data = $games->map(function ($g) use ($assignments) {
+        $a = $assignments->get($g->id);
+
+        // ✅ time_limit_sec -> minutes
+        $timeSec = $g->time_limit_sec ?? null;
+        $durationMin = is_numeric($timeSec) ? (int) ceil(((int)$timeSec) / 60) : null;
+
+        // ✅ total_questions (if grid_dim exists in path_games)
+        $totalQuestions = null;
+        if (isset($g->grid_dim) && is_numeric($g->grid_dim)) {
+            $totalQuestions = ((int)$g->grid_dim * (int)$g->grid_dim);
+        }
+
+        return [
+            'path_game_id'   => (int) $g->id,
+            'path_game_uuid' => (string) ($g->uuid ?? ''),
+            'path_game_name' => (string) ($g->title ?? ''),
+
+            // UI column compatibility (same keys style)
+            'total_time'      => $durationMin,      // minutes
+            'total_questions' => $totalQuestions,   // optional
+            'is_public'       => (string) ($g->is_public ?? 'no'),
+            'status'          => (string) ($g->status ?? 'active'),
+
+            'assigned'        => $a && $a->status === 'active',
+            'assignment_code' => $a && $a->status === 'active'
+                                ? (string) $a->assignment_code
+                                : null,
+        ];
+    });
+
+    return response()->json([
+        'status' => 'success',
+        'data'   => $data,
+    ]);
+}
+/**
+ * ✅ Role Guard Helper
+ * usage:
+ *   if ($resp = $this->requireRole($request, ['admin','super_admin'])) return $resp;
+ */
+private function requireRole(Request $r, array $allowed)
+{
+    // ✅ read role from middleware attrs OR user model
+    $role = (string) (
+        $r->attributes->get('auth_role')
+        ?? optional($r->user())->role
+        ?? ''
+    );
+
+    $role = strtolower(trim($role));
+    $allowedNorm = array_map(fn($x) => strtolower(trim($x)), $allowed);
+
+    \Log::info('UserController.requireRole: check', [
+        'role'    => $role,
+        'allowed' => $allowedNorm,
+        'actor'   => [
+            'id'   => (int) ($r->attributes->get('auth_tokenable_id') ?? optional($r->user())->id ?? 0),
+            'type' => (string) ($r->attributes->get('auth_tokenable_type') ?? (optional($r->user()) ? get_class($r->user()) : '')),
+        ],
+    ]);
+
+    if (!$role) {
+        return response()->json([
+            'status'  => 'error',
+            'message' => 'Authentication required.',
+        ], 401);
+    }
+
+    if (!in_array($role, $allowedNorm, true)) {
+        return response()->json([
+            'status'  => 'error',
+            'message' => 'Access denied.',
+        ], 403);
+    }
+
+    return null; // ✅ allowed
+}
+
+/**
+ * POST /api/users/{id}/path-games/unassign
+ * Body: { path_game_id:int }
+ * Marks assignment as revoked (keeps row for audit).
+ */
+public function unassignPathGame(Request $request, int $id)
+{
+    // ✅ Only admin/super_admin
+    // if ($resp = $this->requireRole($request, ['admin','super_admin'])) return $resp;
+
+    // Confirm user exists
+    $user = DB::table('users')
+        ->where('id', $id)
+        ->whereNull('deleted_at')
+        ->first();
+
+    if (!$user) {
+        return response()->json([
+            'status'  => 'error',
+            'message' => 'User not found',
+        ], 404);
+    }
+
+    $validated = $request->validate([
+        'path_game_id' => 'required|integer',
+    ]);
+    $gameId = (int) $validated['path_game_id'];
+
+    $existing = DB::table('user_path_game_assignments')
+        ->where('user_id', $id)
+        ->where('path_game_id', $gameId)
+        ->whereNull('deleted_at')
+        ->first();
+
+    if (!$existing) {
+        return response()->json([
+            'status'  => 'noop',
+            'message' => 'No active assignment found',
+        ], 200);
+    }
+
+    DB::table('user_path_game_assignments')
+        ->where('id', $existing->id)
+        ->update([
+            'status'     => 'revoked',
+            'updated_at' => now(),
+        ]);
+
+    return response()->json([
+        'status'  => 'success',
+        'message' => 'Assignment revoked',
+    ]);
+}
+/**
+ * POST /api/users/{id}/path-games/assign
+ * Body: { path_game_id:int }
+ * Creates/activates assignment row (keeps row for audit).
+ */
+public function assignPathGame(Request $request, int $id)
+{
+    // ✅ Only admin/super_admin
+//    if ($resp = $this->requireRole($request, ['admin','super_admin'])) return $resp;
+
+    // ✅ Confirm user exists
+    $user = DB::table('users')
+        ->where('id', $id)
+        ->whereNull('deleted_at')
+        ->first();
+
+    if (!$user) {
+        return response()->json([
+            'status'  => 'error',
+            'message' => 'User not found',
+        ], 404);
+    }
+
+    // ✅ Validate input
+    $validated = $request->validate([
+        'path_game_id' => 'required|integer',
+    ]);
+
+    $gameId = (int) $validated['path_game_id'];
+
+    // ✅ Confirm game exists
+    $game = DB::table('path_games')
+        ->where('id', $gameId)
+        ->whereNull('deleted_at')
+        ->first();
+
+    if (!$game) {
+        return response()->json([
+            'status'  => 'error',
+            'message' => 'Path game not found',
+        ], 404);
+    }
+
+    // ✅ Check existing assignment
+    $existing = DB::table('user_path_game_assignments')
+        ->where('user_id', $id)
+        ->where('path_game_id', $gameId)
+        ->whereNull('deleted_at')
+        ->first();
+
+    // ✅ generate assignment code (like others)
+    $assignmentCode = 'PG-' . strtoupper(\Illuminate\Support\Str::random(8));
+
+    // ✅ If already ACTIVE => no-op
+    if ($existing && strtolower($existing->status) === 'active') {
+        return response()->json([
+            'status'  => 'noop',
+            'message' => 'Already assigned',
+            'data'    => [
+                'assignment_code' => $existing->assignment_code,
+            ]
+        ], 200);
+    }
+
+    // ✅ If exists but revoked => reactivate
+    if ($existing) {
+        DB::table('user_path_game_assignments')
+            ->where('id', $existing->id)
+            ->update([
+                'status'          => 'active',
+                'assignment_code' => $assignmentCode,
+                'assigned_by'     => $request->attributes->get('auth_tokenable_id') ?? null,
+                'assigned_at'     => now(),
+                'updated_at'      => now(),
+            ]);
+
+        return response()->json([
+            'status'  => 'success',
+            'message' => 'Assignment re-activated',
+            'data'    => [
+                'assignment_code' => $assignmentCode,
+            ]
+        ], 200);
+    }
+
+    // ✅ Insert fresh assignment
+    DB::table('user_path_game_assignments')->insert([
+        'uuid'            => (string) \Illuminate\Support\Str::uuid(),
+        'user_id'         => $id,
+        'path_game_id'    => $gameId,
+        'assignment_code' => $assignmentCode,
+        'status'          => 'active',
+        'assigned_by'     => $request->attributes->get('auth_tokenable_id') ?? null,
+        'assigned_at'     => now(),
+        'metadata'        => null,
+        'created_at'      => now(),
+        'updated_at'      => now(),
+    ]);
+
+    return response()->json([
+        'status'  => 'success',
+        'message' => 'Path Game assigned successfully',
+        'data'    => [
+            'assignment_code' => $assignmentCode,
+        ]
+    ], 200);
 }
 
 /** Convert stored file path (absolute/relative) into current-host absolute URL. */

@@ -706,8 +706,7 @@ window.initializeStudentDashboard = function() {
         const right = code ? `<span class="stdash-badge-soft"><i class="fa-solid fa-hashtag"></i>${code}</span>` : '';
 
         return `
-          <div class="stdash-list-item">
-            <div class="stdash-list-main">
+g            <div class="stdash-list-main">
               <div class="stdash-list-title">${idx + 1}. ${name}</div>
               <div class="stdash-list-meta">
                 ${tq} questions${ttime ? ' • ' + ttime : ''}${assignedAt ? ' • Assigned ' + assignedAt : ''}

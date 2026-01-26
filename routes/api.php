@@ -21,6 +21,8 @@ use App\Http\Controllers\API\UserFolderController;
 use App\Http\Controllers\API\StudentResultController;
 use App\Http\Controllers\API\InterviewRegistrationCampaignController;
 use App\Http\Controllers\API\MasterResultController;
+use App\Http\Controllers\API\PathGameController;
+use App\Http\Controllers\API\PathGameResultController;
 
 
 
@@ -478,6 +480,10 @@ Route::middleware('checkRole')->prefix('door-games')->group(function () {
     Route::get('/users/{id}/door-games', [UserController::class, 'userDoorGames']);
 Route::post('/users/{id}/door-games/assign', [UserController::class, 'assignDoorGame']);
 Route::post('/users/{id}/door-games/unassign', [UserController::class, 'unassignDoorGame']);
+Route::get('/users/{id}/path-games', [UserController::class, 'userPathGames']);
+Route::post('/users/{id}/path-games/assign', [UserController::class, 'assignPathGame']);
+Route::post('/users/{id}/path-games/unassign', [UserController::class, 'unassignPathGame']);
+
 
     });
 
@@ -564,4 +570,60 @@ Route::middleware('checkRole')->group(function () {
 Route::get('/door-game/result/export', [DoorGameResultController::class, 'export']);
 Route::get('/bubble-game/result/export', [BubbleGameResultController::class, 'exportResults']);
 
+});
+
+Route::middleware('checkRole')->prefix('path-games')->group(function () {
+    Route::get('/', [PathGameController::class, 'index']);
+    Route::post('/', [PathGameController::class, 'store']);
+    Route::get('/my', [PathGameController::class, 'myPathGames']);
+
+    Route::get('/{idOrUuid}', [PathGameController::class, 'show']);
+    Route::put('/{idOrUuid}', [PathGameController::class, 'update']);
+    Route::delete('/{idOrUuid}', [PathGameController::class, 'destroy']);
+});
+
+/*
+|--------------------------------------------------------------------------
+| Path Game Results Routes
+|--------------------------------------------------------------------------
+*/
+Route::middleware('checkRole')->prefix('path-game-results')->group(function () {
+    Route::get('/', [PathGameResultController::class, 'index']);
+
+    /* ===========================
+     | Helpers / Options
+     =========================== */
+    Route::get('/folder-options', [PathGameResultController::class, 'folderOptions']);
+
+    /* ===========================
+     | Export
+     =========================== */
+    Route::get('/export', [PathGameResultController::class, 'export']);
+
+    /* ===========================
+     | Game Actions
+     | (submit / my-results / assigned-results)
+     =========================== */
+    Route::post('/{gameKey}/submit', [PathGameResultController::class, 'submit']);
+    Route::get('/{gameKey}/my-results', [PathGameResultController::class, 'myResults']);
+    Route::get('/game/{gameKey}/assigned-results', [PathGameResultController::class, 'assignedResultsForGame']);
+
+    /* ===========================
+     | Result Detail
+     =========================== */
+    Route::get('/detail/{resultKey}', [PathGameResultController::class, 'resultDetail']);
+    Route::get('/result/instructor/{resultKey}', [PathGameResultController::class, 'resultDetailForInstructor']);
+
+    /* ===========================
+     | Publish / Unpublish / Bulk
+     =========================== */
+    Route::patch('/{resultKey}/publish-to-student', [PathGameResultController::class, 'publishResultToStudent']);
+    Route::patch('/{resultKey}/unpublish', [PathGameResultController::class, 'unpublishResultToStudent']);
+    Route::post('/result/bulk-publish', [PathGameResultController::class, 'bulkPublishAny']);
+
+    /* ===========================
+     | Results CRUD
+     =========================== */
+    Route::post('/', [PathGameResultController::class, 'store']);
+    Route::get('/{idOrUuid}', [PathGameResultController::class, 'show']);
 });

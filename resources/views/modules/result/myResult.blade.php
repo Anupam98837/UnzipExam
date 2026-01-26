@@ -105,6 +105,9 @@ html.theme-dark .table tbody tr{border-color:var(--line-soft)}
           <option value="door_game">Door Game</option>
           <option value="quizz">Quizz</option>
           <option value="bubble_game">Bubble Game</option>
+
+          {{-- ✅ NEW --}}
+          <option value="path_game">Path Game</option>
         </select>
       </div>
 
@@ -188,12 +191,10 @@ html.theme-dark .table tbody tr{border-color:var(--line-soft)}
 
 @push('scripts')
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-
 <script>
 (function(){
   const TOKEN = localStorage.getItem('token') || sessionStorage.getItem('token') || '';
   if (!TOKEN){
-    alert('Session expired. Please login again.');
     location.href = '/';
     return;
   }
@@ -207,21 +208,31 @@ html.theme-dark .table tbody tr{border-color:var(--line-soft)}
   const typeSel = document.getElementById('type');
   const btnReset = document.getElementById('btnReset');
 
-  const rowsEl = document.getElementById('rows-student');
+  const rowsEl  = document.getElementById('rows-student');
   const loaderRow = document.getElementById('loaderRow-student');
   const emptyEl = document.getElementById('empty-student');
-  const metaEl = document.getElementById('metaTxt-student');
+  const metaEl  = document.getElementById('metaTxt-student');
   const pagerEl = document.getElementById('pager-student');
 
-  const tr = document.getElementById('tr-student');
-  const xs = document.getElementById('xs-student');
-  const tbl = document.getElementById('tbl-student');
+  const trWrap = document.getElementById('tr-student');
+  const xsWrap = document.getElementById('xs-student');
+  const tbl    = document.getElementById('tbl-student');
 
   // Toast
   const errToast = new bootstrap.Toast(document.getElementById('errToast'));
   const err = (m)=>{ document.getElementById('errMsg').textContent = m || 'Something went wrong'; errToast.show(); };
 
+  // ✅ State + Cache
   const state = { page: 1 };
+  const cache = new Map(); // key => json
+  let aborter = null;
+  let reqSeq = 0;
+
+  // ✅ Faster date formatter (create once)
+  const dtFmt = new Intl.DateTimeFormat(undefined,{
+    year:'numeric',month:'short',day:'2-digit',
+    hour:'2-digit',minute:'2-digit'
+  });
 
   function esc(s){
     if (s === null || s === undefined) return '';
@@ -235,36 +246,36 @@ html.theme-dark .table tbody tr{border-color:var(--line-soft)}
 
   function fmtDate(iso){
     if(!iso) return '-';
-    const d=new Date(iso);
-    if(isNaN(d)) return esc(iso);
-    return d.toLocaleString(undefined,{year:'numeric',month:'short',day:'2-digit',hour:'2-digit',minute:'2-digit'});
+    const d = new Date(iso);
+    if (isNaN(d)) return esc(iso);
+    return dtFmt.format(d);
   }
+
+  // ✅ Module badge map (no repeated if-chains)
+  const modBadgeMap = {
+    door_game:   `<span class="badge-pill"><i class="fa fa-door-open"></i> Door</span>`,
+    quizz:       `<span class="badge-pill"><i class="fa fa-clipboard-question"></i> Quizz</span>`,
+    bubble_game: `<span class="badge-pill"><i class="fa fa-circle"></i> Bubble</span>`,
+    path_game:   `<span class="badge-pill"><i class="fa fa-route"></i> Path</span>`
+  };
 
   function moduleBadge(mod){
     const v = String(mod||'').toLowerCase();
-    if (v === 'door_game')   return `<span class="badge-pill"><i class="fa fa-door-open"></i> Door</span>`;
-    if (v === 'quizz')       return `<span class="badge-pill"><i class="fa fa-clipboard-question"></i> Quizz</span>`;
-    if (v === 'bubble_game') return `<span class="badge-pill"><i class="fa fa-circle"></i> Bubble</span>`;
-    return `<span class="badge-pill"><i class="fa fa-layer-group"></i> ${esc(mod||'-')}</span>`;
+    return modBadgeMap[v] || `<span class="badge-pill"><i class="fa fa-layer-group"></i> ${esc(mod||'-')}</span>`;
   }
 
-  // ✅ REQUIRED URL mapping (your exact paths)
+  // ✅ REQUIRED URL mapping
   function viewUrlFor(item){
     const rid = item?.result?.uuid || '';
     const mod = String(item?.module || '').toLowerCase();
-
     if (!rid) return '#';
 
     if (mod === 'door_game')   return `/decision-making-test/results/${encodeURIComponent(rid)}/view`;
     if (mod === 'quizz')       return `/exam/results/${encodeURIComponent(rid)}/view`;
     if (mod === 'bubble_game') return `/test/results/${encodeURIComponent(rid)}/view`;
+    if (mod === 'path_game')   return `/path-game/results/${encodeURIComponent(rid)}/view`;
 
     return '#';
-  }
-
-  function folderName(item){
-    const s = item?.student || {};
-    return s.folder_title || s.user_folder_name || '-';
   }
 
   function buildParams(){
@@ -285,171 +296,234 @@ html.theme-dark .table tbody tr{border-color:var(--line-soft)}
     loaderRow.style.display = v ? '' : 'none';
   }
 
-  function syncXScroll(){
-    if (!tr || !xs || !tbl) return;
-    const inner = xs.querySelector('.x-scrollbar-inner');
+  // ✅ Sync bottom scrollbar (bind ONCE)
+  let scrollBound = false;
+  let ro = null;
 
-    const need = tbl.scrollWidth > tr.clientWidth + 2;
-    xs.classList.toggle('hidden', !need);
+  function updateXScroll(){
+    if (!trWrap || !xsWrap || !tbl) return;
+
+    const inner = xsWrap.querySelector('.x-scrollbar-inner');
+    const need = tbl.scrollWidth > trWrap.clientWidth + 2;
+
+    xsWrap.classList.toggle('hidden', !need);
     if (!need) return;
 
     inner.style.width = tbl.scrollWidth + 'px';
-
-    if (xs.__bound) return;
-    xs.__bound = true;
-
-    let lock = false;
-    tr.addEventListener('scroll', ()=>{
-      if (lock) return;
-      lock = true;
-      xs.scrollLeft = tr.scrollLeft;
-      lock = false;
-    });
-
-    xs.addEventListener('scroll', ()=>{
-      if (lock) return;
-      lock = true;
-      tr.scrollLeft = xs.scrollLeft;
-      lock = false;
-    });
-
-    window.addEventListener('resize', ()=>{
-      inner.style.width = tbl.scrollWidth + 'px';
-      xs.classList.toggle('hidden', !(tbl.scrollWidth > tr.clientWidth + 2));
-    });
   }
 
-  async function load(){
+  function bindXScrollOnce(){
+    if (scrollBound) return;
+    scrollBound = true;
+
+    let lock = false;
+
+    trWrap.addEventListener('scroll', ()=>{
+      if (lock) return;
+      lock = true;
+      xsWrap.scrollLeft = trWrap.scrollLeft;
+      lock = false;
+    });
+
+    xsWrap.addEventListener('scroll', ()=>{
+      if (lock) return;
+      lock = true;
+      trWrap.scrollLeft = xsWrap.scrollLeft;
+      lock = false;
+    });
+
+    // ✅ ResizeObserver (more accurate than window resize)
+    ro = new ResizeObserver(()=> updateXScroll());
+    ro.observe(trWrap);
+    ro.observe(tbl);
+  }
+
+  function clearRowsExceptLoader(){
+    rowsEl.querySelectorAll('tr:not(#loaderRow-student)').forEach(n=>n.remove());
+  }
+
+  function renderRows(items){
+    if (!items.length) return;
+
+    const html = new Array(items.length);
+
+    for (let i=0;i<items.length;i++){
+      const item = items[i];
+      const mod = item?.module || '-';
+      const title = item?.game?.title || '-';
+      const result = item?.result || {};
+
+      const attempt = Number(result.attempt_no || 0);
+      const score = Number(result.score || 0);
+      const date = fmtDate(result.created_at || result.result_created_at);
+      const viewUrl = viewUrlFor(item);
+      const disabled = (!result.uuid) ? 'disabled' : '';
+
+      html[i] = `
+        <tr>
+          <td>${moduleBadge(mod)}</td>
+          <td>
+            <div class="fw-semibold">${esc(title)}</div>
+          </td>
+          <td><span class="badge-pill"><i class="fa fa-repeat"></i> #${attempt}</span></td>
+          <td><div class="fw-semibold">${score}</div></td>
+
+          <td style="display:none;">—</td>
+          <td style="display:none;">—</td>
+
+          <td>${esc(date)}</td>
+          <td class="text-end">
+            <a href="${viewUrl}" class="btn btn-primary btn-sm" ${disabled}>
+              <i class="fa fa-eye me-1"></i>View Result
+            </a>
+          </td>
+        </tr>
+      `;
+    }
+
+    rowsEl.insertAdjacentHTML('beforeend', html.join(''));
+  }
+
+  function renderPager(page, totalPages){
+    function li(disabled, active, label, target){
+      const cls=['page-item',disabled?'disabled':'',active?'active':''].filter(Boolean).join(' ');
+      return `<li class="${cls}">
+        <a class="page-link" href="javascript:void(0)" data-page="${target||''}">${label}</a>
+      </li>`;
+    }
+
+    let html = '';
+    html += li(page<=1,false,'Previous',page-1);
+
+    const w=3;
+    const start=Math.max(1,page-w);
+    const end=Math.min(totalPages,page+w);
+
+    if (start>1){
+      html += li(false,false,1,1);
+      if(start>2) html += `<li class="page-item disabled"><span class="page-link">…</span></li>`;
+    }
+
+    for(let p2=start;p2<=end;p2++){
+      html += li(false,p2===page,p2,p2);
+    }
+
+    if (end<totalPages){
+      if(end<totalPages-1) html += `<li class="page-item disabled"><span class="page-link">…</span></li>`;
+      html += li(false,false,totalPages,totalPages);
+    }
+
+    html += li(page>=totalPages,false,'Next',page+1);
+    pagerEl.innerHTML = html;
+  }
+
+  // ✅ Pagination click delegation (bind ONCE)
+  pagerEl.addEventListener('click', (e)=>{
+    const a = e.target.closest('a.page-link[data-page]');
+    if(!a) return;
+
+    const target = Number(a.dataset.page);
+    if (!target || target === state.page) return;
+
+    state.page = Math.max(1, target);
+    load(true);
+    window.scrollTo({top:0, behavior:'smooth'});
+  });
+
+  async function load(fromUserAction=false){
     emptyEl.style.display = 'none';
     metaEl.textContent = '—';
-    pagerEl.innerHTML = '';
 
-    // clear rows except loader
-    rowsEl.querySelectorAll('tr:not(#loaderRow-student)').forEach(n=>n.remove());
-
+    clearRowsExceptLoader();
     showLoader(true);
 
-    try{
-      const url = `${API_MY_RESULTS}?${buildParams()}`;
+    // ✅ abort previous request
+    if (aborter) aborter.abort();
+    aborter = new AbortController();
 
+    const mySeq = ++reqSeq;
+    const qs = buildParams();
+    const url = `${API_MY_RESULTS}?${qs}`;
+
+    // ✅ cache hit (instant render)
+    if (cache.has(qs)){
+      const cached = cache.get(qs);
+      showLoader(false);
+      paint(cached);
+      return;
+    }
+
+    try{
       const res = await fetch(url, {
+        method: 'GET',
         headers:{
           'Authorization':'Bearer ' + TOKEN,
           'Accept':'application/json'
-        }
+        },
+        signal: aborter.signal
       });
+
+      // ignore old responses
+      if (mySeq !== reqSeq) return;
 
       const json = await res.json().catch(()=> ({}));
       if (!res.ok || json?.success === false) throw new Error(json?.message || 'Failed to load');
 
-      const items = Array.isArray(json?.data) ? json.data : [];
-      const p = json?.pagination || {};
-      const total = Number(p.total ?? items.length ?? 0);
-      const per = Number(p.per_page ?? perPageSel.value ?? 20);
-      const page = Number(p.page ?? state.page ?? 1);
-      const totalPages = Number(p.total_pages ?? Math.max(1, Math.ceil(total / per)));
-
-      if (!items.length) emptyEl.style.display = '';
-
-      const frag = document.createDocumentFragment();
-
-      items.forEach(item=>{
-        const mod = item?.module || '-';
-        const title = item?.game?.title || '-';
-        const result = item?.result || {};
-
-        const tr = document.createElement('tr');
-
-        tr.innerHTML = `
-          <td>${moduleBadge(mod)}</td>
-          <td>
-            <div class="fw-semibold">${esc(title)}</div>
-            <div class="text-muted small d-none">Result UUID: ${esc(result.uuid || '-')}</div>
-          </td>
-          <td><span class="badge-pill"><i class="fa fa-repeat"></i> #${Number(result.attempt_no || 0)}</span></td>
-          <td><div class="fw-semibold">${Number(result.score || 0)}</div></td>
-          <td>${esc(fmtDate(result.created_at || result.result_created_at))}</td>
-          <td class="text-end">
-            <a href="${viewUrlFor(item)}"
-               class="btn btn-primary btn-sm"
-               ${!result.uuid ? 'disabled' : ''}>
-              <i class="fa fa-eye me-1"></i>View Result
-            </a>
-          </td>
-        `;
-
-        frag.appendChild(tr);
-      });
-
-      rowsEl.appendChild(frag);
-
-      // pagination
-      function li(disabled, active, label, target){
-        const cls=['page-item',disabled?'disabled':'',active?'active':''].filter(Boolean).join(' ');
-        const href=disabled?'#':'javascript:void(0)';
-        return `<li class="${cls}"><a class="page-link" href="${href}" data-page="${target||''}">${label}</a></li>`;
-      }
-
-      let html='';
-      html += li(page<=1,false,'Previous',page-1);
-
-      const w=3, start=Math.max(1,page-w), end=Math.min(totalPages,page+w);
-      if (start>1){
-        html += li(false,false,1,1);
-        if(start>2) html+='<li class="page-item disabled"><span class="page-link">…</span></li>';
-      }
-      for(let p2=start;p2<=end;p2++) html += li(false,p2===page,p2,p2);
-      if (end<totalPages){
-        if(end<totalPages-1) html+='<li class="page-item disabled"><span class="page-link">…</span></li>';
-        html+=li(false,false,totalPages,totalPages);
-      }
-
-      html += li(page>=totalPages,false,'Next',page+1);
-      pagerEl.innerHTML = html;
-
-      pagerEl.querySelectorAll('a.page-link[data-page]').forEach(a=>{
-        a.addEventListener('click', ()=>{
-          const target = Number(a.dataset.page);
-          if(!target || target === state.page) return;
-          state.page = Math.max(1, target);
-          load();
-          window.scrollTo({top:0,behavior:'smooth'});
-        });
-      });
-
-      metaEl.textContent = `Showing page ${page} of ${totalPages} — ${total} result(s)`;
-
-      // bottom scrollbar sync
-      syncXScroll();
+      cache.set(qs, json); // ✅ store cache
+      paint(json);
 
     }catch(e){
+      if (e.name === 'AbortError') return; // ✅ ignore aborted
       console.error(e);
       emptyEl.style.display = '';
       metaEl.textContent = 'Failed to load';
       err(e.message || 'Load failed');
     }finally{
-      showLoader(false);
+      if (mySeq === reqSeq) showLoader(false);
     }
   }
 
-  // search debounce
+  function paint(json){
+    const items = Array.isArray(json?.data) ? json.data : [];
+    const p = json?.pagination || {};
+
+    const total = Number(p.total ?? items.length ?? 0);
+    const per = Number(p.per_page ?? perPageSel.value ?? 20);
+    const page = Number(p.page ?? state.page ?? 1);
+    const totalPages = Number(p.total_pages ?? Math.max(1, Math.ceil(total / per)));
+
+    if (!items.length){
+      emptyEl.style.display = '';
+    } else {
+      renderRows(items);
+    }
+
+    renderPager(page, totalPages);
+    metaEl.textContent = `Showing page ${page} of ${totalPages} — ${total} result(s)`;
+
+    // ✅ bottom scrollbar sync
+    bindXScrollOnce();
+    updateXScroll();
+  }
+
+  // ✅ search debounce (less API spam)
   let t;
   q.addEventListener('input', ()=>{
     clearTimeout(t);
     t = setTimeout(()=>{
       state.page = 1;
-      load();
-    }, 350);
+      load(true);
+    }, 450);
   });
 
   typeSel.addEventListener('change', ()=>{
     state.page = 1;
-    load();
+    load(true);
   });
 
   perPageSel.addEventListener('change', ()=>{
     state.page = 1;
-    load();
+    load(true);
   });
 
   btnReset.addEventListener('click', ()=>{
@@ -457,12 +531,13 @@ html.theme-dark .table tbody tr{border-color:var(--line-soft)}
     typeSel.value = '';
     perPageSel.value = '20';
     state.page = 1;
-    load();
+    load(true);
   });
 
-  // init
-  load();
+  // ✅ init
+  load(false);
 
 })();
 </script>
+
 @endpush

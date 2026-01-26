@@ -210,6 +210,34 @@ Route::get('/decision-making-test/result/manage', function () {
 });
 
 
+
+/*
+|--------------------------------------------------------------------------
+| 10) Door Game Routes
+|--------------------------------------------------------------------------
+*/
+Route::get('/path-games/create', fn () => view('modules.pathGame.createPathGame'));
+Route::get('/path-games/manage', fn () => view('modules.pathGame.managePathGame'));
+
+
+
+Route::get('/path-finding/play', function () {
+    return view('modules.pathGame.playPathGame');
+});
+
+Route::get('/path-finding-test/results', function () {
+    return view('modules.pathGame.allResult');
+});
+
+Route::get('/path-game/results/{resultId}/view', function ($resultId) {
+    return view('modules.pathGame.viewResult', ['resultId' => $resultId]);
+});
+
+Route::get('/path-finding-test/result/manage', function () {
+    return view('modules.result.viewAssignedStudentResultForPathGame');
+});
+
+
 /*
 |--------------------------------------------------------------------------
 | 11) User Folder Routes

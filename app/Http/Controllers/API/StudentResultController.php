@@ -4,301 +4,473 @@ namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 class StudentResultController extends Controller
 {
-    // ✅ Cache schema checks (HUGE SPEED BOOST)
-    private static array $tableCache = [];
-    private static array $colCache   = [];
+    /**
+     * Supported types (query param: ?type=...)
+     * - door_game
+     * - quizz
+     * - bubble_game
+     * - path_game
+     */
+    private const TYPES = ['door_game','quizz','bubble_game','path_game'];
 
+    /* =========================================================
+     | Auth helper
+     |========================================================= */
     private function actor(Request $request): array
     {
         return [
-            'role' => $request->attributes->get('auth_role'),
-            'type' => $request->attributes->get('auth_tokenable_type'),
+            'role' => (string) ($request->attributes->get('auth_role') ?? ''),
+            'type' => (string) ($request->attributes->get('auth_tokenable_type') ?? ''),
             'id'   => (int) ($request->attributes->get('auth_tokenable_id') ?? 0),
         ];
     }
 
-    private function hasTable(string $table): bool
+    /* =========================================================
+     | Schema cache helpers (speed)
+     |========================================================= */
+    private function schemaHasTable(string $table): bool
     {
-        if (!array_key_exists($table, self::$tableCache)) {
-            self::$tableCache[$table] = Schema::hasTable($table);
-        }
-        return self::$tableCache[$table];
+        return Cache::remember("sr:hasTable:$table", 6 * 3600, fn() => Schema::hasTable($table));
     }
 
-    private function hasColumn(string $table, string $col): bool
+    private function schemaHasColumn(string $table, string $col): bool
     {
-        $key = "{$table}.{$col}";
-        if (!array_key_exists($key, self::$colCache)) {
-            self::$colCache[$key] = $this->hasTable($table) && Schema::hasColumn($table, $col);
-        }
-        return self::$colCache[$key];
+        return Cache::remember(
+            "sr:hasCol:$table:$col",
+            6 * 3600,
+            fn() => $this->schemaHasTable($table) && Schema::hasColumn($table, $col)
+        );
     }
 
     private function firstExistingTable(array $candidates): ?string
     {
         foreach ($candidates as $t) {
-            if ($this->hasTable($t)) return $t;
+            if ($this->schemaHasTable($t)) return $t;
         }
         return null;
     }
 
     private function safeCol(?string $table, string $alias, string $col, string $fallbackSql = "NULL"): string
     {
-        if ($table && $this->hasColumn($table, $col)) {
-            return "{$alias}.{$col}";
-        }
+        if ($table && $this->schemaHasColumn($table, $col)) return "{$alias}.{$col}";
         return $fallbackSql;
     }
 
     private function safeRCol(string $table, string $alias, string $col, string $fallbackSql = "NULL"): string
     {
-        if ($this->hasColumn($table, $col)) {
-            return "{$alias}.{$col}";
-        }
+        if ($this->schemaHasColumn($table, $col)) return "{$alias}.{$col}";
         return $fallbackSql;
     }
 
-    // ✅ Build union queries fast (NO users join)
-    private function buildQueries(int $userId): array
+    /**
+     * ✅ Pick a "best" title expression from the joined game/quiz table.
+     * Order:
+     * title -> quiz_name -> name -> quiz_title -> game_title -> fallback
+     */
+    private function pickTitleExpr(?string $gameTable, string $alias, string $fallbackSql): string
     {
-        $queries = [];
+        if (!$gameTable) return $fallbackSql;
 
-        $doorGameTable   = $this->firstExistingTable(['door_game', 'door_games']);
-        $bubbleGameTable = $this->firstExistingTable(['bubble_game', 'bubble_games']);
-        $quizTable       = $this->firstExistingTable(['quizz', 'quizzes', 'quiz']);
-        $pathGameTable   = $this->firstExistingTable(['path_games', 'path_game']);
+        if ($this->schemaHasColumn($gameTable, 'title'))     return "{$alias}.title";
+        if ($this->schemaHasColumn($gameTable, 'quiz_name')) return "{$alias}.quiz_name";
+        if ($this->schemaHasColumn($gameTable, 'name'))      return "{$alias}.name";
 
-        // ==========================================
-        // ✅ Door Game Results
-        // ==========================================
-        if ($this->hasTable('door_game_results')) {
+        if ($this->schemaHasColumn($gameTable, 'quiz_title')) return "{$alias}.quiz_title";
+        if ($this->schemaHasColumn($gameTable, 'game_title')) return "{$alias}.game_title";
 
-            $hasPub    = $this->hasColumn('door_game_results', 'publish_to_student');
-            $hasStatus = $this->hasColumn('door_game_results', 'status');
-
-            $door = DB::table('door_game_results as r');
-
-            if ($doorGameTable) {
-                $door->leftJoin($doorGameTable . ' as g', 'g.id', '=', 'r.door_game_id');
-            }
-
-            if ($this->hasColumn('door_game_results', 'deleted_at')) $door->whereNull('r.deleted_at');
-
-            $door->where('r.user_id', $userId);
-
-            if ($hasPub) {
-                $door->where('r.publish_to_student', 1);
-            } elseif ($hasStatus) {
-                $door->where('r.status', '!=', 'in_progress');
-            }
-
-            $door->selectRaw("
-                'door_game' as module,
-                " . ($doorGameTable ? "g.id" : "r.door_game_id") . " as game_id,
-                " . $this->safeCol($doorGameTable, 'g', 'uuid', "NULL") . " as game_uuid,
-                " . $this->safeCol($doorGameTable, 'g', 'title', "CONCAT('Door Game #', r.door_game_id)") . " as game_title,
-
-                r.id as result_id,
-                r.uuid as result_uuid,
-                " . $this->safeRCol('door_game_results', 'r', 'attempt_no', "1") . " as attempt_no,
-                " . $this->safeRCol('door_game_results', 'r', 'score', "0") . " as score,
-                " . $this->safeRCol('door_game_results', 'r', 'accuracy', "NULL") . " as accuracy,
-
-                " . ($hasPub ? "r.publish_to_student" : "1") . " as publish_to_student,
-                COALESCE(" . $this->safeRCol('door_game_results', 'r', 'result_created_at', "NULL") . ", r.created_at) as result_created_at
-            ");
-
-            $queries[] = $door;
-        }
-
-        // ==========================================
-        // ✅ Bubble Game Results
-        // ==========================================
-        if ($this->hasTable('bubble_game_results')) {
-
-            $hasPub    = $this->hasColumn('bubble_game_results', 'publish_to_student');
-            $hasStatus = $this->hasColumn('bubble_game_results', 'status');
-
-            $bubble = DB::table('bubble_game_results as r');
-
-            if ($bubbleGameTable) {
-                $bubble->leftJoin($bubbleGameTable . ' as g', 'g.id', '=', 'r.bubble_game_id');
-            }
-
-            if ($this->hasColumn('bubble_game_results', 'deleted_at')) $bubble->whereNull('r.deleted_at');
-
-            $bubble->where('r.user_id', $userId);
-
-            if ($hasPub) {
-                $bubble->where('r.publish_to_student', 1);
-            } elseif ($hasStatus) {
-                $bubble->where('r.status', '!=', 'in_progress');
-            }
-
-            $bubble->selectRaw("
-                'bubble_game' as module,
-                " . ($bubbleGameTable ? "g.id" : "r.bubble_game_id") . " as game_id,
-                " . $this->safeCol($bubbleGameTable, 'g', 'uuid', "NULL") . " as game_uuid,
-                " . $this->safeCol($bubbleGameTable, 'g', 'title', "CONCAT('Bubble Game #', r.bubble_game_id)") . " as game_title,
-
-                r.id as result_id,
-                r.uuid as result_uuid,
-                " . $this->safeRCol('bubble_game_results', 'r', 'attempt_no', "1") . " as attempt_no,
-                " . $this->safeRCol('bubble_game_results', 'r', 'score', "0") . " as score,
-                " . $this->safeRCol('bubble_game_results', 'r', 'accuracy', "NULL") . " as accuracy,
-
-                " . ($hasPub ? "r.publish_to_student" : "1") . " as publish_to_student,
-                COALESCE(" . $this->safeRCol('bubble_game_results', 'r', 'result_created_at', "NULL") . ", r.created_at) as result_created_at
-            ");
-
-            $queries[] = $bubble;
-        }
-
-        // ==========================================
-        // ✅ Quizz Results
-        // ==========================================
-        if ($this->hasTable('quizz_results')) {
-
-            $hasPub    = $this->hasColumn('quizz_results', 'publish_to_student');
-            $hasStatus = $this->hasColumn('quizz_results', 'status');
-
-            $quizz = DB::table('quizz_results as r');
-
-            if ($quizTable && $this->hasColumn('quizz_results', 'quiz_id')) {
-                $quizz->leftJoin($quizTable . ' as g', 'g.id', '=', 'r.quiz_id');
-            }
-
-            if ($this->hasColumn('quizz_results', 'deleted_at')) $quizz->whereNull('r.deleted_at');
-
-            $quizz->where('r.user_id', $userId);
-
-            if ($hasPub) {
-                $quizz->where('r.publish_to_student', 1);
-            } elseif ($hasStatus) {
-                $quizz->where('r.status', '!=', 'in_progress');
-            }
-
-            $quizz->selectRaw("
-                'quizz' as module,
-                " . ($quizTable ? "g.id" : "r.quiz_id") . " as game_id,
-                " . $this->safeCol($quizTable, 'g', 'uuid', $this->safeRCol('quizz_results','r','quiz_uuid',"NULL")) . " as game_uuid,
-                " . $this->safeCol($quizTable, 'g', 'title', "CONCAT('Quizz #', r.quiz_id)") . " as game_title,
-
-                r.id as result_id,
-                r.uuid as result_uuid,
-
-                " . $this->safeRCol('quizz_results', 'r', 'attempt_id', "1") . " as attempt_no,
-                " . $this->safeRCol('quizz_results', 'r', 'marks_obtained', "0") . " as score,
-                " . $this->safeRCol('quizz_results', 'r', 'percentage', "NULL") . " as accuracy,
-
-                " . ($hasPub ? "r.publish_to_student" : "1") . " as publish_to_student,
-                COALESCE(" . $this->safeRCol('quizz_results', 'r', 'released_at', "NULL") . ", r.created_at) as result_created_at
-            ");
-
-            $queries[] = $quizz;
-        }
-
-        // ==========================================
-        // ✅ Path Game Results ✅ ADDED
-        // ==========================================
-        if ($this->hasTable('path_game_results')) {
-
-            $hasPub    = $this->hasColumn('path_game_results', 'publish_to_student');
-            $hasStatus = $this->hasColumn('path_game_results', 'status');
-
-            $path = DB::table('path_game_results as r');
-
-            if ($pathGameTable) {
-                $path->leftJoin($pathGameTable . ' as g', 'g.id', '=', 'r.path_game_id');
-            }
-
-            if ($this->hasColumn('path_game_results', 'deleted_at')) $path->whereNull('r.deleted_at');
-
-            $path->where('r.user_id', $userId);
-
-            if ($hasPub) {
-                $path->where('r.publish_to_student', 1);
-            } elseif ($hasStatus) {
-                $path->where('r.status', '!=', 'in_progress');
-            }
-
-            $path->selectRaw("
-                'path_game' as module,
-                " . ($pathGameTable ? "g.id" : "r.path_game_id") . " as game_id,
-                " . $this->safeCol($pathGameTable, 'g', 'uuid', "NULL") . " as game_uuid,
-                " . $this->safeCol($pathGameTable, 'g', 'title', "CONCAT('Path Game #', r.path_game_id)") . " as game_title,
-
-                r.id as result_id,
-                r.uuid as result_uuid,
-                " . $this->safeRCol('path_game_results', 'r', 'attempt_no', "1") . " as attempt_no,
-                " . $this->safeRCol('path_game_results', 'r', 'score', "0") . " as score,
-                NULL as accuracy,
-
-                " . ($hasPub ? "r.publish_to_student" : "1") . " as publish_to_student,
-                r.created_at as result_created_at
-            ");
-
-            $queries[] = $path;
-        }
-
-        return $queries;
+        return $fallbackSql;
     }
 
-    // ✅ GET: only my published results (student side)
+    /* =========================================================
+     | Query builders per type
+     |  - Always returns: module, game_id, game_uuid, game_title,
+     |    result_id, result_uuid,
+     |    attempt_no (latest attempt no/id-ish),
+     |    attempt_total_count (TOTAL attempts for this user+game),
+     |    score, accuracy, publish_to_student, result_created_at
+     |========================================================= */
+
+    private function queryDoor(int $userId)
+    {
+        if (!$this->schemaHasTable('door_game_results')) return null;
+
+        $resultTable   = 'door_game_results';
+        $doorGameTable = $this->firstExistingTable(['door_game', 'door_games']);
+
+        $hasPub       = $this->schemaHasColumn($resultTable, 'publish_to_student');
+        $hasStatus    = $this->schemaHasColumn($resultTable, 'status');
+        $hasDeletedAt = $this->schemaHasColumn($resultTable, 'deleted_at');
+        $hasAttemptNo = $this->schemaHasColumn($resultTable, 'attempt_no');
+
+        // ✅ attempts stats subquery (COUNT + MAX(attempt_no))
+        $ac = DB::table($resultTable . ' as rr')
+            ->select([
+                'rr.door_game_id',
+                DB::raw('COUNT(*) as attempt_total_count'),
+                DB::raw('COALESCE(MAX(' . ($hasAttemptNo ? 'rr.attempt_no' : 'rr.id') . '), 0) as max_attempt_no'),
+            ])
+            ->where('rr.user_id', $userId);
+
+        if ($hasDeletedAt) $ac->whereNull('rr.deleted_at');
+        if ($hasPub) {
+            $ac->where('rr.publish_to_student', 1);
+        } elseif ($hasStatus) {
+            $ac->where('rr.status', '!=', 'in_progress');
+        }
+
+        $ac->groupBy('rr.door_game_id');
+
+        $q = DB::table($resultTable . ' as r');
+
+        if ($doorGameTable) $q->leftJoin($doorGameTable . ' as g', 'g.id', '=', 'r.door_game_id');
+        $q->leftJoinSub($ac, 'ac', function ($join) {
+            $join->on('ac.door_game_id', '=', 'r.door_game_id');
+        });
+
+        if ($hasDeletedAt) $q->whereNull('r.deleted_at');
+        $q->where('r.user_id', $userId);
+
+        if ($hasPub) $q->where('r.publish_to_student', 1);
+        elseif ($hasStatus) $q->where('r.status', '!=', 'in_progress');
+
+        $titleExpr = $this->pickTitleExpr($doorGameTable, 'g', "CONCAT('Door Game #', r.door_game_id)");
+
+        $attemptNoExpr = $hasAttemptNo ? "r.attempt_no" : "r.id";
+
+        $q->selectRaw("
+            'door_game' as module,
+            " . ($doorGameTable ? "g.id" : "r.door_game_id") . " as game_id,
+            " . $this->safeCol($doorGameTable, 'g', 'uuid', "NULL") . " as game_uuid,
+            {$titleExpr} as game_title,
+
+            r.id as result_id,
+            r.uuid as result_uuid,
+
+            COALESCE({$attemptNoExpr}, ac.max_attempt_no, 1) as attempt_no,
+            COALESCE(ac.attempt_total_count, 0) as attempt_total_count,
+
+            " . $this->safeRCol($resultTable, 'r', 'score', "0") . " as score,
+            " . $this->safeRCol($resultTable, 'r', 'accuracy', "NULL") . " as accuracy,
+
+            " . ($hasPub ? "r.publish_to_student" : "1") . " as publish_to_student,
+            COALESCE(" . $this->safeRCol($resultTable, 'r', 'result_created_at', "NULL") . ", r.created_at) as result_created_at
+        ");
+
+        return $q;
+    }
+
+    private function queryBubble(int $userId)
+    {
+        if (!$this->schemaHasTable('bubble_game_results')) return null;
+
+        $resultTable     = 'bubble_game_results';
+        $bubbleGameTable = $this->firstExistingTable(['bubble_game', 'bubble_games']);
+
+        $hasPub       = $this->schemaHasColumn($resultTable, 'publish_to_student');
+        $hasStatus    = $this->schemaHasColumn($resultTable, 'status');
+        $hasDeletedAt = $this->schemaHasColumn($resultTable, 'deleted_at');
+        $hasAttemptNo = $this->schemaHasColumn($resultTable, 'attempt_no');
+
+        $ac = DB::table($resultTable . ' as rr')
+            ->select([
+                'rr.bubble_game_id',
+                DB::raw('COUNT(*) as attempt_total_count'),
+                DB::raw('COALESCE(MAX(' . ($hasAttemptNo ? 'rr.attempt_no' : 'rr.id') . '), 0) as max_attempt_no'),
+            ])
+            ->where('rr.user_id', $userId);
+
+        if ($hasDeletedAt) $ac->whereNull('rr.deleted_at');
+        if ($hasPub) {
+            $ac->where('rr.publish_to_student', 1);
+        } elseif ($hasStatus) {
+            $ac->where('rr.status', '!=', 'in_progress');
+        }
+
+        $ac->groupBy('rr.bubble_game_id');
+
+        $q = DB::table($resultTable . ' as r');
+
+        if ($bubbleGameTable) $q->leftJoin($bubbleGameTable . ' as g', 'g.id', '=', 'r.bubble_game_id');
+        $q->leftJoinSub($ac, 'ac', function ($join) {
+            $join->on('ac.bubble_game_id', '=', 'r.bubble_game_id');
+        });
+
+        if ($hasDeletedAt) $q->whereNull('r.deleted_at');
+        $q->where('r.user_id', $userId);
+
+        if ($hasPub) $q->where('r.publish_to_student', 1);
+        elseif ($hasStatus) $q->where('r.status', '!=', 'in_progress');
+
+        $titleExpr = $this->pickTitleExpr($bubbleGameTable, 'g', "CONCAT('Bubble Game #', r.bubble_game_id)");
+
+        $attemptNoExpr = $hasAttemptNo ? "r.attempt_no" : "r.id";
+
+        $q->selectRaw("
+            'bubble_game' as module,
+            " . ($bubbleGameTable ? "g.id" : "r.bubble_game_id") . " as game_id,
+            " . $this->safeCol($bubbleGameTable, 'g', 'uuid', "NULL") . " as game_uuid,
+            {$titleExpr} as game_title,
+
+            r.id as result_id,
+            r.uuid as result_uuid,
+
+            COALESCE({$attemptNoExpr}, ac.max_attempt_no, 1) as attempt_no,
+            COALESCE(ac.attempt_total_count, 0) as attempt_total_count,
+
+            " . $this->safeRCol($resultTable, 'r', 'score', "0") . " as score,
+            " . $this->safeRCol($resultTable, 'r', 'accuracy', "NULL") . " as accuracy,
+
+            " . ($hasPub ? "r.publish_to_student" : "1") . " as publish_to_student,
+            COALESCE(" . $this->safeRCol($resultTable, 'r', 'result_created_at', "NULL") . ", r.created_at) as result_created_at
+        ");
+
+        return $q;
+    }
+
+    private function queryPath(int $userId)
+    {
+        if (!$this->schemaHasTable('path_game_results')) return null;
+
+        $resultTable   = 'path_game_results';
+        $pathGameTable = $this->firstExistingTable(['path_games', 'path_game']);
+
+        $hasPub       = $this->schemaHasColumn($resultTable, 'publish_to_student');
+        $hasStatus    = $this->schemaHasColumn($resultTable, 'status');
+        $hasDeletedAt = $this->schemaHasColumn($resultTable, 'deleted_at');
+        $hasAttemptNo = $this->schemaHasColumn($resultTable, 'attempt_no');
+
+        $ac = DB::table($resultTable . ' as rr')
+            ->select([
+                'rr.path_game_id',
+                DB::raw('COUNT(*) as attempt_total_count'),
+                DB::raw('COALESCE(MAX(' . ($hasAttemptNo ? 'rr.attempt_no' : 'rr.id') . '), 0) as max_attempt_no'),
+            ])
+            ->where('rr.user_id', $userId);
+
+        if ($hasDeletedAt) $ac->whereNull('rr.deleted_at');
+        if ($hasPub) {
+            $ac->where('rr.publish_to_student', 1);
+        } elseif ($hasStatus) {
+            $ac->where('rr.status', '!=', 'in_progress');
+        }
+
+        $ac->groupBy('rr.path_game_id');
+
+        $q = DB::table($resultTable . ' as r');
+
+        if ($pathGameTable) $q->leftJoin($pathGameTable . ' as g', 'g.id', '=', 'r.path_game_id');
+        $q->leftJoinSub($ac, 'ac', function ($join) {
+            $join->on('ac.path_game_id', '=', 'r.path_game_id');
+        });
+
+        if ($hasDeletedAt) $q->whereNull('r.deleted_at');
+        $q->where('r.user_id', $userId);
+
+        if ($hasPub) $q->where('r.publish_to_student', 1);
+        elseif ($hasStatus) $q->where('r.status', '!=', 'in_progress');
+
+        $titleExpr = $this->pickTitleExpr($pathGameTable, 'g', "CONCAT('Path Game #', r.path_game_id)");
+
+        $attemptNoExpr = $hasAttemptNo ? "r.attempt_no" : "r.id";
+
+        $q->selectRaw("
+            'path_game' as module,
+            " . ($pathGameTable ? "g.id" : "r.path_game_id") . " as game_id,
+            " . $this->safeCol($pathGameTable, 'g', 'uuid', "NULL") . " as game_uuid,
+            {$titleExpr} as game_title,
+
+            r.id as result_id,
+            r.uuid as result_uuid,
+
+            COALESCE({$attemptNoExpr}, ac.max_attempt_no, 1) as attempt_no,
+            COALESCE(ac.attempt_total_count, 0) as attempt_total_count,
+
+            " . $this->safeRCol($resultTable, 'r', 'score', "0") . " as score,
+            NULL as accuracy,
+
+            " . ($hasPub ? "r.publish_to_student" : "1") . " as publish_to_student,
+            r.created_at as result_created_at
+        ");
+
+        return $q;
+    }
+
+    private function queryQuizz(int $userId)
+    {
+        if (!$this->schemaHasTable('quizz_results')) return null;
+
+        $resultTable  = 'quizz_results';
+        $quizTable    = $this->firstExistingTable(['quizz', 'quizzes', 'quiz']);
+
+        $hasPub       = $this->schemaHasColumn($resultTable, 'publish_to_student');
+        $hasStatus    = $this->schemaHasColumn($resultTable, 'status');
+        $hasDeletedAt = $this->schemaHasColumn($resultTable, 'deleted_at');
+
+        // ✅ attempts table (best for real attempt count)
+        $attemptTable = $this->schemaHasTable('quizz_attempts') ? 'quizz_attempts' : null;
+
+        // attempts count subquery
+        // If quizz_attempts exists, count attempts from it (even if result row is single).
+        // Else fallback to counting results.
+        if ($attemptTable) {
+            $ac = DB::table($attemptTable . ' as aa')
+                ->select([
+                    'aa.quiz_id',
+                    DB::raw('COUNT(*) as attempt_total_count'),
+                    DB::raw('COALESCE(MAX(aa.id), 0) as max_attempt_no'),
+                ])
+                ->where('aa.user_id', $userId)
+                ->groupBy('aa.quiz_id');
+        } else {
+            $ac = DB::table($resultTable . ' as rr')
+                ->select([
+                    'rr.quiz_id',
+                    DB::raw('COUNT(*) as attempt_total_count'),
+                    DB::raw('COALESCE(MAX(rr.id), 0) as max_attempt_no'),
+                ])
+                ->where('rr.user_id', $userId);
+
+            if ($hasDeletedAt) $ac->whereNull('rr.deleted_at');
+            if ($hasPub) {
+                $ac->where('rr.publish_to_student', 1);
+            } elseif ($hasStatus) {
+                $ac->where('rr.status', '!=', 'in_progress');
+            }
+
+            $ac->groupBy('rr.quiz_id');
+        }
+
+        $q = DB::table($resultTable . ' as r');
+
+        if ($quizTable && $this->schemaHasColumn($resultTable, 'quiz_id')) {
+            $q->leftJoin($quizTable . ' as g', 'g.id', '=', 'r.quiz_id');
+        }
+
+        $q->leftJoinSub($ac, 'ac', function ($join) {
+            $join->on('ac.quiz_id', '=', 'r.quiz_id');
+        });
+
+        if ($hasDeletedAt) $q->whereNull('r.deleted_at');
+
+        $q->where('r.user_id', $userId);
+
+        if ($hasPub) $q->where('r.publish_to_student', 1);
+        elseif ($hasStatus) $q->where('r.status', '!=', 'in_progress');
+
+        $titleExpr = $this->pickTitleExpr($quizTable, 'g', "CONCAT('Quizz #', r.quiz_id)");
+
+        // attempt number: prefer r.attempt_id (your schema), else fallback r.id / max_attempt_no
+        $attemptNoExpr = $this->safeRCol($resultTable, 'r', 'attempt_id', "NULL");
+
+        $q->selectRaw("
+            'quizz' as module,
+            " . ($quizTable ? "g.id" : "r.quiz_id") . " as game_id,
+            " . $this->safeCol($quizTable, 'g', 'uuid', $this->safeRCol($resultTable,'r','quiz_uuid',"NULL")) . " as game_uuid,
+            {$titleExpr} as game_title,
+
+            r.id as result_id,
+            r.uuid as result_uuid,
+
+            COALESCE({$attemptNoExpr}, ac.max_attempt_no, r.id, 1) as attempt_no,
+            COALESCE(ac.attempt_total_count, 0) as attempt_total_count,
+
+            " . $this->safeRCol($resultTable, 'r', 'marks_obtained', "0") . " as score,
+            " . $this->safeRCol($resultTable, 'r', 'percentage', "NULL") . " as accuracy,
+
+            " . ($hasPub ? "r.publish_to_student" : "1") . " as publish_to_student,
+            COALESCE(" . $this->safeRCol($resultTable, 'r', 'released_at', "NULL") . ", r.created_at) as result_created_at
+        ");
+
+        return $q;
+    }
+
+    private function viewUrl(string $module, string $rid): string
+    {
+        $rid = rawurlencode($rid);
+
+        if ($module === 'door_game')   return "/decision-making-test/results/{$rid}/view";
+        if ($module === 'quizz')       return "/exam/results/{$rid}/view";
+        if ($module === 'bubble_game') return "/test/results/{$rid}/view";
+        if ($module === 'path_game')   return "/path-game/results/{$rid}/view";
+        return '#';
+    }
+
+    /* =========================================================
+     | GET: /api/student-results/my
+     |========================================================= */
     public function myPublished(Request $request)
     {
         $actor  = $this->actor($request);
         $userId = (int) ($actor['id'] ?? 0);
 
         if ($userId <= 0) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Unable to resolve user from token.'
-            ], 403);
+            return response()->json(['success' => false, 'message' => 'Unable to resolve user from token.'], 403);
         }
-
-        // ✅ Fetch student info ONLY ONCE (no union joins)
-        $student = DB::table('users')
-            ->select([
-                'id',
-                $this->hasColumn('users','uuid') ? 'uuid' : DB::raw("NULL as uuid"),
-                $this->hasColumn('users','name') ? 'name' : DB::raw("NULL as name"),
-                $this->hasColumn('users','email') ? 'email' : DB::raw("NULL as email"),
-            ])
-            ->where('id', $userId)
-            ->first();
 
         $page    = max(1, (int) $request->query('page', 1));
         $perPage = min(100, max(10, (int) $request->query('per_page', 20)));
         $search  = trim((string) $request->query('q', ''));
+        $type    = strtolower(trim((string) $request->query('type', '')));
 
-        $queries = $this->buildQueries($userId);
+        $student = DB::table('users')
+            ->select([
+                'id',
+                $this->schemaHasColumn('users','uuid') ? 'uuid' : DB::raw("NULL as uuid"),
+                $this->schemaHasColumn('users','name') ? 'name' : DB::raw("NULL as name"),
+                $this->schemaHasColumn('users','email') ? 'email' : DB::raw("NULL as email"),
+            ])
+            ->where('id', $userId)
+            ->first();
 
-        if (count($queries) === 0) {
-            return response()->json([
-                'success' => true,
-                'data' => [],
-                'pagination' => [
-                    'total' => 0,
-                    'per_page' => $perPage,
-                    'page' => $page,
-                    'total_pages' => 1
-                ]
+        $baseQuery = null;
+
+        if ($type !== '') {
+            if (!in_array($type, self::TYPES, true)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid type. Allowed: ' . implode(', ', self::TYPES),
+                ], 422);
+            }
+
+            if ($type === 'door_game')   $baseQuery = $this->queryDoor($userId);
+            if ($type === 'quizz')       $baseQuery = $this->queryQuizz($userId);
+            if ($type === 'bubble_game') $baseQuery = $this->queryBubble($userId);
+            if ($type === 'path_game')   $baseQuery = $this->queryPath($userId);
+
+            if (!$baseQuery) {
+                return response()->json([
+                    'success' => true,
+                    'data' => [],
+                    'pagination' => ['page' => $page,'per_page' => $perPage,'has_more' => false],
+                ]);
+            }
+        } else {
+            $qs = array_filter([
+                $this->queryDoor($userId),
+                $this->queryQuizz($userId),
+                $this->queryBubble($userId),
+                $this->queryPath($userId),
             ]);
+
+            if (!$qs) {
+                return response()->json([
+                    'success' => true,
+                    'data' => [],
+                    'pagination' => ['page' => $page,'per_page' => $perPage,'has_more' => false],
+                ]);
+            }
+
+            $baseQuery = array_shift($qs);
+            foreach ($qs as $q) $baseQuery->unionAll($q);
         }
 
-        // ✅ UNION ALL only once
-        $base = array_shift($queries);
-        foreach ($queries as $qq) {
-            $base->unionAll($qq);
-        }
-
-        $outer = DB::query()->fromSub($base, 'x');
+        $outer = DB::query()->fromSub($baseQuery, 'x');
 
         if ($search !== '') {
             $outer->where('x.game_title', 'like', "%{$search}%");
@@ -306,27 +478,18 @@ class StudentResultController extends Controller
 
         $outer->orderByDesc('x.result_created_at');
 
-        // ✅ Count without rebuilding union
-        $countQ = DB::query()->fromSub($base, 'x');
-        if ($search !== '') {
-            $countQ->where('x.game_title', 'like', "%{$search}%");
-        }
-        $total = (int) $countQ->count();
+        $offset = ($page - 1) * $perPage;
+        $rows   = $outer->offset($offset)->limit($perPage + 1)->get();
 
-        $items = $outer->forPage($page, $perPage)->get();
+        $hasMore = $rows->count() > $perPage;
+        if ($hasMore) $rows = $rows->take($perPage);
 
-        $data = $items->map(function ($x) use ($student) {
-            $rid = $x->result_uuid;
-
-            $viewUrl = '#';
-            if ($x->module === 'door_game')   $viewUrl = "/decision-making-test/results/{$rid}/view";
-            if ($x->module === 'quizz')       $viewUrl = "/exam/results/{$rid}/view";
-            if ($x->module === 'bubble_game') $viewUrl = "/test/results/{$rid}/view";
-            if ($x->module === 'path_game')   $viewUrl = "/path-games/results/{$rid}/view";
+        $data = $rows->map(function ($x) use ($student) {
+            $rid = (string) ($x->result_uuid ?? '');
 
             return [
-                'module' => $x->module,
-                'view_url' => $viewUrl,
+                'module'   => (string) $x->module,
+                'view_url' => $this->viewUrl((string) $x->module, $rid),
 
                 'student' => [
                     'id'    => (int) ($student->id ?? 0),
@@ -335,32 +498,39 @@ class StudentResultController extends Controller
                     'email' => $student->email ?? null,
                 ],
 
+                // ✅ ALWAYS return proper title (not only ids)
                 'game' => [
                     'id'    => (int) ($x->game_id ?? 0),
                     'uuid'  => $x->game_uuid,
                     'title' => $x->game_title,
                 ],
 
+                // ✅ attempt_no + attempt_total_count (for your 2nd column UI)
                 'result' => [
-                    'id' => (int) $x->result_id,
+                    'id' => (int) ($x->result_id ?? 0),
                     'uuid' => $x->result_uuid,
+
+                    // latest attempt indicator (attempt_no / attempt_id / id)
                     'attempt_no' => (int) ($x->attempt_no ?? 1),
+
+                    // ✅ TOTAL attempts done by this user for this quiz/game
+                    'attempt_total_count' => (int) ($x->attempt_total_count ?? 0),
+
                     'score' => $x->score,
                     'accuracy' => $x->accuracy,
-                    'publish_to_student' => (int) $x->publish_to_student,
+                    'publish_to_student' => (int) ($x->publish_to_student ?? 1),
                     'result_created_at' => $x->result_created_at,
                 ],
             ];
-        });
+        })->values();
 
         return response()->json([
             'success' => true,
             'data' => $data,
             'pagination' => [
-                'total' => $total,
-                'per_page' => $perPage,
                 'page' => $page,
-                'total_pages' => max(1, (int) ceil($total / $perPage)),
+                'per_page' => $perPage,
+                'has_more' => $hasMore,
             ],
         ]);
     }

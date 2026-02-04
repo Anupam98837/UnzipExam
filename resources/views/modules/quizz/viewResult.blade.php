@@ -530,11 +530,8 @@
     };
   </script>
 
-  {{-- keep as you had it (not changing logic) --}}
-  <script id="MathJax-script"
-          src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
-
-  <script id="MathJax-script" async
+  {{-- ✅ FIX: load MathJax ONCE (no duplicate tag). Use defer so config is applied reliably. --}}
+  <script id="MathJax-script" defer
           src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
 </head>
 
@@ -553,11 +550,6 @@
           <img id="logo" src="{{ asset('/assets/media/images/web/logo.png') }}" alt="Unzip Examination" style="height:50px;width:auto;">
 
         <div>
-          {{-- <div class="er-breadcrumb">
-            <a href="/student/quizzes">My Quizzes</a>
-            <span> · </span>
-            <span id="erQuizTitleSmall">Quiz</span>
-          </div> --}}
           <h1 class="er-title" id="erQuizTitle">Quiz Result</h1>
           <div class="er-sub" id="erAttemptMeta">
             Loading attempt details...
@@ -645,7 +637,6 @@
             </div>
 
             <ul class="mb-0 small text-muted" id="erMetaList">
-              {{-- "Total attempts allowed" removed as requested --}}
               <li>Current attempt ID: <span id="erAttemptId">-</span></li>
               <li>Submitted at: <span id="erSubmittedAt">-</span></li>
             </ul>
@@ -700,7 +691,6 @@
       var errorEl     = document.getElementById("erError");
 
       var quizTitleEl      = document.getElementById("erQuizTitle");
-      // var quizTitleSmallEl = document.getElementById("erQuizTitleSmall");
       var attemptMetaEl    = document.getElementById("erAttemptMeta");
       var scoreChipEl      = document.getElementById("erScoreChip");
 
@@ -878,7 +868,6 @@
 
         var quizTitle = quiz.name || quiz.quiz_name || "Quiz Result";
         quizTitleEl.textContent      = quizTitle;
-        // quizTitleSmallEl.textContent = quizTitle;
 
         var submittedAt = attempt.finished_at || attempt.submitted_at || null;
         var startedAt   = attempt.started_at  || null;
@@ -1005,7 +994,6 @@
 
           /* ---- build DOM ---- */
 
-          // Head
           var head = document.createElement("div");
           head.className = "er-qcard-head";
 
@@ -1041,13 +1029,12 @@
           head.appendChild(meta);
           card.appendChild(head);
 
-          // Question text
           var qWrap = document.createElement("div");
           qWrap.className = "er-q-question";
 
           var qMain = document.createElement("div");
           qMain.className = "er-q-question-main";
-          qMain.innerHTML = buildQuestionHTML(textRaw, type);  // HTML + LaTeX + {dash} blanks
+          qMain.innerHTML = buildQuestionHTML(textRaw, type);
 
           qWrap.appendChild(qMain);
 
@@ -1060,7 +1047,6 @@
 
           card.appendChild(qWrap);
 
-          // Answers block (correct vs your answer)
           var answersWrap = document.createElement("div");
           answersWrap.className = "er-qcard-answers";
 
@@ -1087,7 +1073,6 @@
           var isFibType = (type === "fill_in_the_blank" || type === "fill_in_the_blanks" || type === "fib");
 
           if (isFibType) {
-            // FIB: show plain text (no HTML execution) for safety
             setPlainText(correctTextEl, correctAnsDisplay);
             setPlainText(yourTextEl, yourAnsDisplay);
           } else {
@@ -1106,7 +1091,6 @@
 
           card.appendChild(answersWrap);
 
-          // Time bar
           var timeWrap = document.createElement("div");
           timeWrap.className = "er-q-time";
 
@@ -1145,8 +1129,6 @@
         typesetMath();
         setTimeout(typesetMath, 500);
       }
-
-      /* ---------- API call ---------- */
 
       async function loadResult() {
         var token = getToken();
@@ -1205,7 +1187,6 @@
 
       if (htmlBtn) {
         htmlBtn.addEventListener("click", function () {
-          // Backend export (ExamController@export)
           window.open("/api/exam/results/" + encodeURIComponent(RESULT_ID) + "/export", "_blank");
         });
       }

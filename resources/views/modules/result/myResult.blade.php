@@ -19,6 +19,25 @@
 .mfa-toolbar .btn-light{background:var(--surface);border:1px solid var(--line-strong)}
 .mfa-toolbar .btn-primary{background:var(--primary-color);border:none}
 
+/* ✅ Square Tabs (table-top style) */
+.sr-tabbar{display:flex;flex-wrap:wrap;gap:8px}
+.sr-tab{
+  height:40px;
+  display:inline-flex;align-items:center;gap:.5rem;
+  padding:0 14px;
+  border-radius:12px;
+  border:1px solid var(--line-strong);
+  background:var(--surface);
+  color:var(--text-color);
+  cursor:pointer;
+  user-select:none;
+  transition:transform .08s ease, box-shadow .08s ease;
+}
+.sr-tab:hover{transform:translateY(-1px);box-shadow:var(--shadow-1)}
+.sr-tab i{opacity:.85}
+.sr-tab.active{background:var(--primary-color);border-color:var(--primary-color);color:#fff}
+.sr-tab:focus{outline:none;box-shadow:0 0 0 .25rem rgba(158,54,58,.25)}
+
 /* Table Card */
 .table-wrap.card{position:relative;border:1px solid var(--line-strong);border-radius:16px;background:var(--surface);box-shadow:var(--shadow-2);overflow:hidden}
 .table-wrap .card-body{overflow:hidden}
@@ -36,9 +55,7 @@ td{vertical-align:middle;white-space:nowrap}
 
 /* ✅ Bottom X scrollbar (synced) */
 .x-scrollbar{
-  height:14px;
-  overflow-x:auto;
-  overflow-y:hidden;
+  height:14px; overflow-x:auto; overflow-y:hidden;
   border-top:1px solid var(--line-strong);
   background:color-mix(in oklab, var(--muted-color) 6%, transparent);
 }
@@ -46,11 +63,7 @@ td{vertical-align:middle;white-space:nowrap}
 .x-scrollbar-inner{height:1px}
 
 /* ✅ Hide native horizontal scrollbar of table area (keep scroll working) */
-.table-responsive{
-  overflow-x:auto !important;
-  scrollbar-width:none;          /* Firefox */
-  -ms-overflow-style:none;       /* IE/Edge old */
-}
+.table-responsive{overflow-x:auto !important; scrollbar-width:none; -ms-overflow-style:none;}
 .table-responsive::-webkit-scrollbar{ height:0px; }
 .table-responsive::-webkit-scrollbar-thumb{ background:transparent; }
 
@@ -61,8 +74,6 @@ td{vertical-align:middle;white-space:nowrap}
   border:1px solid var(--line-strong);
   background:color-mix(in oklab, var(--muted-color) 10%, transparent)
 }
-.badge-success{background:var(--success-color)!important;color:#fff!important;border:none!important}
-.badge-secondary{background:#64748b!important;color:#fff!important;border:none!important}
 
 /* Empty & loader */
 .empty{color:var(--muted-color)}
@@ -99,22 +110,31 @@ html.theme-dark .table tbody tr{border-color:var(--line-soft)}
         <i class="fa fa-search position-absolute" style="left:12px;top:50%;transform:translateY(-50%);opacity:.6;"></i>
       </div>
 
-      <div style="min-width:220px;">
-        <select id="type" class="form-select">
-          <option value="">All Results</option>
-          <option value="door_game">Door Game</option>
-          <option value="quizz">Quizz</option>
-          <option value="bubble_game">Bubble Game</option>
-
-          {{-- ✅ NEW --}}
-          <option value="path_game">Path Game</option>
-        </select>
-      </div>
-
       <button id="btnReset" class="btn btn-primary">
         <i class="fa fa-rotate-left me-1"></i>Reset
       </button>
 
+    </div>
+  </div>
+
+  {{-- ✅ Tabs above table (default Quizz, All last) --}}
+  <div class="panel mb-2">
+    <div class="sr-tabbar" id="srTabbar">
+      <button type="button" class="sr-tab active" data-type="quizz">
+        <i class="fa fa-clipboard-question"></i> Quizz
+      </button>
+      <button type="button" class="sr-tab" data-type="door_game">
+        <i class="fa fa-door-open"></i> Door
+      </button>
+      <button type="button" class="sr-tab" data-type="bubble_game">
+        <i class="fa fa-circle"></i> Bubble
+      </button>
+      <button type="button" class="sr-tab" data-type="path_game">
+        <i class="fa fa-route"></i> Path
+      </button>
+      <button type="button" class="sr-tab" data-type="">
+        <i class="fa fa-layer-group"></i> All
+      </button>
     </div>
   </div>
 
@@ -131,8 +151,6 @@ html.theme-dark .table tbody tr{border-color:var(--line-soft)}
                 <th>GAME / TEST</th>
                 <th style="width:120px;">ATTEMPT</th>
                 <th style="width:120px;">SCORE</th>
-                <th style="display:none; width:110px;">%</th>
-                <th style="display:none; width:220px;">FOLDER</th>
                 <th style="width:170px;">SUBMITTED</th>
                 <th class="text-end" style="width:140px;">ACTION</th>
               </tr>
@@ -140,7 +158,7 @@ html.theme-dark .table tbody tr{border-color:var(--line-soft)}
 
             <tbody id="rows-student">
               <tr id="loaderRow-student" style="display:none;">
-                <td colspan="8" class="p-0">
+                <td colspan="6" class="p-0">
                   <div class="p-4">
                     <div class="placeholder-wave">
                       <div class="placeholder col-12 mb-2" style="height:18px;"></div>
@@ -155,7 +173,6 @@ html.theme-dark .table tbody tr{border-color:var(--line-soft)}
           </table>
         </div>
 
-        {{-- ✅ bottom x-scroll --}}
         <div class="x-scrollbar" id="xs-student">
           <div class="x-scrollbar-inner"></div>
         </div>
@@ -194,19 +211,15 @@ html.theme-dark .table tbody tr{border-color:var(--line-soft)}
 <script>
 (function(){
   const TOKEN = localStorage.getItem('token') || sessionStorage.getItem('token') || '';
-  if (!TOKEN){
-    location.href = '/';
-    return;
-  }
+  if (!TOKEN){ location.href = '/'; return; }
 
-  // ✅ API (published only)
   const API_MY_RESULTS = '/api/student-results/my';
 
   // DOM
   const perPageSel = document.getElementById('per_page');
   const q = document.getElementById('q');
-  const typeSel = document.getElementById('type');
   const btnReset = document.getElementById('btnReset');
+  const tabBtns = Array.from(document.querySelectorAll('.sr-tab[data-type]'));
 
   const rowsEl  = document.getElementById('rows-student');
   const loaderRow = document.getElementById('loaderRow-student');
@@ -222,13 +235,16 @@ html.theme-dark .table tbody tr{border-color:var(--line-soft)}
   const errToast = new bootstrap.Toast(document.getElementById('errToast'));
   const err = (m)=>{ document.getElementById('errMsg').textContent = m || 'Something went wrong'; errToast.show(); };
 
-  // ✅ State + Cache
-  const state = { page: 1 };
-  const cache = new Map(); // key => json
+  // ✅ Default tab = quizz
+  const state = { page: 1, type: 'quizz' };
+
+  // ✅ Cache: key => response
+  const cache = new Map();
+
+  // request control
   let aborter = null;
   let reqSeq = 0;
 
-  // ✅ Faster date formatter (create once)
   const dtFmt = new Intl.DateTimeFormat(undefined,{
     year:'numeric',month:'short',day:'2-digit',
     hour:'2-digit',minute:'2-digit'
@@ -237,11 +253,8 @@ html.theme-dark .table tbody tr{border-color:var(--line-soft)}
   function esc(s){
     if (s === null || s === undefined) return '';
     return String(s)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;');
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/'/g,'&#039;');
   }
 
   function fmtDate(iso){
@@ -251,7 +264,6 @@ html.theme-dark .table tbody tr{border-color:var(--line-soft)}
     return dtFmt.format(d);
   }
 
-  // ✅ Module badge map (no repeated if-chains)
   const modBadgeMap = {
     door_game:   `<span class="badge-pill"><i class="fa fa-door-open"></i> Door</span>`,
     quizz:       `<span class="badge-pill"><i class="fa fa-clipboard-question"></i> Quizz</span>`,
@@ -264,7 +276,6 @@ html.theme-dark .table tbody tr{border-color:var(--line-soft)}
     return modBadgeMap[v] || `<span class="badge-pill"><i class="fa fa-layer-group"></i> ${esc(mod||'-')}</span>`;
   }
 
-  // ✅ REQUIRED URL mapping
   function viewUrlFor(item){
     const rid = item?.result?.uuid || '';
     const mod = String(item?.module || '').toLowerCase();
@@ -278,7 +289,17 @@ html.theme-dark .table tbody tr{border-color:var(--line-soft)}
     return '#';
   }
 
-  function buildParams(){
+  function buildKey(){
+    // ✅ include everything that changes result
+    return [
+      'p=' + state.page,
+      'pp=' + Number(perPageSel.value || 20),
+      't=' + (state.type || ''),
+      'q=' + (q.value || '').trim()
+    ].join('&');
+  }
+
+  function buildUrl(){
     const usp = new URLSearchParams();
     usp.set('page', state.page);
     usp.set('per_page', Number(perPageSel.value || 20));
@@ -286,56 +307,38 @@ html.theme-dark .table tbody tr{border-color:var(--line-soft)}
     const qq = (q.value || '').trim();
     if (qq) usp.set('q', qq);
 
-    const type = typeSel.value || '';
+    const type = String(state.type || '').trim();
     if (type) usp.set('type', type);
 
-    return usp.toString();
+    return `${API_MY_RESULTS}?${usp.toString()}`;
   }
 
-  function showLoader(v){
-    loaderRow.style.display = v ? '' : 'none';
-  }
+  function showLoader(v){ loaderRow.style.display = v ? '' : 'none'; }
 
-  // ✅ Sync bottom scrollbar (bind ONCE)
+  // bottom scrollbar sync
   let scrollBound = false;
-  let ro = null;
-
   function updateXScroll(){
     if (!trWrap || !xsWrap || !tbl) return;
-
     const inner = xsWrap.querySelector('.x-scrollbar-inner');
     const need = tbl.scrollWidth > trWrap.clientWidth + 2;
-
     xsWrap.classList.toggle('hidden', !need);
     if (!need) return;
-
     inner.style.width = tbl.scrollWidth + 'px';
   }
-
   function bindXScrollOnce(){
     if (scrollBound) return;
     scrollBound = true;
 
     let lock = false;
-
     trWrap.addEventListener('scroll', ()=>{
-      if (lock) return;
-      lock = true;
-      xsWrap.scrollLeft = trWrap.scrollLeft;
-      lock = false;
+      if (lock) return; lock = true; xsWrap.scrollLeft = trWrap.scrollLeft; lock = false;
     });
-
     xsWrap.addEventListener('scroll', ()=>{
-      if (lock) return;
-      lock = true;
-      trWrap.scrollLeft = xsWrap.scrollLeft;
-      lock = false;
+      if (lock) return; lock = true; trWrap.scrollLeft = xsWrap.scrollLeft; lock = false;
     });
 
-    // ✅ ResizeObserver (more accurate than window resize)
-    ro = new ResizeObserver(()=> updateXScroll());
-    ro.observe(trWrap);
-    ro.observe(tbl);
+    const ro = new ResizeObserver(()=> updateXScroll());
+    ro.observe(trWrap); ro.observe(tbl);
   }
 
   function clearRowsExceptLoader(){
@@ -346,7 +349,6 @@ html.theme-dark .table tbody tr{border-color:var(--line-soft)}
     if (!items.length) return;
 
     const html = new Array(items.length);
-
     for (let i=0;i<items.length;i++){
       const item = items[i];
       const mod = item?.module || '-';
@@ -355,22 +357,16 @@ html.theme-dark .table tbody tr{border-color:var(--line-soft)}
 
       const attempt = Number(result.attempt_no || 0);
       const score = Number(result.score || 0);
-      const date = fmtDate(result.created_at || result.result_created_at);
+      const date = fmtDate(result.result_created_at || result.created_at);
       const viewUrl = viewUrlFor(item);
       const disabled = (!result.uuid) ? 'disabled' : '';
 
       html[i] = `
         <tr>
           <td>${moduleBadge(mod)}</td>
-          <td>
-            <div class="fw-semibold">${esc(title)}</div>
-          </td>
+          <td><div class="fw-semibold">${esc(title)}</div></td>
           <td><span class="badge-pill"><i class="fa fa-repeat"></i> #${attempt}</span></td>
           <td><div class="fw-semibold">${score}</div></td>
-
-          <td style="display:none;">—</td>
-          <td style="display:none;">—</td>
-
           <td>${esc(date)}</td>
           <td class="text-end">
             <a href="${viewUrl}" class="btn btn-primary btn-sm" ${disabled}>
@@ -380,11 +376,13 @@ html.theme-dark .table tbody tr{border-color:var(--line-soft)}
         </tr>
       `;
     }
-
     rowsEl.insertAdjacentHTML('beforeend', html.join(''));
   }
 
-  function renderPager(page, totalPages){
+  // ✅ Two pager modes:
+  // 1) total_pages mode (old API)
+  // 2) has_more mode (new fast API) -> Previous + Next only
+  function renderPagerTotal(page, totalPages){
     function li(disabled, active, label, target){
       const cls=['page-item',disabled?'disabled':'',active?'active':''].filter(Boolean).join(' ');
       return `<li class="${cls}">
@@ -417,18 +415,42 @@ html.theme-dark .table tbody tr{border-color:var(--line-soft)}
     pagerEl.innerHTML = html;
   }
 
-  // ✅ Pagination click delegation (bind ONCE)
+  function renderPagerHasMore(page, hasMore){
+    const prevDisabled = page <= 1;
+    const nextDisabled = !hasMore;
+
+    pagerEl.innerHTML = `
+      <li class="page-item ${prevDisabled ? 'disabled':''}">
+        <a class="page-link" href="javascript:void(0)" data-page="${page-1}">Previous</a>
+      </li>
+      <li class="page-item ${nextDisabled ? 'disabled':''}">
+        <a class="page-link" href="javascript:void(0)" data-page="${page+1}">Next</a>
+      </li>
+    `;
+  }
+
   pagerEl.addEventListener('click', (e)=>{
     const a = e.target.closest('a.page-link[data-page]');
     if(!a) return;
-
     const target = Number(a.dataset.page);
     if (!target || target === state.page) return;
+    if (target < 1) return;
 
-    state.page = Math.max(1, target);
+    state.page = target;
     load(true);
     window.scrollTo({top:0, behavior:'smooth'});
   });
+
+  function setActiveTab(type){
+    tabBtns.forEach(btn=>{
+      const t = btn.dataset.type ?? '';
+      btn.classList.toggle('active', String(t) === String(type));
+    });
+  }
+
+  function invalidateCache(){
+    cache.clear();
+  }
 
   async function load(fromUserAction=false){
     emptyEl.style.display = 'none';
@@ -437,19 +459,16 @@ html.theme-dark .table tbody tr{border-color:var(--line-soft)}
     clearRowsExceptLoader();
     showLoader(true);
 
-    // ✅ abort previous request
     if (aborter) aborter.abort();
     aborter = new AbortController();
 
     const mySeq = ++reqSeq;
-    const qs = buildParams();
-    const url = `${API_MY_RESULTS}?${qs}`;
+    const key = buildKey();
+    const url = buildUrl();
 
-    // ✅ cache hit (instant render)
-    if (cache.has(qs)){
-      const cached = cache.get(qs);
+    if (cache.has(key)){
       showLoader(false);
-      paint(cached);
+      paint(cache.get(key));
       return;
     }
 
@@ -463,17 +482,16 @@ html.theme-dark .table tbody tr{border-color:var(--line-soft)}
         signal: aborter.signal
       });
 
-      // ignore old responses
       if (mySeq !== reqSeq) return;
 
       const json = await res.json().catch(()=> ({}));
       if (!res.ok || json?.success === false) throw new Error(json?.message || 'Failed to load');
 
-      cache.set(qs, json); // ✅ store cache
+      cache.set(key, json);
       paint(json);
 
     }catch(e){
-      if (e.name === 'AbortError') return; // ✅ ignore aborted
+      if (e.name === 'AbortError') return;
       console.error(e);
       emptyEl.style.display = '';
       metaEl.textContent = 'Failed to load';
@@ -487,10 +505,8 @@ html.theme-dark .table tbody tr{border-color:var(--line-soft)}
     const items = Array.isArray(json?.data) ? json.data : [];
     const p = json?.pagination || {};
 
-    const total = Number(p.total ?? items.length ?? 0);
-    const per = Number(p.per_page ?? perPageSel.value ?? 20);
     const page = Number(p.page ?? state.page ?? 1);
-    const totalPages = Number(p.total_pages ?? Math.max(1, Math.ceil(total / per)));
+    const per  = Number(p.per_page ?? perPageSel.value ?? 20);
 
     if (!items.length){
       emptyEl.style.display = '';
@@ -498,46 +514,72 @@ html.theme-dark .table tbody tr{border-color:var(--line-soft)}
       renderRows(items);
     }
 
-    renderPager(page, totalPages);
-    metaEl.textContent = `Showing page ${page} of ${totalPages} — ${total} result(s)`;
+    // ✅ pager mode
+    if (p.total_pages !== undefined || p.total !== undefined){
+      const total = Number(p.total ?? items.length ?? 0);
+      const totalPages = Number(p.total_pages ?? Math.max(1, Math.ceil(total / per)));
+      renderPagerTotal(page, totalPages);
+      metaEl.textContent = `Showing page ${page} of ${totalPages} — ${total} result(s)`;
+    } else {
+      const hasMore = !!p.has_more;
+      renderPagerHasMore(page, hasMore);
+      metaEl.textContent = `Showing page ${page}${hasMore ? ' (more available)' : ''}`;
+    }
 
-    // ✅ bottom scrollbar sync
     bindXScrollOnce();
     updateXScroll();
   }
 
-  // ✅ search debounce (less API spam)
-  let t;
-  q.addEventListener('input', ()=>{
-    clearTimeout(t);
-    t = setTimeout(()=>{
+  // ✅ Tabs click -> set type + load
+  tabBtns.forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const t = btn.dataset.type ?? '';
+      if (String(t) === String(state.type)) return;
+
+      state.type = String(t);
       state.page = 1;
+
+      invalidateCache();         // ✅ IMPORTANT
+      setActiveTab(state.type);
+      load(true);
+      window.scrollTo({top:0, behavior:'smooth'});
+    });
+  });
+
+  // ✅ search debounce (also clears cache)
+  let tmr;
+  q.addEventListener('input', ()=>{
+    clearTimeout(tmr);
+    tmr = setTimeout(()=>{
+      state.page = 1;
+      invalidateCache();         // ✅ IMPORTANT
       load(true);
     }, 450);
   });
 
-  typeSel.addEventListener('change', ()=>{
-    state.page = 1;
-    load(true);
-  });
-
+  // ✅ per-page change clears cache
   perPageSel.addEventListener('change', ()=>{
     state.page = 1;
+    invalidateCache();           // ✅ IMPORTANT
     load(true);
   });
 
+  // ✅ reset -> default quizz
   btnReset.addEventListener('click', ()=>{
     q.value = '';
-    typeSel.value = '';
     perPageSel.value = '20';
     state.page = 1;
+
+    state.type = 'quizz';
+    invalidateCache();           // ✅ IMPORTANT
+    setActiveTab('quizz');
     load(true);
   });
 
-  // ✅ init
+  // ✅ init (default Quizz)
+  setActiveTab('quizz');
   load(false);
 
 })();
 </script>
-
 @endpush

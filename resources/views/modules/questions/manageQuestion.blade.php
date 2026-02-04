@@ -1524,12 +1524,33 @@ mjx-container,
         var quizMeta = null; 
 
         function typesetMath(root) {
-        if (!window.MathJax || !window.MathJax.typesetPromise) return;
-        const nodes = root ? [root] : undefined;
-        MathJax.typesetPromise(nodes).catch(function (err) {
-            console.error('MathJax typeset error:', err);
+  if (!window.MathJax) return;
+
+  const nodes = root ? [root] : undefined;
+
+  // MathJax v3: wait until startup is ready, then clear + typeset
+  const doTypeset = () => {
+    try {
+      if (window.MathJax.typesetClear && nodes) window.MathJax.typesetClear(nodes);
+      if (window.MathJax.typesetPromise) {
+        return window.MathJax.typesetPromise(nodes).catch(err => {
+          console.error('MathJax typeset error:', err);
         });
+      }
+    } catch (e) {
+      console.error('MathJax typeset exception:', e);
     }
+  };
+
+  // If startup exists, wait for it
+  if (window.MathJax.startup && window.MathJax.startup.promise) {
+    window.MathJax.startup.promise.then(doTypeset);
+  } else {
+    // fallback
+    setTimeout(doTypeset, 0);
+  }
+}
+
         var previewOverlay = document.getElementById('previewOverlay');
 var previewTitle   = document.getElementById('previewTitle');
 var previewDesc    = document.getElementById('previewDesc');
@@ -1541,6 +1562,9 @@ function openPreviewModal(){
     if (!previewOverlay) return;
     previewOverlay.style.display = 'flex';
     document.body.style.overflow = 'hidden';
+
+    requestAnimationFrame(() => typesetMath(previewOverlay));
+
 }
 function closePreviewModal(){
     if (!previewOverlay) return;
@@ -1724,6 +1748,37 @@ document.getElementById('btnHelp')?.addEventListener('click', function(){
             // Return text content for preview, or sanitized HTML for editing
             return d.textContent || ''; 
         }
+
+        function sanitizePreviewHtml(html){
+            if (!html) return '';
+
+            const d = document.createElement('div');
+            d.innerHTML = html;
+
+            // remove dangerous / useless tags
+            d.querySelectorAll('script,style,head,meta,link,title,iframe,object,embed').forEach(el => el.remove());
+
+            // remove inline event handlers: onclick, onerror, etc.
+            d.querySelectorAll('*').forEach(el => {
+                [...el.attributes].forEach(attr => {
+                if (/^on/i.test(attr.name)) el.removeAttribute(attr.name);
+                });
+            });
+
+            // ensure imgs are visible & responsive in preview
+            d.querySelectorAll('img').forEach(img => {
+                img.removeAttribute('srcset');
+                img.removeAttribute('sizes');
+                img.style.maxWidth = '100%';
+                img.style.height = 'auto';
+                img.style.display = 'block';
+                img.style.margin = '6px 0';
+                img.style.borderRadius = '8px';
+            });
+
+            return d.innerHTML;
+            }
+
 
         // Function to truncate text to 3-4 words
         function truncateText(text, maxWords = 4) {
@@ -3044,95 +3099,92 @@ if (qDifficulty) qDifficulty.value = 'medium';
           return (anySingleFlag || correctCount === 1) ? 'single_choice' : 'multiple_choice';
         }
 
-function renderQuestionPreview(q){
-    if (!previewTitle) return;
-    const uiType = guessUiType(q);
-    const diff   = (q.question_difficulty || 'medium').toLowerCase();
-    const typeMeta = typeMetaForList(q);
+        function renderQuestionPreview(q){
+            if (!previewTitle) return;
+            const uiType = guessUiType(q);
+            const diff   = (q.question_difficulty || 'medium').toLowerCase();
+            const typeMeta = typeMetaForList(q);
 
-    // chips
-    previewChips.innerHTML = `
-        <span class="preview-chip diff-${diff}">${diff.charAt(0).toUpperCase()+diff.slice(1)}</span>
-        <span class="preview-chip">${typeMeta.label}</span>
-        <span class="preview-chip">${q.question_mark || 1} mark${(q.question_mark||1) > 1 ? 's':''}</span>
-    `;
+            // chips
+            previewChips.innerHTML = `
+                <span class="preview-chip diff-${diff}">${diff.charAt(0).toUpperCase()+diff.slice(1)}</span>
+                <span class="preview-chip">${typeMeta.label}</span>
+                <span class="preview-chip">${q.question_mark || 1} mark${(q.question_mark||1) > 1 ? 's':''}</span>
+            `;
 
-    // ---- TITLE: strip HTML so TeX is contiguous ----
-    const rawTitle   = q.question_title || 'Untitled question';
-    const plainTitle = stripHtml(rawTitle); // remove <p>, <br>, etc.
-    let   titleHtml  = plainTitle;
+            // ✅ TITLE: keep HTML (so images show) + sanitize
+            let titleHtml = sanitizePreviewHtml(q.question_title || 'Untitled question');
 
-    if (uiType === 'fill_in_the_blank') {
-        // turn {dash} tokens into blanks
-        titleHtml = plainTitle.replace(/{dash}/g, '<span class="preview-blank"></span>');
-    }
-    previewTitle.innerHTML = titleHtml;
+            // fill blank: convert {dash} tokens to blanks
+            if (uiType === 'fill_in_the_blank') {
+                titleHtml = titleHtml.replace(/{dash}/g, '<span class="preview-blank"></span>');
+            }
+            previewTitle.innerHTML = titleHtml;
 
-    // ---- DESCRIPTION (also flattened so TeX works) ----
-    const descPlain = stripHtml(q.question_description || '');
-    if (descPlain.trim().length){
-        previewDesc.style.display = 'block';
-        previewDesc.innerHTML = esc(descPlain);
-    } else {
-        previewDesc.style.display = 'none';
-        previewDesc.innerHTML = '';
-    }
+            // ✅ DESCRIPTION: keep HTML + sanitize
+            const descHtml = sanitizePreviewHtml(q.question_description || '');
+            if (descHtml.replace(/<[^>]*>/g,'').trim().length){
+                previewDesc.style.display = 'block';
+                previewDesc.innerHTML = descHtml;
+            } else {
+                previewDesc.style.display = 'none';
+                previewDesc.innerHTML = '';
+            }
 
-    // ---- OPTIONS ----
-    previewOptions.innerHTML = '';
-    const answers = Array.isArray(q.answers) ? q.answers.slice() : [];
-    answers.sort((a,b) => (a.answer_order||0) - (b.answer_order||0));
+            // ✅ OPTIONS: keep HTML + sanitize (so option images show)
+            previewOptions.innerHTML = '';
+            const answers = Array.isArray(q.answers) ? q.answers.slice() : [];
+            answers.sort((a,b) => (a.answer_order||0) - (b.answer_order||0));
 
-    if (uiType === 'fill_in_the_blank') {
-        if (answers.length){
-            const heading = document.createElement('div');
-            heading.className = 'preview-extra-title';
-            heading.textContent = 'Correct answers';
-            previewOptions.appendChild(heading);
+            if (uiType === 'fill_in_the_blank') {
+                if (answers.length){
+                const heading = document.createElement('div');
+                heading.className = 'preview-extra-title';
+                heading.textContent = 'Correct answers';
+                previewOptions.appendChild(heading);
 
-            answers.forEach((ans, idx) => {
-                const text = stripHtml(ans.answer_title || '');
-                const wrap = document.createElement('div');
-                wrap.className = 'preview-option correct';
-                wrap.innerHTML = `
+                answers.forEach((ans, idx) => {
+                    const wrap = document.createElement('div');
+                    wrap.className = 'preview-option correct';
+                    wrap.innerHTML = `
                     <div class="preview-option-label">${idx+1}</div>
-                    <div class="preview-option-content">${esc(text)}</div>
+                    <div class="preview-option-content">${sanitizePreviewHtml(ans.answer_title || '')}</div>
+                    `;
+                    previewOptions.appendChild(wrap);
+                });
+                }
+            } else {
+                const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+                answers.forEach((ans, idx) => {
+                const correct = !!ans.is_correct;
+                const wrap    = document.createElement('div');
+                const letter  = letters[idx] || '?';
+
+                wrap.className = 'preview-option' + (correct ? ' correct' : '');
+                wrap.innerHTML = `
+                    <div class="preview-option-label">${letter}</div>
+                    <div class="preview-option-content">${sanitizePreviewHtml(ans.answer_title || '')}</div>
                 `;
                 previewOptions.appendChild(wrap);
-            });
-        }
-    } else {
-        const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-        answers.forEach((ans, idx) => {
-            const text    = stripHtml(ans.answer_title || '');
-            const correct = !!ans.is_correct;
-            const wrap    = document.createElement('div');
-            const letter  = letters[idx] || '?';
+                });
+            }
 
-            wrap.className = 'preview-option' + (correct ? ' correct' : '');
-            wrap.innerHTML = `
-                <div class="preview-option-label">${letter}</div>
-                <div class="preview-option-content">${esc(text)}</div>
-            `;
-            previewOptions.appendChild(wrap);
-        });
-    }
+            // ✅ EXPLANATION: keep HTML + sanitize
+            const explHtml = sanitizePreviewHtml(q.answer_explanation || '');
+            if (explHtml.replace(/<[^>]*>/g,'').trim().length){
+                previewExtra.innerHTML = `
+                <div class="preview-extra-title">Explanation</div>
+                <div>${explHtml}</div>
+                `;
+            } else {
+                previewExtra.innerHTML = '';
+            }
 
-    // ---- EXPLANATION ----
-    const explPlain = stripHtml(q.answer_explanation || '');
-    if (explPlain.trim().length){
-        previewExtra.innerHTML = `
-            <div class="preview-extra-title">Explanation</div>
-            <div>${esc(explPlain)}</div>
-        `;
-    } else {
-        previewExtra.innerHTML = '';
-    }
+            // typeset math after inserting HTML
+            const previewRoot = document.getElementById('previewOverlay');
+            typesetMath(previewRoot);
+            }
 
-    // finally typeset the whole modal (header + body)
-    const previewRoot = document.getElementById('previewOverlay');
-    typesetMath(previewRoot);
-}
 
 
 async function viewQuestion(id){

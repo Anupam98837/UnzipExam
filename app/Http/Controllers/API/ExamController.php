@@ -136,12 +136,6 @@ class ExamController extends Controller
     public function start(Request $request, string $quizKey)
     {
         $user = $this->getUserFromToken($request);
-        if (!$user || !$this->isStudent($user)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Unauthorized (student token required)',
-            ], 401);
-        }
 
         $quiz = $this->quizByKey($quizKey);
         if (!$quiz) {

@@ -71,6 +71,11 @@ Route::get('/exam/{quiz}', function (\Illuminate\Http\Request $r, $quiz) {
     return view('modules.exam.exam', ['quizKey' => $quiz]);
 })->name('exam.take');
 
+Route::get('/test-exam/{quiz}', function (Request $r, $quiz) {
+    // Pass the quiz key (uuid or id) to the test view
+    return view('modules.exam.testExam', ['quizKey' => $quiz]);
+})->name('exam.test');
+
 /*
 |--------------------------------------------------------------------------
 | 6) Student Routes

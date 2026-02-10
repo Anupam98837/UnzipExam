@@ -234,6 +234,7 @@ $rows = DB::table('quizz_questions as q')
         'q.question_difficulty as question_difficulty',     // <-- fix
         'q.question_settings',
         'q.question_order',
+        'q.group_title',
         'q.created_at as question_created_at',
 
         'a.id   as answer_id',
@@ -268,6 +269,7 @@ $rows = DB::table('quizz_questions as q')
                 'question_difficulty'  => $r->question_difficulty ?: 'medium', // <-- NEW: surfaced to API
                 'question_settings'    => $r->question_settings,
                 'question_order'       => (int) $r->question_order,
+                'group_title'          => $r->group_title,
                 'created_at'           => $r->question_created_at,
                 'answers'              => [],
             ];
@@ -326,6 +328,7 @@ $rows = DB::table('quizz_questions as q')
         'q.question_difficulty as question_difficulty',     // <-- fix
         'q.question_settings',
         'q.question_order',
+        'q.group_title',
         'q.created_at as question_created_at',
 
         'a.id   as answer_id',
@@ -361,6 +364,7 @@ $rows = DB::table('quizz_questions as q')
             'question_difficulty'  => (string) $first->question_difficulty,
             'question_settings'    => $first->question_settings,
             'question_order'       => (int) $first->question_order,
+            'group_title'          => $first->group_title,
             'created_at'           => $first->question_created_at,
             'answers'              => [],
         ];
@@ -410,6 +414,7 @@ $rows = DB::table('quizz_questions as q')
             'question_difficulty' => ['nullable','string', Rule::in(self::DIFFICULTIES)],
             'question_settings'      => ['nullable','array'],
             'question_order'         => ['required','integer','min:1'],
+            'group_title'            => ['nullable','string','max:255'],
 
             'answers'                        => ['required','array','min:1'],
             'answers.*.answer_title'         => ['nullable','string'],
@@ -444,6 +449,7 @@ $rows = DB::table('quizz_questions as q')
                                 ? json_encode($data['question_settings'], JSON_UNESCAPED_UNICODE)
                                 : null,
     'question_order'       => (int) $data['question_order'],
+    'group_title'          => $data['group_title'] ?? null,
     'created_by'           => $a['id'] ?: null,
     'updated_by'           => $a['id'] ?: null,
     'created_at_ip'        => $ip,
@@ -545,6 +551,7 @@ $rows = DB::table('quizz_questions as q')
             'question_difficulty' => ['sometimes','string', Rule::in(self::DIFFICULTIES)],
             'question_settings'         => ['nullable','array'],
             'question_order'            => ['sometimes','required','integer','min:1'],
+            'group_title'               => ['nullable','string','max:255'],
 
             'answers'                        => ['sometimes','array','min:1'],
             'answers.*.answer_title'         => ['nullable','string'],
@@ -578,6 +585,7 @@ $rows = DB::table('quizz_questions as q')
             if (array_key_exists('question_description', $data)) $upd['question_description'] = $data['question_description'];
             if (array_key_exists('answer_explanation', $data))   $upd['answer_explanation']   = $data['answer_explanation'];
             if (array_key_exists('question_mark', $data))        $upd['question_mark']        = (int) $data['question_mark'];
+            if (array_key_exists('group_title', $data))          $upd['group_title']          = $data['group_title'];
            if (array_key_exists('question_difficulty', $data)) {
     $upd['question_difficulty'] = strtolower($data['question_difficulty']); // <-- fix
 }

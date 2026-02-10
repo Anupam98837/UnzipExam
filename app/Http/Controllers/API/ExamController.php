@@ -394,153 +394,189 @@ class ExamController extends Controller
     }
 
     /* ============================================
-     | GET /api/exam/attempts/{attempt}/questions
-     |============================================ */
-    public function questions(Request $request, string $attemptUuid)
-    {
-        $user = $this->getUserFromToken($request);
-        if (!$user) return response()->json(['success'=>false,'message'=>'Unauthorized'], 401);
+ | GET /api/exam/attempts/{attempt}/questions
+ |============================================ */
+public function questions(Request $request, string $attemptUuid)
+{
+    $user = $this->getUserFromToken($request);
+    if (!$user) return response()->json(['success'=>false,'message'=>'Unauthorized'], 401);
 
-        $attempt = DB::table('quizz_attempts')->where('uuid', $attemptUuid)->first();
-        if (!$attempt || (int)$attempt->user_id !== (int)$user->id) {
-            return response()->json(['success'=>false,'message'=>'Attempt not found'], 404);
-        }
-
-        if ($this->deadlinePassed($attempt)) {
-            $attempt = $this->autoFinalize($attempt, true);
-        }
-
-        $rows = DB::table('quizz_questions as q')
-            ->leftJoin('quizz_question_answers as a', 'a.belongs_question_id', '=', 'q.id')
-            ->where('q.quiz_id', $attempt->quiz_id)
-            ->orderBy('q.question_order')
-            ->orderBy('a.answer_order')
-            ->select([
-                'q.id as question_id',
-                'q.question_title',
-                'q.question_description',
-                'q.answer_explanation',
-                'q.question_type',
-                'q.question_mark',
-                'q.question_order',
-                DB::raw("(
-                    SELECT COUNT(*) FROM quizz_question_answers
-                    WHERE belongs_question_id = q.id AND is_correct = 1
-                ) as correct_count"),
-
-                'a.id as answer_id',
-                'a.answer_title',
-                'a.answer_order',
-            ])
-            ->get();
-
-        $questionsById = [];
-        foreach ($rows as $r) {
-            $qid = (int)$r->question_id;
-
-            if (!isset($questionsById[$qid])) {
-                $questionsById[$qid] = [
-                    'question_id'                 => $qid,
-                    'question_title'              => $r->question_title,
-                    'question_description'        => $r->question_description,
-                    'question_type'               => $r->question_type,
-                    'question_mark'               => (int)$r->question_mark,
-                    'question_order'              => (int)$r->question_order,
-                    'has_multiple_correct_answer' => ((int)$r->correct_count > 1),
-                    'answers'                     => [],
-                ];
-            }
-
-            if ($r->answer_id !== null) {
-                $questionsById[$qid]['answers'][] = [
-                    'answer_id'    => (int)$r->answer_id,
-                    'answer_title' => $r->answer_title,
-                    'answer_order' => (int)($r->answer_order ?? 0),
-                ];
-            }
-        }
-
-        $saved = DB::table('quizz_attempt_answers')
-            ->where('attempt_id', $attempt->id)
-            ->pluck('selected_raw', 'question_id');
-
-        $selections = [];
-        foreach ($saved as $qid => $json) {
-            try { $selections[$qid] = json_decode($json, true); }
-            catch (\Throwable $e) { $selections[$qid] = null; }
-        }
-
-        $layoutQuestions = null;
-        $layoutOptions   = null;
-
-        if (!empty($attempt->questions_order)) {
-            try { $layoutQuestions = json_decode($attempt->questions_order, true); }
-            catch (\Throwable $e) { $layoutQuestions = null; }
-        }
-
-        if (!empty($attempt->options_order)) {
-            try { $layoutOptions = json_decode($attempt->options_order, true); }
-            catch (\Throwable $e) { $layoutOptions = null; }
-        }
-
-        $orderedQuestions = [];
-        $hasLayout = is_array($layoutQuestions) && !empty($layoutQuestions);
-
-        if ($hasLayout) {
-            $usedQids = [];
-            foreach ($layoutQuestions as $qid) {
-                $qid = (int)$qid;
-                if (!isset($questionsById[$qid])) continue;
-
-                $qArr = $questionsById[$qid];
-
-                if (is_array($layoutOptions)) {
-                    $keyInt = $qid;
-                    $keyStr = (string)$qid;
-                    $ansOrder = $layoutOptions[$keyInt] ?? ($layoutOptions[$keyStr] ?? null);
-
-                    if (is_array($ansOrder) && !empty($qArr['answers'])) {
-                        $answersById = [];
-                        foreach ($qArr['answers'] as $ans) {
-                            $answersById[(int)$ans['answer_id']] = $ans;
-                        }
-
-                        $newAnswers = [];
-                        foreach ($ansOrder as $aid) {
-                            $aid = (int)$aid;
-                            if (isset($answersById[$aid])) {
-                                $newAnswers[] = $answersById[$aid];
-                                unset($answersById[$aid]);
-                            }
-                        }
-
-                        foreach ($answersById as $aRow) $newAnswers[] = $aRow;
-                        $qArr['answers'] = $newAnswers;
-                    }
-                }
-
-                $orderedQuestions[] = $qArr;
-                $usedQids[$qid] = true;
-            }
-
-            foreach ($questionsById as $qid => $qArr) {
-                if (!isset($usedQids[$qid])) $orderedQuestions[] = $qArr;
-            }
-        } else {
-            $orderedQuestions = array_values($questionsById);
-        }
-
-        return response()->json([
-            'success'=>true,
-            'attempt'=>[
-                'status'        => $attempt->status,
-                'time_left_sec' => $this->timeLeftSec($attempt),
-                'server_end_at' => (string)$attempt->server_deadline_at,
-            ],
-            'questions'  => $orderedQuestions,
-            'selections' => $selections
-        ], 200);
+    $attempt = DB::table('quizz_attempts')->where('uuid', $attemptUuid)->first();
+    if (!$attempt || (int)$attempt->user_id !== (int)$user->id) {
+        return response()->json(['success'=>false,'message'=>'Attempt not found'], 404);
     }
+
+    if ($this->deadlinePassed($attempt)) {
+        $attempt = $this->autoFinalize($attempt, true);
+    }
+
+    $rows = DB::table('quizz_questions as q')
+        ->leftJoin('quizz_question_answers as a', 'a.belongs_question_id', '=', 'q.id')
+        ->where('q.quiz_id', $attempt->quiz_id)
+        ->orderBy('q.question_order')
+        ->orderBy('a.answer_order')
+        ->select([
+            'q.id as question_id',
+            'q.question_title',
+            'q.question_description',
+            'q.answer_explanation',
+            'q.question_type',
+            'q.question_mark',
+            'q.group_title',
+            'q.question_order',
+            DB::raw("(
+                SELECT COUNT(*) FROM quizz_question_answers
+                WHERE belongs_question_id = q.id AND is_correct = 1
+            ) as correct_count"),
+
+            'a.id as answer_id',
+            'a.answer_title',
+            'a.answer_order',
+        ])
+        ->get();
+
+    $questionsById = [];
+    foreach ($rows as $r) {
+        $qid = (int)$r->question_id;
+
+        if (!isset($questionsById[$qid])) {
+            $questionsById[$qid] = [
+                'question_id'                 => $qid,
+                'question_title'              => $r->question_title,
+                'question_description'        => $r->question_description,
+                'question_type'               => $r->question_type,
+                'question_mark'               => (int)$r->question_mark,
+                'question_order'              => (int)$r->question_order,
+                'group_title'                 => $r->group_title,
+                'has_multiple_correct_answer' => ((int)$r->correct_count > 1),
+                'answers'                     => [],
+            ];
+        }
+
+        if ($r->answer_id !== null) {
+            $questionsById[$qid]['answers'][] = [
+                'answer_id'    => (int)$r->answer_id,
+                'answer_title' => $r->answer_title,
+                'answer_order' => (int)($r->answer_order ?? 0),
+            ];
+        }
+    }
+
+    $saved = DB::table('quizz_attempt_answers')
+        ->where('attempt_id', $attempt->id)
+        ->pluck('selected_raw', 'question_id');
+
+    $selections = [];
+    foreach ($saved as $qid => $json) {
+        try { $selections[$qid] = json_decode($json, true); }
+        catch (\Throwable $e) { $selections[$qid] = null; }
+    }
+
+    $layoutQuestions = null;
+    $layoutOptions   = null;
+
+    if (!empty($attempt->questions_order)) {
+        try { $layoutQuestions = json_decode($attempt->questions_order, true); }
+        catch (\Throwable $e) { $layoutQuestions = null; }
+    }
+
+    if (!empty($attempt->options_order)) {
+        try { $layoutOptions = json_decode($attempt->options_order, true); }
+        catch (\Throwable $e) { $layoutOptions = null; }
+    }
+
+    $orderedQuestions = [];
+    $hasLayout = is_array($layoutQuestions) && !empty($layoutQuestions);
+
+    if ($hasLayout) {
+        $usedQids = [];
+        foreach ($layoutQuestions as $qid) {
+            $qid = (int)$qid;
+            if (!isset($questionsById[$qid])) continue;
+
+            $qArr = $questionsById[$qid];
+
+            if (is_array($layoutOptions)) {
+                $keyInt = $qid;
+                $keyStr = (string)$qid;
+                $ansOrder = $layoutOptions[$keyInt] ?? ($layoutOptions[$keyStr] ?? null);
+
+                if (is_array($ansOrder) && !empty($qArr['answers'])) {
+                    $answersById = [];
+                    foreach ($qArr['answers'] as $ans) {
+                        $answersById[(int)$ans['answer_id']] = $ans;
+                    }
+
+                    $newAnswers = [];
+                    foreach ($ansOrder as $aid) {
+                        $aid = (int)$aid;
+                        if (isset($answersById[$aid])) {
+                            $newAnswers[] = $answersById[$aid];
+                            unset($answersById[$aid]);
+                        }
+                    }
+
+                    foreach ($answersById as $aRow) $newAnswers[] = $aRow;
+                    $qArr['answers'] = $newAnswers;
+                }
+            }
+
+            $orderedQuestions[] = $qArr;
+            $usedQids[$qid] = true;
+        }
+
+        foreach ($questionsById as $qid => $qArr) {
+            if (!isset($usedQids[$qid])) $orderedQuestions[] = $qArr;
+        }
+    } else {
+        $orderedQuestions = array_values($questionsById);
+    }
+
+    /* ==========================================================
+     | ✅ NEW: Group-aware ordering (NO response schema change)
+     | Ensures same group_title questions stay contiguous.
+     | - Group order = first appearance in $orderedQuestions
+     | - Within a group = preserves existing relative order
+     | - Empty/null group_title stays per-question (no forced bunching)
+     |========================================================== */
+    $groupBuckets = [];
+    $groupOrder   = [];
+
+    foreach ($orderedQuestions as $qArr) {
+        $gt = trim((string)($qArr['group_title'] ?? ''));
+
+        // If no group, keep each question as its own "group" so we don't move them around
+        $key = ($gt === '')
+            ? ('__nogroup__:' . (int)$qArr['question_id'])
+            : ('g:' . mb_strtolower($gt, 'UTF-8'));
+
+        if (!isset($groupBuckets[$key])) {
+            $groupBuckets[$key] = [];
+            $groupOrder[] = $key;
+        }
+        $groupBuckets[$key][] = $qArr;
+    }
+
+    $groupedOut = [];
+    foreach ($groupOrder as $k) {
+        foreach ($groupBuckets[$k] as $qArr) {
+            $groupedOut[] = $qArr;
+        }
+    }
+    $orderedQuestions = $groupedOut;
+
+    return response()->json([
+        'success'=>true,
+        'attempt'=>[
+            'status'        => $attempt->status,
+            'time_left_sec' => $this->timeLeftSec($attempt),
+            'server_end_at' => (string)$attempt->server_deadline_at,
+        ],
+        'questions'  => $orderedQuestions,
+        'selections' => $selections
+    ], 200);
+}
+
 
     /* ==========================================================
      | NEW: POST /api/exam/attempts/{attempt}/bulk-answer

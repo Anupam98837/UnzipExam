@@ -1236,6 +1236,10 @@ mjx-container,
                         <div class="section-title">
                             <i class="fa fa-info-circle"></i> Basic Information
                         </div>
+                        <div class="form-group">
+                            <label class="form-label">Group Title (Optional)</label>
+                            <input id="qGroupTitle" type="text" class="form-control" placeholder="e.g., Algebra - Part A">
+                          </div>
                         
                         <div class="row">
                             <div class="col">
@@ -3005,10 +3009,12 @@ typesetMath(box);
             if (qType) qType.value = 'multiple_choice';
 
             if (qType) qType.disabled = false;
-var qDifficulty = document.getElementById('qDifficulty');
-if (qDifficulty) qDifficulty.value = 'medium';
+            var qDifficulty = document.getElementById('qDifficulty');
+            if (qDifficulty) qDifficulty.value = 'medium';
 
-            
+            var qGroupTitle = document.getElementById('qGroupTitle');
+            if (qGroupTitle) qGroupTitle.value = '';
+
             var qMarks = document.getElementById('qMarks');
             if (qMarks) qMarks.value = '1';
             
@@ -3295,6 +3301,9 @@ function typeMetaForList(q){
             }
              if (qTypeEl) qTypeEl.disabled = true;
 
+             var qGroupTitle = document.getElementById('qGroupTitle');
+             if (qGroupTitle) qGroupTitle.value = (q.question_group_title || q.group_title || '');
+
             var qType = document.getElementById('qType');
             if (qType) qType.value = uiType;
             
@@ -3302,9 +3311,8 @@ function typeMetaForList(q){
             if (qMarks) qMarks.value = (q.question_mark != null ? q.question_mark : 1);
 
             var qDifficulty = document.getElementById('qDifficulty');
-if (qDifficulty) qDifficulty.value = (q.question_difficulty || 'medium');
+            if (qDifficulty) qDifficulty.value = (q.question_difficulty || 'medium');
 
-            
             var qOrder = document.getElementById('qOrder');
             if (qOrder) qOrder.value = (q.question_order != null ? q.question_order : 1);
 
@@ -3473,9 +3481,13 @@ if (qDifficulty) qDifficulty.value = (q.question_difficulty || 'medium');
 
             var edExplainArea = document.querySelector('#edExplain .rte-area');
             var explHTML = edExplainArea ? (edExplainArea.innerHTML || '') : '';
+            var groupTitle = (document.getElementById('qGroupTitle')?.value || '').trim();
+
 
             var body = {
                 quiz_id: quizId,
+                question_group_title: groupTitle || null,
+                group_title: groupTitle || null, // optional
                 question_title: titleHTML,
                 question_description: descHTML,
                 answer_explanation: explHTML,
@@ -3485,6 +3497,7 @@ if (qDifficulty) qDifficulty.value = (q.question_difficulty || 'medium');
                 question_difficulty: (document.getElementById('qDifficulty')?.value || 'medium'),
                 answers: answers
                 };
+
 
 
             var btn = document.getElementById('btnSave');

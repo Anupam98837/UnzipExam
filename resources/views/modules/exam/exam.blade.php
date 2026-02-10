@@ -720,6 +720,12 @@ function renderQuestion(){
   const multi   = !!q.has_multiple_correct_answer;
   const label   = multi && rawType !== 'fill_in_the_blank' ? 'Multiple choice' : typeLabel(rawType);
 
+  // ✅ Group title (display only; no schema/API change)
+  const groupTitle = String(q.group_title ?? '').trim();
+  const groupBadge = groupTitle
+    ? `<span class="question-badge ms-1">Group: ${escapeHtml(groupTitle)}</span>`
+    : '';
+
   const toDisplay = s =>
     normalizeTeX(String(s || '')).replace(/\{dash\}/gi, '<span class="fib-underline">&nbsp;</span>');
 
@@ -735,6 +741,7 @@ function renderQuestion(){
           Marks: <b>${q.question_mark ?? 1}</b>
           <span class="mx-1">•</span>
           <span class="question-badge">${label}</span>
+          ${groupBadge}
         </div>
       </div>
       <span class="badge rounded-pill text-bg-info ${reviews[q.question_id] ? '' : 'invisible'}">Review</span>
@@ -822,6 +829,7 @@ function renderQuestion(){
   refreshNav();
   updateProgress();
 }
+
 
 /* ================== Navigator ================== */
 function buildNavigator(){

@@ -17,6 +17,123 @@ class PathGameResultController extends Controller
     /* ============================================================
      | Helpers (Role + Actor)
      *============================================================ */
+/* ============================================================
+ | ✅ Add these helpers INSIDE the same controller (once)
+ *============================================================ */
+
+private function logActivity(
+    Request $request,
+    string $activity,                 // 'store'|'update'|'destroy'
+    string $module,                   // 'PathGameResults'
+    string $note,                     // readable note
+    string $tableName,                // 'path_game_results'
+    ?int $recordId = null,
+    ?array $changed = null,
+    ?array $oldValues = null,
+    ?array $newValues = null
+): void {
+    $a = $this->actor($request); // you already use $this->actor() in submit()
+
+    $changedFields = null;
+    if (is_array($changed)) {
+        $changedFields = array_values(array_unique(
+            array_keys($changed) === range(0, count($changed) - 1) ? $changed : array_keys($changed)
+        ));
+    }
+
+    try {
+        DB::table('user_data_activity_log')->insert([
+            'performed_by'      => (int)($a['id'] ?? 0),
+            'performed_by_role' => $a['role'] ?? null,
+            'ip'                => $request->ip(),
+            'user_agent'        => (string)$request->userAgent(),
+            'activity'          => $activity,
+            'module'            => $module,
+            'table_name'        => $tableName ?: 'unknown',
+            'record_id'         => $recordId,
+            'changed_fields'    => $changedFields ? json_encode($changedFields, JSON_UNESCAPED_UNICODE) : null,
+            'old_values'        => $oldValues ? json_encode($oldValues, JSON_UNESCAPED_UNICODE) : null,
+            'new_values'        => $newValues ? json_encode($newValues, JSON_UNESCAPED_UNICODE) : null,
+            'log_note'          => $note,
+            'created_at'        => now(),
+            'updated_at'        => now(),
+        ]);
+    } catch (\Throwable $e) {
+        Log::error('user_data_activity_log insert failed', ['error' => $e->getMessage()]);
+    }
+}
+
+/** Keep logs small: don’t dump user_answer_json fully */
+private function resultSnapshotForLog(?object $row = null, ?string $userAnswerJson = null): ?array
+{
+    if (!$row && $userAnswerJson === null) return null;
+
+    $snap = $row ? (array)$row : [];
+
+    // remove heavy json if exists on row
+    if (array_key_exists('user_answer_json', $snap)) unset($snap['user_answer_json']);
+
+    if ($userAnswerJson !== null) {
+        $snap['user_answer_json_len'] = strlen($userAnswerJson);
+        $snap['user_answer_json_md5'] = md5($userAnswerJson);
+    }
+
+    return $snap ?: null;
+}
+
+/** Admin receivers: all admins (id, role=admin). */
+private function adminReceivers(array $excludeIds = []): array
+{
+    $exclude = array_flip(array_map('intval', $excludeIds));
+    $rows = DB::table('users')->select('id')->get();
+    $out = [];
+    foreach ($rows as $r) {
+        $id = (int)$r->id;
+        if (!isset($exclude[$id])) $out[] = ['id'=>$id, 'role'=>'admin', 'read'=>0];
+    }
+    return $out;
+}
+
+/** DB-only notification insert (safe) */
+private function persistNotification(array $payload): void
+{
+    try {
+        $title     = (string)($payload['title']    ?? 'Notification');
+        $message   = (string)($payload['message']  ?? '');
+        $receivers = array_values(array_map(function($x){
+            return [
+                'id'   => isset($x['id']) ? (int)$x['id'] : null,
+                'role' => (string)($x['role'] ?? 'unknown'),
+                'read' => (int)($x['read'] ?? 0),
+            ];
+        }, $payload['receivers'] ?? []));
+
+        $metadata = $payload['metadata'] ?? [];
+        $type     = (string)($payload['type'] ?? 'general');
+        $linkUrl  = $payload['link_url'] ?? null;
+
+        $priority = in_array(($payload['priority'] ?? 'normal'), ['low','normal','high','urgent'], true)
+            ? $payload['priority'] : 'normal';
+
+        $status   = in_array(($payload['status'] ?? 'active'), ['active','archived','deleted'], true)
+            ? $payload['status'] : 'active';
+
+        DB::table('notifications')->insert([
+            'title'      => $title,
+            'message'    => $message,
+            'receivers'  => json_encode($receivers, JSON_UNESCAPED_UNICODE),
+            'metadata'   => $metadata ? json_encode($metadata, JSON_UNESCAPED_UNICODE) : null,
+            'type'       => $type,
+            'link_url'   => $linkUrl,
+            'priority'   => $priority,
+            'status'     => $status,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    } catch (\Throwable $e) {
+        Log::error('notifications insert failed', ['error' => $e->getMessage()]);
+    }
+}
 
     private function normalizeRole(?string $role): string
     {
@@ -844,76 +961,117 @@ class PathGameResultController extends Controller
      *============================================================ */
 
     public function store(Request $request)
-    {
-        $payload = $request->all();
-        $this->normalizeUserAnswerJson($payload);
+{
+    $payload = $request->all();
+    $this->normalizeUserAnswerJson($payload);
 
-        $validator = Validator::make($payload, [
-            'path_game_id' => ['required', 'integer', 'exists:path_games,id'],
-            'user_id' => ['required', 'integer', 'exists:users,id'],
-            'attempt_no' => ['required', 'integer', 'min:1'],
-            'user_answer_json' => ['nullable', 'array'],
-            'score' => ['nullable', 'numeric', 'min:0'],
-            'time_taken_ms' => ['nullable', 'integer', 'min:0'],
-            'status' => ['required', 'in:win,fail,timeout,in_progress'],
+    $validator = Validator::make($payload, [
+        'path_game_id' => ['required', 'integer', 'exists:path_games,id'],
+        'user_id' => ['required', 'integer', 'exists:users,id'],
+        'attempt_no' => ['required', 'integer', 'min:1'],
+        'user_answer_json' => ['nullable', 'array'],
+        'score' => ['nullable', 'numeric', 'min:0'],
+        'time_taken_ms' => ['nullable', 'integer', 'min:0'],
+        'status' => ['required', 'in:win,fail,timeout,in_progress'],
+    ]);
+
+    if ($validator->fails()) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Validation failed.',
+            'errors' => $validator->errors()
+        ], 422);
+    }
+
+    DB::beginTransaction();
+    try {
+        $now = Carbon::now();
+        $ip = $this->getClientIp($request);
+        $uuid = (string)Str::uuid();
+
+        $encodedAnswer = isset($payload['user_answer_json'])
+            ? json_encode($payload['user_answer_json'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
+            : null;
+
+        $insertId = DB::table('path_game_results')->insertGetId([
+            'uuid' => $uuid,
+            'path_game_id' => (int)$payload['path_game_id'],
+            'user_id' => (int)$payload['user_id'],
+            'attempt_no' => (int)$payload['attempt_no'],
+            'user_answer_json' => $encodedAnswer,
+            'score' => (float)($payload['score'] ?? 0),
+            'time_taken_ms' => isset($payload['time_taken_ms']) ? (int)$payload['time_taken_ms'] : null,
+            'status' => $payload['status'],
+            'created_at' => $now,
+            'updated_at' => $now,
+            'created_at_ip' => $ip,
+            'updated_at_ip' => $ip,
+            'deleted_at' => null,
         ]);
 
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation failed.',
-                'errors' => $validator->errors()
-            ], 422);
-        }
+        DB::commit();
 
-        DB::beginTransaction();
-        try {
-            $now = Carbon::now();
-            $ip = $this->getClientIp($request);
-            $uuid = (string)Str::uuid();
+        $result = DB::table('path_game_results')->where('id', $insertId)->first();
 
-            $insertId = DB::table('path_game_results')->insertGetId([
-                'uuid' => $uuid,
+        // ✅ Activity Log (after commit, safe)
+        $this->logActivity(
+            $request,
+            'store',
+            'PathGameResults',
+            'Created path game result (admin/store)',
+            'path_game_results',
+            (int)$insertId,
+            ['path_game_id','user_id','attempt_no','user_answer_json','score','time_taken_ms','status'],
+            null,
+            $this->resultSnapshotForLog($result, $encodedAnswer)
+        );
+
+        // ✅ Notify Admins
+        $appUrl = rtrim((string)config('app.url'), '/');
+        $priority = ($payload['status'] ?? '') === 'win' ? 'high' : 'normal';
+
+        $this->persistNotification([
+            'title'     => 'Path game result created',
+            'message'   => 'A path game result was created (admin/store).',
+            'receivers' => $this->adminReceivers(),
+            'metadata'  => [
+                'action'       => 'created',
+                'result_id'    => (int)$insertId,
+                'result_uuid'  => (string)$uuid,
                 'path_game_id' => (int)$payload['path_game_id'],
-                'user_id' => (int)$payload['user_id'],
-                'attempt_no' => (int)$payload['attempt_no'],
-                'user_answer_json' => isset($payload['user_answer_json']) ? json_encode($payload['user_answer_json']) : null,
-                'score' => (float)($payload['score'] ?? 0),
-                'time_taken_ms' => isset($payload['time_taken_ms']) ? (int)$payload['time_taken_ms'] : null,
-                'status' => $payload['status'],
-                'created_at' => $now,
-                'updated_at' => $now,
-                'created_at_ip' => $ip,
-                'updated_at_ip' => $ip,
-                'deleted_at' => null,
-            ]);
+                'user_id'      => (int)$payload['user_id'],
+                'attempt_no'   => (int)$payload['attempt_no'],
+                'status'       => (string)$payload['status'],
+                'score'        => (float)($payload['score'] ?? 0),
+                'actor'        => $this->actor($request),
+            ],
+            'type'      => 'path_game_result',
+            'link_url'  => $appUrl.'/path-games/'.$payload['path_game_id'].'/results', // adjust if your route differs
+            'priority'  => $priority,
+            'status'    => 'active',
+        ]);
 
-            DB::commit();
+        return response()->json([
+            'success' => true,
+            'message' => 'Result created successfully.',
+            'data' => $this->mapResultRow($result),
+        ], 201);
 
-            $result = DB::table('path_game_results')->where('id', $insertId)->first();
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Result created successfully.',
-                'data' => $this->mapResultRow($result),
-            ], 201);
-
-        } catch (\Throwable $e) {
-            DB::rollBack();
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to create result.',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+    } catch (\Throwable $e) {
+        DB::rollBack();
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to create result.',
+            'error' => $e->getMessage()
+        ], 500);
     }
+}
 
     /* ============================================================
      | ✅ SUBMIT (Door-style: strict attempts + evaluation + insert)
      | POST /api/path-games/{gameKey}/submit
      *============================================================ */
-
-   public function submit(Request $request, string $gameKey)
+public function submit(Request $request, string $gameKey)
 {
     Log::info('PathGame.submit: start', [
         'ip' => $request->ip(),
@@ -948,15 +1106,10 @@ class PathGameResultController extends Controller
 
     $payload = $request->all();
 
-    // ✅ Ensure user_answer_json is always array
     if (empty($payload['user_answer_json']) || !is_array($payload['user_answer_json'])) {
         $payload['user_answer_json'] = [];
     }
 
-    /**
-     * ✅ Auto-pick time_taken_ms if frontend didn’t send explicitly.
-     * Works for Replay v2 payload.
-     */
     $timeFromJson =
         (int) data_get($payload, 'user_answer_json.attempt.time_taken_ms', 0)
         ?: (int) data_get($payload, 'user_answer_json.timing.total_ms', 0)
@@ -966,13 +1119,6 @@ class PathGameResultController extends Controller
         $payload['time_taken_ms'] = $timeFromJson;
     }
 
-    /**
-     * ✅ Normalize Replay v2 into keys your evaluation understands:
-     * - final_path
-     * - rotation_log
-     * - events_map
-     * - meta.start_index/end_index/reached_earth
-     */
     $this->normalizeUserAnswerJson($payload, $game);
 
     $validator = Validator::make($payload, [
@@ -989,12 +1135,11 @@ class PathGameResultController extends Controller
     }
 
     try {
-        return DB::transaction(function () use ($request, $userId, $game, $payload, $gameKey) {
+        return DB::transaction(function () use ($request, $userId, $game, $payload, $gameKey, $actor) {
 
             $maxAttempts = (int)($game->max_attempts ?? 1);
             if ($maxAttempts < 1) $maxAttempts = 1;
 
-            // ✅ Strict count with lock
             $attemptsUsed = (int)DB::table('path_game_results')
                 ->where('path_game_id', (int)$game->id)
                 ->where('user_id', (int)$userId)
@@ -1017,7 +1162,6 @@ class PathGameResultController extends Controller
 
             $timeTakenMs = (int)$payload['time_taken_ms'];
 
-            // ✅ Evaluate once (your existing logic)
             $evaluation = $this->evaluateAnswer(
                 (array)$payload['user_answer_json'],
                 $game,
@@ -1029,10 +1173,8 @@ class PathGameResultController extends Controller
             $limitMs     = (int)($evaluation['time_limit_ms'] ?? ((int)($game->time_limit_sec ?? 0) * 1000));
             $isTimeout   = (bool)($evaluation['timeout'] ?? false);
 
-            // ✅ Score (unchanged)
             $score = ($finalStatus === 'win' && !$isTimeout) ? 1 : 0;
 
-            // ✅ Enrich JSON for storage (Replay v2 + Summary)
             $enrichedUserAnswerJson = $this->enrichPathUserAnswerJsonForStorage(
                 (array)$payload['user_answer_json'],
                 $game,
@@ -1043,6 +1185,8 @@ class PathGameResultController extends Controller
                 (int)$score
             );
 
+            $encodedAnswer = json_encode($enrichedUserAnswerJson, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+
             $uuid = (string)Str::uuid();
             $now  = now();
             $ip   = $this->getClientIp($request);
@@ -1052,10 +1196,7 @@ class PathGameResultController extends Controller
                 'path_game_id'     => (int)$game->id,
                 'user_id'          => (int)$userId,
                 'attempt_no'       => (int)$attemptNo,
-
-                // ✅ store enriched replay-ready JSON
-                'user_answer_json' => json_encode($enrichedUserAnswerJson, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
-
+                'user_answer_json' => $encodedAnswer,
                 'score'            => (float)$score,
                 'time_taken_ms'    => (int)$timeTakenMs,
                 'status'           => (string)$finalStatus,
@@ -1064,6 +1205,61 @@ class PathGameResultController extends Controller
                 'created_at_ip'    => $ip,
                 'updated_at_ip'    => $ip,
                 'deleted_at'       => null,
+            ]);
+
+            // ✅ Activity Log (safe; small snapshot)
+            $this->logActivity(
+                $request,
+                'store',
+                'PathGameResults',
+                "Submitted attempt #{$attemptNo} for game {$gameKey} (status={$finalStatus})",
+                'path_game_results',
+                (int)$resultId,
+                ['path_game_id','user_id','attempt_no','user_answer_json','score','time_taken_ms','status'],
+                null,
+                $this->resultSnapshotForLog((object)[
+                    'id' => (int)$resultId,
+                    'uuid' => (string)$uuid,
+                    'path_game_id' => (int)$game->id,
+                    'user_id' => (int)$userId,
+                    'attempt_no' => (int)$attemptNo,
+                    'score' => (float)$score,
+                    'time_taken_ms' => (int)$timeTakenMs,
+                    'status' => (string)$finalStatus,
+                    'created_at_ip' => $ip,
+                ], $encodedAnswer)
+            );
+
+            // ✅ Notify Admins (safe)
+            $appUrl = rtrim((string)config('app.url'), '/');
+            $priority = $finalStatus === 'win' ? 'high' : 'normal';
+
+            $this->persistNotification([
+                'title'     => 'Path game attempt submitted',
+                'message'   => "Game {$gameKey}: user {$userId} submitted attempt #{$attemptNo} ({$finalStatus}).",
+                'receivers' => $this->adminReceivers(),
+                'metadata'  => [
+                    'action'        => 'submitted',
+                    'game_key'      => $gameKey,
+                    'path_game_id'  => (int)$game->id,
+                    'result_id'     => (int)$resultId,
+                    'result_uuid'   => (string)$uuid,
+                    'user_id'       => (int)$userId,
+                    'attempt_no'    => (int)$attemptNo,
+                    'status'        => (string)$finalStatus,
+                    'score'         => (int)$score,
+                    'time_taken_ms' => (int)$timeTakenMs,
+                    'evaluation'    => [
+                        'correct' => $isCorrect,
+                        'timeout' => $isTimeout,
+                        'time_limit_ms' => $limitMs,
+                    ],
+                    'actor' => $actor,
+                ],
+                'type'      => 'path_game_result',
+                'link_url'  => $appUrl.'/path-games/'.$gameKey.'/results', // adjust if your route differs
+                'priority'  => $priority,
+                'status'    => 'active',
             ]);
 
             $msg = 'Your answer is incorrect. Please try again.';

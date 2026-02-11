@@ -23,6 +23,12 @@ use App\Http\Controllers\API\InterviewRegistrationCampaignController;
 use App\Http\Controllers\API\MasterResultController;
 use App\Http\Controllers\API\PathGameController;
 use App\Http\Controllers\API\PathGameResultController;
+use App\Http\Controllers\API\TermsController;
+use App\Http\Controllers\API\PrivacyPolicyController;
+use App\Http\Controllers\API\RefundPolicyController;
+use App\Http\Controllers\API\AboutUsController;
+use App\Http\Controllers\API\ContactUsController;
+use App\Http\Controllers\API\SessionTokenController;
 
 
 
@@ -627,3 +633,52 @@ Route::middleware('checkRole')->prefix('path-game-results')->group(function () {
     Route::post('/', [PathGameResultController::class, 'store']);
     Route::get('/{idOrUuid}', [PathGameResultController::class, 'show']);
 });
+
+
+ 
+//Terms & Condition
+Route::prefix('terms')->group(function () {
+    Route::get('/', [TermsController::class, 'index']);
+    Route::get('/check', [TermsController::class, 'check']);
+    Route::post('/', [TermsController::class, 'store']);
+    Route::put('/', [TermsController::class, 'update']);  
+    Route::delete('/', [TermsController::class, 'destroy']);
+});
+ 
+//Privacy Policy
+Route::prefix('privacy-policy')->group(function () {
+    Route::get('/', [PrivacyPolicyController::class, 'index']);
+    Route::get('/check', [PrivacyPolicyController::class, 'check']);
+    Route::post('/', [PrivacyPolicyController::class, 'store']);
+    Route::put('/', [PrivacyPolicyController::class, 'update']);  
+    Route::delete('/', [PrivacyPolicyController::class, 'destroy']);
+});
+ 
+ 
+//Refund Policy
+Route::prefix('refund-policy')->group(function () {
+    Route::get('/', [RefundPolicyController::class, 'index']);
+    Route::get('/check', [RefundPolicyController::class, 'check']);
+    Route::post('/', [RefundPolicyController::class, 'store']);
+    Route::put('/', [RefundPolicyController::class, 'update']);    
+    Route::delete('/', [RefundPolicyController::class, 'destroy']);
+});
+//About Us
+Route::get('/about-us', [AboutUsController::class, 'index']);
+Route::get('/about-us/check', [AboutUsController::class, 'check']);
+ 
+Route::post('/about-us', [AboutUsController::class, 'store']); // create
+Route::put('/about-us', [AboutUsController::class, 'update']);
+ 
+Route::delete('/about-us', [AboutUsController::class, 'destroy']);
+ 
+//Contact Us
+/* Public */
+Route::post('/contact-us', [ContactUsController::class, 'store']);
+ 
+/* Admin */
+Route::get('/contact-us', [ContactUsController::class, 'index']);
+Route::get('/contact-us/{id}', [ContactUsController::class, 'show']);
+Route::delete('/contact-us/{id}', [ContactUsController::class, 'destroy']);
+Route::get('/contact-us/export/csv', [ContactUsController::class, 'exportCsv']);
+Route::patch('/contact-us/{id}/read', [ContactUsController::class, 'markAsRead']);

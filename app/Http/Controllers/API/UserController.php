@@ -5,6 +5,7 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\File;
@@ -808,6 +809,13 @@ public function store(Request $request)
  * PUT/PATCH /api/users/{id}
  * Partial update. If name changes, slug is regenerated.
  */
+/**
+ * PUT/PATCH /api/users/{id}
+ * Partial update. If name changes, slug is regenerated.
+ * ✅ Supports admin-driven password change using:
+ *   - current_password (admin's current password)
+ *   - new_password     (target user's new password)
+ */
 public function update(Request $request, int $id)
 {
     // ✅ Normalize folder id coming from FormData/JSON
@@ -841,6 +849,10 @@ public function update(Request $request, int $id)
             'integer',
             Rule::exists('user_folders', 'id')->whereNull('deleted_at'),
         ],
+
+        // ✅ Password change (admin confirms their own password)
+        'current_password' => 'sometimes|required_with:new_password|string',
+        'new_password'     => 'sometimes|string|min:8|max:255',
     ]);
 
     if ($v->fails()) {
@@ -908,6 +920,54 @@ public function update(Request $request, int $id)
         }
         $this->deleteManagedProfileImage($existing->image);
         $updates['image'] = $newUrl;
+    }
+
+    /* ============================
+     * ✅ PASSWORD UPDATE (ADMIN)
+     * ============================ */
+    if (!empty($data['new_password'] ?? null)) {
+
+        // Role check (from middleware attributes OR fallback to logged in user)
+        $actorRole = strtolower((string)($request->attributes->get('auth_role') ?? ''));
+        if (!$actorRole && auth()->check()) {
+            $actorRole = strtolower((string)(auth()->user()->role ?? ''));
+        }
+
+        if (!in_array($actorRole, ['admin','super_admin'], true)) {
+            return response()->json(['status'=>'error','message'=>'You are not allowed to change user password'], 403);
+        }
+
+        // Get actor/admin id (from middleware attributes OR fallback auth)
+        $actorId = (int)($request->attributes->get('auth_tokenable_id') ?? 0);
+        if ($actorId <= 0 && auth()->check()) {
+            $actorId = (int)auth()->id();
+        }
+
+        if ($actorId <= 0) {
+            return response()->json(['status'=>'error','message'=>'Unauthorized'], 401);
+        }
+
+        // Verify admin current password
+        $actor = DB::table('users')->where('id', $actorId)->whereNull('deleted_at')->first();
+        if (!$actor || empty($actor->password)) {
+            return response()->json(['status'=>'error','message'=>'Unauthorized'], 401);
+        }
+
+        $currentPw = (string)($data['current_password'] ?? '');
+        if (!Hash::check($currentPw, $actor->password)) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Current password is incorrect'
+            ], 422);
+        }
+
+        // ✅ Update target user's password
+        $updates['password'] = Hash::make((string)$data['new_password']);
+
+        // Optional: track password change time if column exists
+        if (Schema::hasColumn('users', 'password_changed_at')) {
+            $updates['password_changed_at'] = now();
+        }
     }
 
     if (empty($updates)) {

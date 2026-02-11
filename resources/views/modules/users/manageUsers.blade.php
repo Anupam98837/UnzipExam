@@ -2736,7 +2736,7 @@ document.addEventListener('click', (e) => {
     resetUserForm();
     userModalTitle.textContent = 'Edit User';
     userForm.dataset.mode = 'edit';
-    pwSections.forEach(el => el.classList.add('d-none'));
+    // pwSections.forEach(el => el.classList.add('d-none'));
 
     try{
       const res = await fetch(`/api/users/${id}`, {
@@ -2797,116 +2797,147 @@ document.addEventListener('click', (e) => {
       }
     });
   });
+userForm.addEventListener('submit', async function(e){
+  e.preventDefault();
 
-  userForm.addEventListener('submit', async function(e){
-    e.preventDefault();
-    if (!CAN_WRITE){
-      err('You do not have permission to modify users');
+  if (!CAN_WRITE){
+    err('You do not have permission to modify users');
+    return;
+  }
+
+  const mode = userForm.dataset.mode || 'create';
+
+  const name   = userNameInput.value.trim();
+  const email  = userEmailInput.value.trim();
+  const role   = userRoleInput.value;
+  const status = userStatusInput.value || 'active';
+
+  if (!name){
+    Swal.fire('Name required','Please enter full name.','info');
+    return;
+  }
+  if (!email){
+    Swal.fire('Email required','Please enter email.','info');
+    return;
+  }
+  if (!role){
+    Swal.fire('Role required','Please select role.','info');
+    return;
+  }
+
+  // ✅ Password handling (reuse same fields)
+  const pw  = (userPasswordInput.value || '').trim();   // create: password, edit: new_password
+  const pw2 = (userPassword2Input.value || '').trim();  // confirm
+
+  if (mode === 'create'){
+    if (!pw || pw.length < 8){
+      Swal.fire('Password too short','Password must be at least 8 characters.','info');
       return;
     }
-
-    const mode = userForm.dataset.mode || 'create';
-
-    const name  = userNameInput.value.trim();
-    const email = userEmailInput.value.trim();
-    const role  = userRoleInput.value;
-    const status= userStatusInput.value || 'active';
-
-    if (!name){
-      Swal.fire('Name required','Please enter full name.','info');
+    if (pw !== pw2){
+      Swal.fire('Password mismatch','Password and confirm password must match.','info');
       return;
     }
-    if (!email){
-      Swal.fire('Email required','Please enter email.','info');
-      return;
-    }
-    if (!role){
-      Swal.fire('Role required','Please select role.','info');
-      return;
-    }
+  } else {
+    // ✅ Edit: password optional (only validate if admin typed something)
+    const wantsPwChange = (pw.length > 0) || (pw2.length > 0);
 
-    if (mode === 'create'){
-      const pw  = userPasswordInput.value;
-      const pw2 = userPassword2Input.value;
+    if (wantsPwChange){
       if (!pw || pw.length < 8){
-        Swal.fire('Password too short','Password must be at least 8 characters.','info');
+        Swal.fire('New password too short','Minimum 8 characters.','info');
         return;
       }
       if (pw !== pw2){
-        Swal.fire('Password mismatch','Password and confirm password must match.','info');
+        Swal.fire('Password mismatch','New password and confirm must match.','info');
         return;
       }
     }
+  }
 
-    const fd = new FormData();
-    fd.append('name', name);
-    fd.append('email', email);
-    fd.append('role', role);
-    fd.append('status', status);
+  const fd = new FormData();
+  fd.append('name', name);
+  fd.append('email', email);
+  fd.append('role', role);
+  fd.append('status', status);
 
-    // ✅ FIX: append folder only ONCE (allows remove when blank)
-    if (userFolderInput){
-      fd.append('user_folder_id', userFolderInput.value || '');
-    }
+  // folder
+  if (userFolderInput){
+    fd.append('user_folder_id', userFolderInput.value || '');
+  }
 
-    if (userPhoneInput.value.trim()){
-      fd.append('phone_number', userPhoneInput.value.trim());
-    }
-    if (userAltEmailInput.value.trim()){
-      fd.append('alternative_email', userAltEmailInput.value.trim());
-    }
-    if (userAltPhoneInput.value.trim()){
-      fd.append('alternative_phone_number', userAltPhoneInput.value.trim());
-    }
-    if (userWhatsAppInput.value.trim()){
-      fd.append('whatsapp_number', userWhatsAppInput.value.trim());
-    }
-    if (userAddressInput.value.trim()){
-      fd.append('address', userAddressInput.value.trim());
-    }
-    if (mode === 'create'){
-      fd.append('password', userPasswordInput.value);
-    }
-    if (userImageInput.files && userImageInput.files[0]){
-      fd.append('image', userImageInput.files[0]);
-    }
+  if (userPhoneInput.value.trim()){
+    fd.append('phone_number', userPhoneInput.value.trim());
+  }
+  if (userAltEmailInput.value.trim()){
+    fd.append('alternative_email', userAltEmailInput.value.trim());
+  }
+  if (userAltPhoneInput.value.trim()){
+    fd.append('alternative_phone_number', userAltPhoneInput.value.trim());
+  }
+  if (userWhatsAppInput.value.trim()){
+    fd.append('whatsapp_number', userWhatsAppInput.value.trim());
+  }
+  if (userAddressInput.value.trim()){
+    fd.append('address', userAddressInput.value.trim());
+  }
 
-    let url  = '/api/users';
-    let method = 'POST';
-    if (mode === 'edit'){
-      const id = userIdInput.value;
-      if (!id){
-        err('Missing user id');
-        return;
-      }
-      url = `/api/users/${id}`;
-      fd.append('_method','PATCH');
-      method = 'POST';
+  // ✅ Create: send password
+  if (mode === 'create'){
+    fd.append('password', pw);
+  }
+
+  // ✅ Edit: if admin entered new password, send it (NO admin password prompt)
+  if (mode === 'edit'){
+    const wantsPwChange = (pw.length > 0) || (pw2.length > 0);
+    if (wantsPwChange){
+      // backend should accept new_password (or password) — choose one convention
+      fd.append('new_password', pw);
     }
+  }
 
-    saveUserBtn.disabled = true;
-    const oldHtml = saveUserBtn.innerHTML;
-    saveUserBtn.innerHTML = `<span class="spinner-border spinner-border-sm me-1" role="status"></span>Saving…`;
+  if (userImageInput.files && userImageInput.files[0]){
+    fd.append('image', userImageInput.files[0]);
+  }
 
-    try{
-      const res = await fetch(url, {
-        method,
-        headers: authHeaders({'Accept':'application/json'}),
-        body: fd
-      });
-      const j = await res.json().catch(()=> ({}));
-      if (!res.ok) throw new Error(firstError(j) || 'Save failed');
+  let url  = '/api/users';
+  let method = 'POST';
 
-      ok(mode === 'create' ? 'User created' : 'User updated');
-      userModal.hide();
-      loadUsers().catch(ex => err(ex.message || 'Reload failed'));
-    }catch(e){
-      err(e.message || 'Save failed');
-    }finally{
-      saveUserBtn.disabled = false;
-      saveUserBtn.innerHTML = oldHtml;
+  // ✅ Edit/PATCH via method spoofing
+  if (mode === 'edit'){
+    const id = userIdInput.value;
+    if (!id){
+      err('Missing user id');
+      return;
     }
-  });
+    url = `/api/users/${id}`;
+    fd.append('_method','PATCH');
+    method = 'POST';
+  }
+
+  saveUserBtn.disabled = true;
+  const oldHtml = saveUserBtn.innerHTML;
+  saveUserBtn.innerHTML = `<span class="spinner-border spinner-border-sm me-1" role="status"></span>Saving…`;
+
+  try{
+    const res = await fetch(url, {
+      method,
+      headers: authHeaders({'Accept':'application/json'}),
+      body: fd
+    });
+
+    const j = await res.json().catch(()=> ({}));
+    if (!res.ok) throw new Error(firstError(j) || j.message || 'Save failed');
+
+    ok(mode === 'create' ? 'User created' : 'User updated');
+    userModal.hide();
+    loadUsers().catch(ex => err(ex.message || 'Reload failed'));
+  }catch(e){
+    err(e.message || 'Save failed');
+  }finally{
+    saveUserBtn.disabled = false;
+    saveUserBtn.innerHTML = oldHtml;
+  }
+});
 
   if (CAN_WRITE && btnAddUser){
     btnAddUser.addEventListener('click', openCreateUser);

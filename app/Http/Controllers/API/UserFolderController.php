@@ -11,14 +11,117 @@ use Illuminate\Support\Str;
 
 class UserFolderController extends Controller
 {
-    /**
-     * ✅ Helper: Insert log into DB
+    /* =========================
+     * Actor / Notification helpers
+     * ========================= */
+
+    /** Actor (supports both request->user() and CheckRole attributes) */
+    private function actor(Request $request): array
+    {
+        $attrRole = $request->attributes->get('auth_role');
+        $attrId   = (int) ($request->attributes->get('auth_tokenable_id') ?? 0);
+
+        $userId = 0;
+        try {
+            $userId = (int) (optional($request->user())->id ?? 0);
+        } catch (\Throwable $e) {
+            $userId = 0;
+        }
+
+        return [
+            'role' => $attrRole ?: null,
+            'id'   => $attrId > 0 ? $attrId : ($userId > 0 ? $userId : 0),
+        ];
+    }
+
+    /** Admin receivers: all admins (id, role=admin). */
+    private function adminReceivers(array $excludeIds = []): array
+    {
+        $exclude = array_flip(array_map('intval', $excludeIds));
+        $rows = DB::table('users')->select('id')->get();
+        $out = [];
+        foreach ($rows as $r) {
+            $id = (int) $r->id;
+            if (!isset($exclude[$id])) $out[] = ['id' => $id, 'role' => 'admin', 'read' => 0];
+        }
+        return $out;
+    }
+
+    /** DB-only notification insert (safe). */
+    private function persistNotification(array $payload): void
+    {
+        try {
+            $title     = (string)($payload['title']    ?? 'Notification');
+            $message   = (string)($payload['message']  ?? '');
+            $receivers = array_values(array_map(function ($x) {
+                return [
+                    'id'   => isset($x['id']) ? (int)$x['id'] : null,
+                    'role' => (string)($x['role'] ?? 'unknown'),
+                    'read' => (int)($x['read'] ?? 0),
+                ];
+            }, $payload['receivers'] ?? []));
+
+            $metadata = $payload['metadata'] ?? [];
+            $type     = (string)($payload['type'] ?? 'general');
+            $linkUrl  = $payload['link_url'] ?? null;
+
+            $priority = in_array(($payload['priority'] ?? 'normal'), ['low', 'normal', 'high', 'urgent'], true)
+                ? $payload['priority'] : 'normal';
+
+            $status = in_array(($payload['status'] ?? 'active'), ['active', 'archived', 'deleted'], true)
+                ? $payload['status'] : 'active';
+
+            DB::table('notifications')->insert([
+                'title'      => $title,
+                'message'    => $message,
+                'receivers'  => json_encode($receivers, JSON_UNESCAPED_UNICODE),
+                'metadata'   => $metadata ? json_encode($metadata, JSON_UNESCAPED_UNICODE) : null,
+                'type'       => $type,
+                'link_url'   => $linkUrl,
+                'priority'   => $priority,
+                'status'     => $status,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('notifications insert failed', ['error' => $e->getMessage()]);
+        }
+    }
+
+    /** Simple changed-fields detector for notifications */
+    private function changedFields(array $old, array $new, array $ignore = []): array
+    {
+        $ignoreFlip = array_flip($ignore);
+        $keys = array_unique(array_merge(array_keys($old), array_keys($new)));
+        $out = [];
+
+        foreach ($keys as $k) {
+            if (isset($ignoreFlip[$k])) continue;
+
+            $ov = $old[$k] ?? null;
+            $nv = $new[$k] ?? null;
+
+            // normalize strings to compare (esp. metadata json)
+            if (is_string($ov) && is_string($nv)) {
+                if (trim($ov) !== trim($nv)) $out[] = $k;
+            } else {
+                if ($ov !== $nv) $out[] = $k;
+            }
+        }
+
+        return array_values($out);
+    }
+
+    /* =========================
+     * ✅ Helper: Insert log into DB (existing schema)
+     * =========================
      * NOTE: uuid column removed from insert to avoid SQL error (no migration change)
      */
     private function writeLog(Request $request, string $action, int|string|null $entityId, ?array $old = null, ?array $new = null): void
     {
         try {
-            $actorId = optional($request->user())->id;
+            $actor = $this->actor($request);
+            $actorId = $actor['id'] ?: null;
 
             DB::table('user_data_activity_log')->insert([
                 // 'uuid'        => (string) Str::uuid(), // ❌ table doesn't have uuid column
@@ -26,8 +129,8 @@ class UserFolderController extends Controller
                 'entity_type' => 'user_folders',
                 'entity_id'   => $entityId ? (int)$entityId : null,
                 'actor_id'    => $actorId ? (int)$actorId : null,
-                'old_values'  => $old ? json_encode($old) : null,
-                'new_values'  => $new ? json_encode($new) : null,
+                'old_values'  => $old ? json_encode($old, JSON_UNESCAPED_UNICODE) : null,
+                'new_values'  => $new ? json_encode($new, JSON_UNESCAPED_UNICODE) : null,
                 'ip'          => $request->ip(),
                 'user_agent'  => substr((string)$request->userAgent(), 0, 1000),
                 'created_at'  => now(),
@@ -46,9 +149,6 @@ class UserFolderController extends Controller
 
     /**
      * ✅ FIX: Resolve folder by id OR uuid (string)
-     * Accepts:
-     * - numeric id: "2"
-     * - uuid: "58f1040d-c0b3-4076-88c8-2edb5a5792f2"
      */
     private function resolveFolderId(int|string|null $id): ?int
     {
@@ -73,29 +173,23 @@ class UserFolderController extends Controller
         return $row ? (int)$row->id : null;
     }
 
-    /**
+    /* =========================
      * ✅ LIST all folders
-     * GET /api/user-folders
-     * - default: paginated
-     * - dropdown: header X-dropdown: 1  OR  ?show=all
-     */
+     * ========================= */
     public function index(Request $request)
     {
         $q = DB::table('user_folders')
             ->whereNull('deleted_at')
             ->orderByDesc('id');
 
-        // Optional filter by status
         if ($request->filled('status')) {
             $q->where('status', $request->query('status'));
         }
 
-        // ✅ Dropdown mode
         $xDropdown  = strtolower(trim((string)$request->header('X-dropdown', '')));
         $isDropdown = in_array($xDropdown, ['1', 'true', 'yes'], true) || $request->query('show') === 'all';
 
         if ($isDropdown) {
-            // ✅ Return only what FE needs for dropdown (fast + clean)
             $folders = $q->select('id', 'uuid', 'title', 'status')->get();
 
             return response()->json([
@@ -108,7 +202,6 @@ class UserFolderController extends Controller
             ]);
         }
 
-        // ✅ Paginated mode
         $perPage = (int)$request->query('per_page', 20);
         $perPage = max(1, min($perPage, 100));
 
@@ -128,7 +221,6 @@ class UserFolderController extends Controller
 
     /**
      * ✅ SHOW one folder + assigned users
-     * GET /api/user-folders/{id OR uuid}
      */
     public function show(Request $request, $id)
     {
@@ -162,7 +254,6 @@ class UserFolderController extends Controller
 
     /**
      * ✅ CREATE folder
-     * POST /api/user-folders
      */
     public function store(Request $request)
     {
@@ -182,7 +273,8 @@ class UserFolderController extends Controller
             ], 422);
         }
 
-        $actorId = optional($request->user())->id;
+        $actor = $this->actor($request);
+        $actorId = $actor['id'] ?: null;
 
         DB::beginTransaction();
         try {
@@ -192,7 +284,7 @@ class UserFolderController extends Controller
                 'description'   => $request->description,
                 'reason'        => $request->reason,
                 'status'        => $request->status ?? 'active',
-                'metadata'      => $request->metadata ? json_encode($request->metadata) : null,
+                'metadata'      => $request->metadata ? json_encode($request->metadata, JSON_UNESCAPED_UNICODE) : null,
                 'created_by'    => $actorId,
                 'created_at_ip' => $request->ip(),
                 'updated_at_ip' => $request->ip(),
@@ -201,9 +293,29 @@ class UserFolderController extends Controller
             ]);
 
             $newRow = DB::table('user_folders')->where('id', $folderId)->first();
+
+            // ✅ Activity log
             $this->writeLog($request, 'create', $folderId, null, (array)$newRow);
 
             DB::commit();
+
+            // ✅ Notification (after commit)
+            $appUrl = rtrim((string)config('app.url'), '/');
+            $this->persistNotification([
+                'title'     => 'User folder created',
+                'message'   => 'Folder "'.(($newRow->title ?? '') ?: ('#'.$folderId)).'" was created.',
+                'receivers' => $this->adminReceivers(),
+                'metadata'  => [
+                    'action'    => 'created',
+                    'folder_id' => (int)$folderId,
+                    'folder'    => $newRow ? (array)$newRow : ['id'=>$folderId],
+                    'actor'     => $actor,
+                ],
+                'type'      => 'user_folder',
+                'link_url'  => $appUrl.'/user-folders/'.$folderId,
+                'priority'  => 'normal',
+                'status'    => 'active',
+            ]);
 
             return response()->json([
                 'success' => true,
@@ -224,7 +336,6 @@ class UserFolderController extends Controller
 
     /**
      * ✅ UPDATE folder
-     * PUT /api/user-folders/{id OR uuid}
      */
     public function update(Request $request, $id)
     {
@@ -259,6 +370,7 @@ class UserFolderController extends Controller
             ], 422);
         }
 
+        $actor = $this->actor($request);
         $oldRow = (array)$folder;
 
         $payload = [
@@ -272,7 +384,7 @@ class UserFolderController extends Controller
         if ($request->filled('status')) $payload['status'] = $request->status;
 
         if ($request->has('metadata')) {
-            $payload['metadata'] = $request->metadata ? json_encode($request->metadata) : null;
+            $payload['metadata'] = $request->metadata ? json_encode($request->metadata, JSON_UNESCAPED_UNICODE) : null;
         }
 
         DB::beginTransaction();
@@ -280,9 +392,36 @@ class UserFolderController extends Controller
             DB::table('user_folders')->where('id', $folderId)->update($payload);
 
             $newRow = DB::table('user_folders')->where('id', $folderId)->first();
+
+            // ✅ Activity log
             $this->writeLog($request, 'update', $folderId, $oldRow, (array)$newRow);
 
             DB::commit();
+
+            // ✅ Notification (after commit)
+            $changed = $this->changedFields($oldRow, (array)$newRow, [
+                'updated_at', 'updated_at_ip', 'created_at', 'created_by', 'created_at_ip'
+            ]);
+
+            $appUrl = rtrim((string)config('app.url'), '/');
+            $this->persistNotification([
+                'title'     => 'User folder updated',
+                'message'   => $changed
+                    ? ('Folder "'.(($newRow->title ?? '') ?: ('#'.$folderId)).'" updated ('.implode(', ', $changed).').')
+                    : ('Folder "'.(($newRow->title ?? '') ?: ('#'.$folderId)).'" updated.'),
+                'receivers' => $this->adminReceivers(),
+                'metadata'  => [
+                    'action'    => 'updated',
+                    'folder_id' => (int)$folderId,
+                    'changed'   => $changed,
+                    'folder'    => $newRow ? (array)$newRow : ['id'=>$folderId],
+                    'actor'     => $actor,
+                ],
+                'type'      => 'user_folder',
+                'link_url'  => $appUrl.'/user-folders/'.$folderId,
+                'priority'  => 'normal',
+                'status'    => 'active',
+            ]);
 
             return response()->json([
                 'success' => true,
@@ -302,7 +441,6 @@ class UserFolderController extends Controller
 
     /**
      * ✅ DELETE folder (Soft delete)
-     * DELETE /api/user-folders/{id OR uuid}
      */
     public function destroy(Request $request, $id)
     {
@@ -321,6 +459,7 @@ class UserFolderController extends Controller
             return response()->json(['success' => false, 'message' => 'Folder not found'], 404);
         }
 
+        $actor  = $this->actor($request);
         $oldRow = (array)$folder;
 
         DB::beginTransaction();
@@ -335,9 +474,27 @@ class UserFolderController extends Controller
                 ->where('user_folder_id', $folderId)
                 ->update(['user_folder_id' => null]);
 
+            // ✅ Activity log
             $this->writeLog($request, 'delete', $folderId, $oldRow, null);
 
             DB::commit();
+
+            // ✅ Notification (after commit)
+            $this->persistNotification([
+                'title'     => 'User folder deleted',
+                'message'   => 'Folder "'.(($folder->title ?? '') ?: ('#'.$folderId)).'" was deleted.',
+                'receivers' => $this->adminReceivers(),
+                'metadata'  => [
+                    'action'    => 'deleted',
+                    'folder_id' => (int)$folderId,
+                    'folder'    => $oldRow,
+                    'actor'     => $actor,
+                ],
+                'type'      => 'user_folder',
+                'link_url'  => null,
+                'priority'  => 'normal',
+                'status'    => 'active',
+            ]);
 
             return response()->json([
                 'success' => true,
@@ -389,6 +546,7 @@ class UserFolderController extends Controller
             ], 422);
         }
 
+        $actor   = $this->actor($request);
         $userIds = $request->user_ids;
 
         DB::beginTransaction();
@@ -396,7 +554,10 @@ class UserFolderController extends Controller
             $oldUsers = DB::table('users')
                 ->select('id', 'user_folder_id')
                 ->whereIn('id', $userIds)
-                ->get();
+                ->get()
+                ->map(fn($u) => ['id' => (int)$u->id, 'user_folder_id' => $u->user_folder_id ? (int)$u->user_folder_id : null])
+                ->values()
+                ->all();
 
             DB::table('users')
                 ->whereIn('id', $userIds)
@@ -405,8 +566,12 @@ class UserFolderController extends Controller
             $newUsers = DB::table('users')
                 ->select('id', 'user_folder_id')
                 ->whereIn('id', $userIds)
-                ->get();
+                ->get()
+                ->map(fn($u) => ['id' => (int)$u->id, 'user_folder_id' => $u->user_folder_id ? (int)$u->user_folder_id : null])
+                ->values()
+                ->all();
 
+            // ✅ Activity log
             $this->writeLog(
                 $request,
                 'assign_users',
@@ -416,6 +581,25 @@ class UserFolderController extends Controller
             );
 
             DB::commit();
+
+            // ✅ Notification (after commit)
+            $appUrl = rtrim((string)config('app.url'), '/');
+            $this->persistNotification([
+                'title'     => 'Users assigned to folder',
+                'message'   => count($userIds).' user(s) assigned to folder "'.(($folder->title ?? '') ?: ('#'.$folderId)).'".',
+                'receivers' => $this->adminReceivers(),
+                'metadata'  => [
+                    'action'    => 'assign_users',
+                    'folder_id' => (int)$folderId,
+                    'folder'    => (array)$folder,
+                    'user_ids'  => array_values(array_map('intval', $userIds)),
+                    'actor'     => $actor,
+                ],
+                'type'      => 'user_folder',
+                'link_url'  => $appUrl.'/user-folders/'.$folderId,
+                'priority'  => 'normal',
+                'status'    => 'active',
+            ]);
 
             return response()->json([
                 'success' => true,

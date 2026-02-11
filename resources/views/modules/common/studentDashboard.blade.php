@@ -529,16 +529,24 @@ window.initializeStudentDashboard = function() {
       toastErrorText.textContent = msg;
       toastError.show();
     }
+// PATCH: make escapeHtml safe for non-strings (objects/numbers/null)
+function escapeHtml(str) {
+  if (str === null || str === undefined) str = '';
+  else if (typeof str === 'object') {
+    try { str = JSON.stringify(str); } catch (e) { str = String(str); }
+  } else {
+    str = String(str);
+  }
 
-    function escapeHtml(str) {
-      return (str || '').replace(/[&<>"']/g, s => ({
-        '&': '&amp;',
-        '<': '&lt;',
-        '>': '&gt;',
-        '"': '&quot;',
-        "'": '&#39;'
-      }[s]));
-    }
+  return str.replace(/[&<>"']/g, s => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  }[s]));
+}
+
 
     function periodLabelText(p) {
       switch (p) {

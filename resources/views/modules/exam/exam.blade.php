@@ -13,7 +13,6 @@
   <title>Exam</title>
 
   <link rel="stylesheet" href="{{ asset('assets/css/common/main.css') }}"/>
-  <link rel="icon" type="image/png" sizes="32x32" href="{{ asset('assets/media/images/web/favicon.png') }}">
 
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"/>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
@@ -592,16 +591,35 @@ const mmss = s => {
   return `${m}:${n}`;
 };
 
-function computeTimeLeft(){
-  if (!serverEndAt) return 0;
-  const end = new Date(serverEndAt).getTime();
-  const now = Date.now();
-  return Math.max(0, Math.floor((end - now) / 1000));
+function parseServerDate(val){
+  if(!val) return null;
+
+  // ✅ fix Laravel date: "YYYY-MM-DD HH:mm:ss"
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(val)) {
+    val = val.replace(' ', 'T'); // safer parsing
+  }
+
+  const d = new Date(val);
+  return isNaN(d.getTime()) ? null : d;
 }
+
+function computeTimeLeft(){
+  const endDate = parseServerDate(serverEndAt);
+  if (!endDate) return null;   // ✅ IMPORTANT: null means "timer not ready"
+  return Math.max(0, Math.floor((endDate.getTime() - Date.now()) / 1000));
+}
+
 
 function startTimerFromServerEnd(){
   const tick = async () => {
     const left = computeTimeLeft();
+
+    // ✅ If serverEndAt missing/invalid, do NOT submit
+    if (left === null) {
+      $('#time-left').textContent = '--:--';
+      return;
+    }
+
     $('#time-left').textContent = mmss(left);
 
     if (left <= 0) {
@@ -615,6 +633,7 @@ function startTimerFromServerEnd(){
   if (timerHandle) clearInterval(timerHandle);
   timerHandle = setInterval(tick, 1000);
 }
+
 
 /* ================== UI helpers ================== */
 function showSkeleton(on=true){ $('#q-skeleton')?.classList.toggle('d-none', !on); }
@@ -720,12 +739,6 @@ function renderQuestion(){
   const multi   = !!q.has_multiple_correct_answer;
   const label   = multi && rawType !== 'fill_in_the_blank' ? 'Multiple choice' : typeLabel(rawType);
 
-  // ✅ Group title (display only; no schema/API change)
-  const groupTitle = String(q.group_title ?? '').trim();
-  const groupBadge = groupTitle
-    ? `<span class="question-badge ms-1">Group: ${escapeHtml(groupTitle)}</span>`
-    : '';
-
   const toDisplay = s =>
     normalizeTeX(String(s || '')).replace(/\{dash\}/gi, '<span class="fib-underline">&nbsp;</span>');
 
@@ -741,7 +754,6 @@ function renderQuestion(){
           Marks: <b>${q.question_mark ?? 1}</b>
           <span class="mx-1">•</span>
           <span class="question-badge">${label}</span>
-          ${groupBadge}
         </div>
       </div>
       <span class="badge rounded-pill text-bg-info ${reviews[q.question_id] ? '' : 'invisible'}">Review</span>
@@ -829,7 +841,6 @@ function renderQuestion(){
   refreshNav();
   updateProgress();
 }
-
 
 /* ================== Navigator ================== */
 function buildNavigator(){
@@ -970,24 +981,92 @@ async function doSubmit(auto){
 }
 
 /* ================== BOOT EXAM (after modal start) ================== */
+/* ================== BOOT EXAM (after modal start) ================== */
 async function bootExam(){
   try{
     showSkeleton(true);
 
+    // ✅ Load cache first (if any)
     const hasCache = cacheLoad();
 
+    // ✅ Helper: safe parse server datetime
+    const parseServerDate = (val) => {
+      if(!val) return null;
+
+      // Laravel often returns "YYYY-MM-DD HH:mm:ss"
+      if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(val)) {
+        val = val.replace(' ', 'T');
+      }
+
+      const d = new Date(val);
+      return isNaN(d.getTime()) ? null : d;
+    };
+
+    const safeTimeLeft = () => {
+      const d = parseServerDate(serverEndAt);
+      if (!d) return null;
+      return Math.max(0, Math.floor((d.getTime() - Date.now()) / 1000));
+    };
+
+    // ✅ If attempt exists but serverEndAt missing → refresh from server once
+    if (ATTEMPT_UUID && !serverEndAt) {
+      try{
+        const data = await api(`/api/exam/attempts/${ATTEMPT_UUID}/questions`);
+        const pack = data.data || data;
+
+        if (pack?.attempt?.server_end_at) {
+          serverEndAt = pack.attempt.server_end_at;
+          cacheSave();
+        }
+      }catch(e){
+        console.warn('Could not refresh server_end_at for cached attempt:', e);
+      }
+    }
+
+    // ✅ If cached attempt time is already over, clear and start fresh
+    const leftNow = safeTimeLeft();
+    if (ATTEMPT_UUID && leftNow !== null && leftNow <= 0) {
+      clearAllExamClientState(); // removes ATTEMPT_UUID + cache
+    }
+
+    // ✅ If no attempt uuid, start a new attempt
     if (!ATTEMPT_UUID) {
       const started = await api(`/api/exam/quizzes/${encodeURIComponent(QUIZ_KEY)}/start`, { method:'POST' });
+
       const attempt = started.attempt || started.data?.attempt || started.data || {};
       ATTEMPT_UUID  = attempt.attempt_uuid || null;
 
       localStorage.setItem(STORAGE_ATTEMPT_KEY, ATTEMPT_UUID);
-      serverEndAt = attempt.server_end_at || null;
+
+      // ✅ IMPORTANT: set serverEndAt properly
+      serverEndAt = attempt.server_end_at || attempt.serverEndAt || null;
 
       if (attempt.quiz_name) document.title = attempt.quiz_name + ' • Exam';
+
       cacheSave();
     }
 
+    // ✅ If still serverEndAt missing, try pulling from questions API (safe fallback)
+    if (ATTEMPT_UUID && !serverEndAt) {
+      try{
+        const data = await api(`/api/exam/attempts/${ATTEMPT_UUID}/questions`);
+        const pack = data.data || data;
+
+        if (pack?.attempt?.server_end_at) {
+          serverEndAt = pack.attempt.server_end_at;
+        }
+
+        questions  = pack.questions || [];
+        selections = pack.selections || {};
+        currentIndex = 0;
+
+        cacheSave();
+      }catch(e){
+        console.warn('Fallback fetch questions failed:', e);
+      }
+    }
+
+    // ✅ If cache didn’t have questions, fetch them now
     if (!hasCache || !questions.length) {
       const data = await api(`/api/exam/attempts/${ATTEMPT_UUID}/questions`);
       const pack = data.data || data;
@@ -995,8 +1074,9 @@ async function bootExam(){
       questions  = pack.questions || [];
       selections = pack.selections || {};
 
-      if (pack.attempt?.server_end_at) serverEndAt = pack.attempt.server_end_at;
+      if (pack?.attempt?.server_end_at) serverEndAt = pack.attempt.server_end_at;
 
+      // ✅ Normalize FIB selections
       questions.forEach(q => {
         if (String(q.question_type).toLowerCase() === 'fill_in_the_blank') {
           const cur = selections[q.question_id];
@@ -1012,26 +1092,48 @@ async function bootExam(){
       cacheSave();
     }
 
+    // ✅ If still no questions → stop safely
+    if (!questions.length) {
+      showSkeleton(false);
+      throw new Error('No questions found for this attempt.');
+    }
+
     showSkeleton(false);
+
+    // ✅ Render UI
     buildNavigator();
     currentIndex = Math.min(Math.max(0, currentIndex), Math.max(0, questions.length - 1));
     renderQuestion();
 
-    startTimerFromServerEnd();
+    // ✅ Start timer ONLY if serverEndAt is valid (prevents auto submit glitch)
+    if (parseServerDate(serverEndAt)) {
+      startTimerFromServerEnd();
+    } else {
+      // show placeholder timer
+      const timeEl = document.getElementById('time-left');
+      if (timeEl) timeEl.textContent = '--:--';
+      console.warn('serverEndAt missing/invalid → timer not started');
+    }
 
+    // ✅ start time tracking
     const q = questions[currentIndex];
     if (q?.question_id) enterQuestion(q.question_id);
 
-    $('#prev-btn').addEventListener('click', onPrev);
-    $('#next-btn').addEventListener('click', onNext);
-    $('#review-btn').addEventListener('click', onToggleReview);
-    $('#submit-btn').addEventListener('click', () => doSubmit(false));
+    // ✅ bind events only once (prevents double submit)
+    if (!bootExam.__bound) {
+      bootExam.__bound = true;
 
-    window.addEventListener('beforeunload', () => {
-      const cur = questions[currentIndex];
-      if (cur?.question_id) leaveQuestion(cur.question_id);
-      cacheSave();
-    });
+      $('#prev-btn').addEventListener('click', onPrev);
+      $('#next-btn').addEventListener('click', onNext);
+      $('#review-btn').addEventListener('click', onToggleReview);
+      $('#submit-btn').addEventListener('click', () => doSubmit(false));
+
+      window.addEventListener('beforeunload', () => {
+        const cur = questions[currentIndex];
+        if (cur?.question_id) leaveQuestion(cur.question_id);
+        cacheSave();
+      });
+    }
 
   }catch(e){
     console.error(e);
@@ -1039,6 +1141,7 @@ async function bootExam(){
     Swal.fire({icon:'error',title:'Cannot start exam',text:e.message || 'Please try again.'});
   }
 }
+
 
 /* ================== Boot (Modal first) ================== */
 document.addEventListener('DOMContentLoaded', async () => {

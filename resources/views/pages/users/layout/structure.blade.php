@@ -488,7 +488,6 @@
 
   </nav>
 </div>
-
       {{-- STUDENT --}}
       <div id="allMenuStudent" style="display:none">
         <nav class="w3-menu" aria-label="Student Modules">

@@ -203,6 +203,153 @@ private function actor(Request $r): array
     }
 
     /* ===========================
+     | Activity Logs + Notification (POST/PUT/PATCH/DELETE only)
+     | Non-blocking: will never break your API if tables are missing
+     =========================== */
+
+    private function toPlainArray($row): array
+    {
+        if (!$row) return [];
+        $arr = json_decode(json_encode($row), true);
+        return is_array($arr) ? $arr : [];
+    }
+
+    private function tableColumnsCached(string $table): array
+    {
+        static $cache = [];
+        if (!array_key_exists($table, $cache)) {
+            $cache[$table] = Schema::hasTable($table) ? Schema::getColumnListing($table) : [];
+        }
+        return $cache[$table];
+    }
+
+    private function safeInsertByAvailableColumns(string $table, array $data): void
+    {
+        if (!Schema::hasTable($table)) return;
+
+        $cols = $this->tableColumnsCached($table);
+        if (empty($cols)) return;
+
+        $filtered = [];
+        foreach ($data as $k => $v) {
+            if (in_array($k, $cols, true)) $filtered[$k] = $v;
+        }
+
+        if (!empty($filtered)) {
+            DB::table($table)->insert($filtered);
+        }
+    }
+
+    private function writeActivityLog(Request $r, string $action, array $meta = []): void
+    {
+        try {
+            $actor = $this->actor($r);
+
+            $performedBy = (int) ($actor['id'] ?? 0);
+            if ($performedBy <= 0) {
+                $performedBy = (int) ($this->actorId($r) ?? 0);
+            }
+
+            $now = Carbon::now();
+
+            $payload = [
+                'uuid'              => (string) Str::uuid(),
+                'performed_by'      => $performedBy ?: null,
+                'performed_by_role' => (string) ($actor['role'] ?? ''),
+                'performed_by_type' => (string) ($actor['type'] ?? ''),
+                'module'            => 'PathGame',
+                'module_name'       => 'PathGame',
+                'action'            => $action,
+                'event'             => $action,
+                'method'            => strtoupper((string) $r->method()),
+                'request_method'    => strtoupper((string) $r->method()),
+                'url'               => (string) $r->fullUrl(),
+                'request_url'       => (string) $r->fullUrl(),
+                'ip'                => (string) $r->ip(),
+                'user_agent'        => substr((string) $r->userAgent(), 0, 500),
+                'entity_table'      => 'path_games',
+                'entity_id'         => $meta['entity_id'] ?? null,
+                'entity_uuid'       => $meta['entity_uuid'] ?? null,
+                'record_id'         => $meta['entity_id'] ?? null,
+                'record_uuid'       => $meta['entity_uuid'] ?? null,
+                'changed_fields'    => isset($meta['changed_fields']) ? json_encode($meta['changed_fields']) : null,
+                'old_values'        => isset($meta['old_values']) ? json_encode($meta['old_values']) : null,
+                'new_values'        => isset($meta['new_values']) ? json_encode($meta['new_values']) : null,
+                'log_note'          => $meta['log_note'] ?? null,
+                'note'              => $meta['log_note'] ?? null,
+                'created_at'        => $now,
+                'updated_at'        => $now,
+            ];
+
+            if (Schema::hasTable('user_data_activity_log')) {
+                $this->safeInsertByAvailableColumns('user_data_activity_log', $payload);
+            } elseif (Schema::hasTable('activity_logs')) {
+                $this->safeInsertByAvailableColumns('activity_logs', $payload);
+            } elseif (Schema::hasTable('activity_log')) {
+                $this->safeInsertByAvailableColumns('activity_log', $payload);
+            } else {
+                // fallback: file log only
+                Log::info('ActivityLog(PathGame)', $payload);
+            }
+
+        } catch (\Throwable $e) {
+            // never break API
+            Log::debug('ActivityLog(PathGame) failed', ['error' => $e->getMessage()]);
+        }
+    }
+
+    private function writeNotificationLog(Request $r, string $action, array $meta = []): void
+    {
+        try {
+            $actor = $this->actor($r);
+
+            $userId = (int) ($actor['id'] ?? 0);
+            if ($userId <= 0) {
+                $userId = (int) ($this->actorId($r) ?? 0);
+            }
+
+            $now = Carbon::now();
+
+            $title = $meta['title'] ?? ('Path Game ' . ucfirst($action));
+            $message = $meta['message'] ?? ($meta['log_note'] ?? '');
+
+            $payload = [
+                'uuid'        => (string) Str::uuid(),
+                'user_id'     => $userId ?: null,
+                'title'       => $title,
+                'message'     => $message,
+                'body'        => $message,
+                'type'        => 'path_game',
+                'module'      => 'PathGame',
+                'action'      => $action,
+                'data'        => isset($meta['data']) ? json_encode($meta['data']) : null,
+                'meta'        => isset($meta['data']) ? json_encode($meta['data']) : null,
+                'entity_id'   => $meta['entity_id'] ?? null,
+                'entity_uuid' => $meta['entity_uuid'] ?? null,
+                'ip'          => (string) $r->ip(),
+                'user_agent'  => substr((string) $r->userAgent(), 0, 500),
+                'created_at'  => $now,
+                'updated_at'  => $now,
+            ];
+
+            if (Schema::hasTable('notification_logs')) {
+                $this->safeInsertByAvailableColumns('notification_logs', $payload);
+            } elseif (Schema::hasTable('notifications')) {
+                $this->safeInsertByAvailableColumns('notifications', $payload);
+            } elseif (Schema::hasTable('user_notifications')) {
+                $this->safeInsertByAvailableColumns('user_notifications', $payload);
+            } else {
+                // fallback: file log only
+                Log::info('Notification(PathGame)', $payload);
+            }
+
+        } catch (\Throwable $e) {
+            // never break API
+            Log::debug('Notification(PathGame) failed', ['error' => $e->getMessage()]);
+        }
+    }
+
+    /* ===========================
      | CRUD
      =========================== */
 
@@ -379,6 +526,25 @@ private function actor(Request $r): array
 
         $game = DB::table('path_games')->where('id', $insertId)->first();
 
+        // ✅ Activity + Notification logs (POST)
+        $newArr = $this->toPlainArray($game);
+        $this->writeActivityLog($request, 'create', [
+            'entity_id'      => (int) $insertId,
+            'entity_uuid'    => (string) $uuid,
+            'changed_fields' => array_keys($newArr),
+            'old_values'     => null,
+            'new_values'     => $newArr,
+            'log_note'       => 'Path game created',
+        ]);
+        $this->writeNotificationLog($request, 'create', [
+            'entity_id'   => (int) $insertId,
+            'entity_uuid' => (string) $uuid,
+            'title'       => 'Path Game Created',
+            'message'     => (string) (($game->title ?? 'Path Game') . ' created successfully.'),
+            'data'        => ['id' => (int)$insertId, 'uuid' => (string)$uuid, 'title' => (string)($game->title ?? '')],
+            'log_note'    => 'Path game created',
+        ]);
+
         return response()->json([
             'success' => true,
             'message' => 'Path game created successfully.',
@@ -387,6 +553,22 @@ private function actor(Request $r): array
 
     } catch (\Throwable $e) {
         DB::rollBack();
+
+        // ✅ Activity + Notification logs (POST failed)
+        $this->writeActivityLog($request, 'create_failed', [
+            'entity_id'   => null,
+            'entity_uuid' => null,
+            'old_values'  => null,
+            'new_values'  => $payload,
+            'log_note'    => 'Path game create failed: ' . $e->getMessage(),
+        ]);
+        $this->writeNotificationLog($request, 'create_failed', [
+            'title'    => 'Path Game Create Failed',
+            'message'  => 'Failed to create path game.',
+            'data'     => ['error' => $e->getMessage()],
+            'log_note' => 'Path game create failed',
+        ]);
+
         return response()->json([
             'success' => false,
             'message' => 'Failed to create path game.',
@@ -481,6 +663,8 @@ private function actor(Request $r): array
         $update['created_by'] = $actorId; // your field: "Created/updated by"
         $update['updated_at'] = $now;
 
+        $oldArr = $this->toPlainArray($existing);
+
         DB::beginTransaction();
         try {
             DB::table('path_games')
@@ -491,6 +675,26 @@ private function actor(Request $r): array
 
             $game = DB::table('path_games')->where('id', $existing->id)->first();
 
+            // ✅ Activity + Notification logs (PUT/PATCH)
+            $newArr = $this->toPlainArray($game);
+            $changedFields = array_keys($update);
+            $this->writeActivityLog($request, 'update', [
+                'entity_id'      => (int) $existing->id,
+                'entity_uuid'    => (string) ($game->uuid ?? $existing->uuid ?? ''),
+                'changed_fields' => array_values(array_unique($changedFields)),
+                'old_values'     => $oldArr,
+                'new_values'     => $newArr,
+                'log_note'       => 'Path game updated',
+            ]);
+            $this->writeNotificationLog($request, 'update', [
+                'entity_id'   => (int) $existing->id,
+                'entity_uuid' => (string) ($game->uuid ?? $existing->uuid ?? ''),
+                'title'       => 'Path Game Updated',
+                'message'     => (string) (($game->title ?? $existing->title ?? 'Path Game') . ' updated successfully.'),
+                'data'        => ['id' => (int)$existing->id, 'uuid' => (string)($game->uuid ?? $existing->uuid ?? ''), 'title' => (string)($game->title ?? $existing->title ?? '')],
+                'log_note'    => 'Path game updated',
+            ]);
+
             return response()->json([
                 'success' => true,
                 'message' => 'Path game updated successfully.',
@@ -498,6 +702,25 @@ private function actor(Request $r): array
             ]);
         } catch (\Throwable $e) {
             DB::rollBack();
+
+            // ✅ Activity + Notification logs (PUT/PATCH failed)
+            $this->writeActivityLog($request, 'update_failed', [
+                'entity_id'   => (int) $existing->id,
+                'entity_uuid' => (string) ($existing->uuid ?? ''),
+                'changed_fields' => array_keys($update),
+                'old_values'  => $oldArr,
+                'new_values'  => $payload,
+                'log_note'    => 'Path game update failed: ' . $e->getMessage(),
+            ]);
+            $this->writeNotificationLog($request, 'update_failed', [
+                'entity_id'   => (int) $existing->id,
+                'entity_uuid' => (string) ($existing->uuid ?? ''),
+                'title'       => 'Path Game Update Failed',
+                'message'     => 'Failed to update path game.',
+                'data'        => ['id' => (int)$existing->id, 'uuid' => (string)($existing->uuid ?? ''), 'error' => $e->getMessage()],
+                'log_note'    => 'Path game update failed',
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to update path game.',
@@ -520,6 +743,8 @@ private function actor(Request $r): array
 
         $now = Carbon::now();
 
+        $oldArr = $this->toPlainArray($existing);
+
         try {
             DB::table('path_games')
                 ->where('id', $existing->id)
@@ -528,11 +753,51 @@ private function actor(Request $r): array
                     'updated_at' => $now,
                 ]);
 
+            // ✅ Activity + Notification logs (DELETE)
+            $newArr = $oldArr;
+            $newArr['deleted_at'] = $now->toDateTimeString();
+            $newArr['updated_at'] = $now->toDateTimeString();
+
+            $this->writeActivityLog($request, 'delete', [
+                'entity_id'      => (int) $existing->id,
+                'entity_uuid'    => (string) ($existing->uuid ?? ''),
+                'changed_fields' => ['deleted_at','updated_at'],
+                'old_values'     => $oldArr,
+                'new_values'     => $newArr,
+                'log_note'       => 'Path game deleted (soft delete)',
+            ]);
+            $this->writeNotificationLog($request, 'delete', [
+                'entity_id'   => (int) $existing->id,
+                'entity_uuid' => (string) ($existing->uuid ?? ''),
+                'title'       => 'Path Game Deleted',
+                'message'     => (string) (($existing->title ?? 'Path Game') . ' deleted successfully.'),
+                'data'        => ['id' => (int)$existing->id, 'uuid' => (string)($existing->uuid ?? ''), 'title' => (string)($existing->title ?? '')],
+                'log_note'    => 'Path game deleted (soft delete)',
+            ]);
+
             return response()->json([
                 'success' => true,
                 'message' => 'Path game deleted successfully.',
             ]);
         } catch (\Throwable $e) {
+
+            // ✅ Activity + Notification logs (DELETE failed)
+            $this->writeActivityLog($request, 'delete_failed', [
+                'entity_id'   => (int) $existing->id,
+                'entity_uuid' => (string) ($existing->uuid ?? ''),
+                'old_values'  => $oldArr,
+                'new_values'  => null,
+                'log_note'    => 'Path game delete failed: ' . $e->getMessage(),
+            ]);
+            $this->writeNotificationLog($request, 'delete_failed', [
+                'entity_id'   => (int) $existing->id,
+                'entity_uuid' => (string) ($existing->uuid ?? ''),
+                'title'       => 'Path Game Delete Failed',
+                'message'     => 'Failed to delete path game.',
+                'data'        => ['id' => (int)$existing->id, 'uuid' => (string)($existing->uuid ?? ''), 'error' => $e->getMessage()],
+                'log_note'    => 'Path game delete failed',
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to delete path game.',

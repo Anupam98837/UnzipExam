@@ -59,20 +59,104 @@ class MediaController extends Controller
         return 'other';
     }
 
-    /** Basic activity logger (optional—but keeps parity with the rest of W3T) */
-    private function logActivity(int $userId, string $action, array $payload = []): void
-    {
+    /* =========================================================
+     | ✅ Activity log (DocumentType-style)
+     * ========================================================= */
+
+    private function logActivity(
+        Request $request,
+        string $activity,                 // 'store'|'destroy'
+        string $module,                   // 'Media'
+        string $note,                     // readable note
+        string $tableName,                // 'media'
+        ?int $recordId = null,
+        ?array $changed = null,
+        ?array $oldValues = null,
+        ?array $newValues = null
+    ): void {
+        $a = $this->actor($request);
+
+        $changedFields = null;
+        if (is_array($changed)) {
+            $changedFields = array_values(array_unique(
+                array_keys($changed) === range(0, count($changed)-1) ? $changed : array_keys($changed)
+            ));
+        }
+
         try {
             DB::table('user_data_activity_log')->insert([
-                'user_id'    => $userId,
-                'action'     => $action,
-                'payload'    => json_encode($payload, JSON_UNESCAPED_SLASHES),
-                'ip_address' => request()->ip(),
-                'created_at' => Carbon::now(),
+                'performed_by'      => $a['id'] ?: 0,
+                'performed_by_role' => $a['role'] ?: null,
+                'ip'                => $request->ip(),
+                'user_agent'        => (string) $request->userAgent(),
+                'activity'          => $activity,
+                'module'            => $module,
+                'table_name'        => $tableName ?: 'unknown',
+                'record_id'         => $recordId,
+                'changed_fields'    => $changedFields ? json_encode($changedFields, JSON_UNESCAPED_UNICODE) : null,
+                'old_values'        => $oldValues ? json_encode($oldValues, JSON_UNESCAPED_UNICODE) : null,
+                'new_values'        => $newValues ? json_encode($newValues, JSON_UNESCAPED_UNICODE) : null,
+                'log_note'          => $note,
+                'created_at'        => now(),
+                'updated_at'        => now(),
             ]);
         } catch (\Throwable $e) {
-            Log::warning('media.activity.log.fail', ['e' => $e->getMessage()]);
+            Log::error('user_data_activity_log insert failed', ['error' => $e->getMessage()]);
         }
+    }
+
+    /** DB-only notification insert (same pattern you used earlier) */
+    private function persistNotification(array $payload): void
+    {
+        try {
+            $title     = (string)($payload['title']    ?? 'Notification');
+            $message   = (string)($payload['message']  ?? '');
+            $receivers = array_values(array_map(function($x){
+                return [
+                    'id'   => isset($x['id']) ? (int)$x['id'] : null,
+                    'role' => (string)($x['role'] ?? 'unknown'),
+                    'read' => (int)($x['read'] ?? 0),
+                ];
+            }, $payload['receivers'] ?? []));
+
+            $metadata = $payload['metadata'] ?? [];
+            $type     = (string)($payload['type'] ?? 'general');
+            $linkUrl  = $payload['link_url'] ?? null;
+
+            $priority = in_array(($payload['priority'] ?? 'normal'), ['low','normal','high','urgent'], true)
+                        ? $payload['priority'] : 'normal';
+
+            $status   = in_array(($payload['status'] ?? 'active'), ['active','archived','deleted'], true)
+                        ? $payload['status'] : 'active';
+
+            DB::table('notifications')->insert([
+                'title'      => $title,
+                'message'    => $message,
+                'receivers'  => json_encode($receivers, JSON_UNESCAPED_UNICODE),
+                'metadata'   => $metadata ? json_encode($metadata, JSON_UNESCAPED_UNICODE) : null,
+                'type'       => $type,
+                'link_url'   => $linkUrl,
+                'priority'   => $priority,
+                'status'     => $status,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('notifications insert failed', ['error' => $e->getMessage()]);
+        }
+    }
+
+    /** Admin receivers:  (id, role=admin). */
+    private function adminReceivers(array $excludeIds = []): array
+    {
+        $exclude = array_flip(array_map('intval', $excludeIds));
+        $rows = DB::table('users')->select('id')->get();
+        $out = [];
+        foreach ($rows as $r) {
+            $id = (int)$r->id;
+            if (!isset($exclude[$id])) $out[] = ['id'=>$id, 'role'=>'admin', 'read'=>0];
+        }
+        return $out;
     }
 
     /** Allow id or uuid lookup */
@@ -99,7 +183,7 @@ class MediaController extends Controller
             'category'        => 'nullable|string|in:image,video,audio,document,archive,other',
             'status'          => 'nullable|string|in:active,archived',
             'usage_tag'       => 'nullable|string|max:50',
-            'sort'            => 'nullable|string|max:64',    // e.g., -created_at, title
+            'sort'            => 'nullable|string|max:64',
             'per_page'        => 'nullable|integer|min:1|max:200',
             'page'            => 'nullable|integer|min:1',
             'include_deleted' => 'nullable|boolean',
@@ -123,10 +207,7 @@ class MediaController extends Controller
 
         $builder = DB::table('media as m')
             ->leftJoin('users as u', 'u.id', '=', 'm.created_by')
-            ->select(
-                'm.*',
-                DB::raw("COALESCE(u.name, CONCAT('User#', m.created_by)) as created_by_name")
-            );
+            ->select('m.*', DB::raw("COALESCE(u.name, CONCAT('User#', m.created_by)) as created_by_name"));
 
         if ($onlyDeleted) {
             $builder->whereNotNull('m.deleted_at');
@@ -139,7 +220,6 @@ class MediaController extends Controller
         if ($tag)  $builder->where('m.usage_tag', $tag);
 
         if ($q !== '') {
-            // Try FULLTEXT, fallback to LIKE
             try {
                 $builder->whereRaw('MATCH(m.title, m.description, m.alt_text) AGAINST (? IN NATURAL LANGUAGE MODE)', [$q]);
             } catch (\Throwable $e) {
@@ -152,18 +232,15 @@ class MediaController extends Controller
             }
         }
 
-        // Sorting
         $dir = 'asc'; $col = 'm.created_at';
         if ($sort) {
             $dir = str_starts_with($sort, '-') ? 'desc' : 'asc';
             $col = ltrim($sort, '+-');
-            // allowlist
             $allowed = ['id','created_at','title','category','size_bytes','status'];
             $col = in_array($col, $allowed, true) ? "m.$col" : 'm.created_at';
         }
         $builder->orderBy($col, $dir)->orderBy('m.id', 'desc');
 
-        // Pagination
         $total = (clone $builder)->count();
         $items = $builder->forPage($page, $per)->get();
 
@@ -185,14 +262,14 @@ class MediaController extends Controller
 
     /* =========================================================
      |  POST /api/media  (upload & create)
+     |  ✅ ADD LOG + NOTIFICATION ONLY HERE
      * ========================================================= */
     public function store(Request $request)
     {
         $actor = $this->actor($request);
 
         $v = Validator::make($request->all(), [
-            // Accept very broadly (central library). Size limit can be tuned.
-            'file'        => 'required|file|max:102400', // 100MB
+            'file'        => 'required|file|max:102400',
             'title'       => 'nullable|string|max:255',
             'description' => 'nullable|string',
             'alt_text'    => 'nullable|string|max:255',
@@ -217,25 +294,22 @@ class MediaController extends Controller
         $dir    = $this->mediaDir();
         $fpath  = $dir . DIRECTORY_SEPARATOR . $fname;
 
-        // Move file to public/AllMedia
         $file->move($dir, $fname);
 
         $mime   = File::mimeType($fpath) ?: $file->getClientMimeType();
         $size   = (int) filesize($fpath);
         $cat    = $this->categorize($mime, $ext);
 
-        // Dimensions (images)
         $width = null; $height = null; $duration = null;
         if ($cat === 'image') {
             try {
                 $dim = @getimagesize($fpath);
                 if (is_array($dim)) { $width = (int) $dim[0]; $height = (int) $dim[1]; }
-            } catch (\Throwable $e) { /* ignore */ }
+            } catch (\Throwable $e) {}
         }
 
         $absUrl = $this->appUrl() . '/AllMedia/' . $fname;
 
-        // Insert
         $row = [
             'uuid'             => $uuid,
             'title'            => $request->input('title'),
@@ -247,10 +321,10 @@ class MediaController extends Controller
             'size_bytes'       => $size,
             'width'            => $width,
             'height'           => $height,
-            'duration_seconds' => $duration, // null unless you later add ffprobe
+            'duration_seconds' => $duration,
             'url'              => $absUrl,
             'usage_tag'        => $request->input('usage_tag'),
-            'metadata'         => $request->filled('metadata') ? json_encode($request->input('metadata'), JSON_UNESCAPED_SLASHES) : null,
+            'metadata'         => $request->filled('metadata') ? json_encode($request->input('metadata'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) : null,
             'status'           => $request->input('status', 'active'),
             'created_by'       => $actor['id'] ?: null,
             'updated_by'       => $actor['id'] ?: null,
@@ -261,10 +335,40 @@ class MediaController extends Controller
         try {
             $id = DB::table('media')->insertGetId($row);
             $created = DB::table('media')->where('id', $id)->first();
-            $this->logActivity($actor['id'], 'media.create', ['id' => $id, 'uuid' => $uuid, 'url' => $absUrl]);
+
+            // ✅ Activity Log (DocumentType-style)
+            $this->logActivity(
+                $request,
+                'store',
+                'Media',
+                "Media uploaded \"".((string)($created->title ?? $fname))."\"",
+                'media',
+                (int)$id,
+                array_keys($row),
+                null,
+                $created ? (array)$created : null
+            );
+
+            // ✅ Notification
+            $this->persistNotification([
+                'title'     => 'Media uploaded',
+                'message'   => "New media uploaded: \"".((string)($created->title ?? $fname))."\"",
+                'receivers' => $this->adminReceivers(),
+                'metadata'  => [
+                    'action'   => 'uploaded',
+                    'media_id' => (int)$id,
+                    'media'    => $created ? (array)$created : ['id'=>$id,'uuid'=>$uuid,'url'=>$absUrl],
+                    'actor'    => $this->actor($request),
+                ],
+                'type'      => 'media',
+                'link_url'  => $this->appUrl().'/AllMedia/'.$fname,
+                'priority'  => 'normal',
+                'status'    => 'active',
+            ]);
+
             return response()->json(['success' => true, 'data' => $created], 201);
+
         } catch (\Throwable $e) {
-            // Cleanup file on DB failure
             try { if (File::exists($fpath)) File::delete($fpath); } catch (\Throwable $e2) {}
             Log::error('media.store.db_fail', ['e' => $e->getMessage()]);
             return response()->json(['success' => false, 'error' => 'Failed to save media'], 500);
@@ -273,7 +377,7 @@ class MediaController extends Controller
 
     /* =========================================================
      |  DELETE /api/media/{idOrUuid}
-     |     ?hard=true   → force delete + remove physical file
+     |  ✅ ADD LOG + NOTIFICATION ONLY HERE
      * ========================================================= */
     public function destroy(Request $request, string $idOrUuid)
     {
@@ -282,6 +386,10 @@ class MediaController extends Controller
 
         $row = $this->findMediaRow($idOrUuid, true);
         if (!$row) {
+            // optional: log attempt
+            $this->logActivity($request, 'destroy', 'Media', 'Media not found (delete)', 'media', null, null, null, [
+                'id_or_uuid' => $idOrUuid, 'hard' => $hard
+            ]);
             return response()->json(['success' => false, 'error' => 'Not found'], 404);
         }
 
@@ -289,30 +397,54 @@ class MediaController extends Controller
         $fpath = null;
         try {
             $path = parse_url((string)$row->url, PHP_URL_PATH) ?? '';
-            if ($path !== '') {
-                $fpath = public_path(ltrim($path, '/'));
-            }
+            if ($path !== '') $fpath = public_path(ltrim($path, '/'));
         } catch (\Throwable $e) {
             $fpath = null;
         }
 
         if ($hard) {
-            // Hard delete: remove DB row and file
+            // Hard delete (query builder → single delete)
             try {
-                DB::table('media')->where('id', $row->id)->delete(); // soft or hard? We want hard:
-                DB::table('media')->where('id', $row->id)->delete(); // ensure removed if soft
-                DB::table('media')->where('id', $row->id)->forceDelete(); // in case of softDeletes trait behavior
-            } catch (\Throwable $e) {
-                // On pure query builder tables, forceDelete() is not available—fallback:
                 DB::table('media')->where('id', $row->id)->delete();
-                DB::table('media')->where('id', $row->id)->whereNotNull('deleted_at')->delete();
+            } catch (\Throwable $e) {
+                Log::error('media.hard_delete.db_fail', ['e'=>$e->getMessage(), 'id'=>$row->id]);
+                return response()->json(['success' => false, 'error' => 'Failed to delete media'], 500);
             }
 
             // Remove file
             try { if ($fpath && File::exists($fpath)) File::delete($fpath); } catch (\Throwable $e) {}
 
-            $this->logActivity($actor['id'], 'media.delete.force', ['id' => $row->id, 'uuid' => $row->uuid, 'url' => $row->url]);
-            return response()->json(['success' => true, 'deleted' => 'hard', 'id' => $row->id]);
+            // ✅ Activity Log
+            $this->logActivity(
+                $request,
+                'destroy',
+                'Media',
+                "Media hard deleted \"".((string)($row->title ?? $row->uuid))."\"",
+                'media',
+                (int)$row->id,
+                ['hard'],
+                (array)$row,
+                null
+            );
+
+            // ✅ Notification
+            $this->persistNotification([
+                'title'     => 'Media deleted (hard)',
+                'message'   => "Media hard deleted: \"".((string)($row->title ?? $row->uuid))."\"",
+                'receivers' => $this->adminReceivers(),
+                'metadata'  => [
+                    'action'   => 'deleted_hard',
+                    'media_id' => (int)$row->id,
+                    'media'    => (array)$row,
+                    'actor'    => $this->actor($request),
+                ],
+                'type'      => 'media',
+                'link_url'  => null,
+                'priority'  => 'normal',
+                'status'    => 'active',
+            ]);
+
+            return response()->json(['success' => true, 'deleted' => 'hard', 'id' => (int)$row->id]);
         }
 
         // Soft delete
@@ -321,7 +453,37 @@ class MediaController extends Controller
             'updated_by' => $actor['id'] ?: null,
             'updated_at' => Carbon::now(),
         ]);
-        $this->logActivity($actor['id'], 'media.delete.soft', ['id' => $row->id, 'uuid' => $row->uuid]);
-        return response()->json(['success' => true, 'deleted' => 'soft', 'id' => $row->id]);
+
+        // ✅ Activity Log
+        $this->logActivity(
+            $request,
+            'destroy',
+            'Media',
+            "Media soft deleted \"".((string)($row->title ?? $row->uuid))."\"",
+            'media',
+            (int)$row->id,
+            ['soft'],
+            (array)$row,
+            null
+        );
+
+        // ✅ Notification
+        $this->persistNotification([
+            'title'     => 'Media deleted',
+            'message'   => "Media soft deleted: \"".((string)($row->title ?? $row->uuid))."\"",
+            'receivers' => $this->adminReceivers(),
+            'metadata'  => [
+                'action'   => 'deleted_soft',
+                'media_id' => (int)$row->id,
+                'media'    => (array)$row,
+                'actor'    => $this->actor($request),
+            ],
+            'type'      => 'media',
+            'link_url'  => null,
+            'priority'  => 'normal',
+            'status'    => 'active',
+        ]);
+
+        return response()->json(['success' => true, 'deleted' => 'soft', 'id' => (int)$row->id]);
     }
 }

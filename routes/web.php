@@ -275,3 +275,26 @@ Route::get('/registration-campaign/create', function () {
 Route::get('/interview-registration-campaigns/manage', function () {
     return view('pages.users.pages.interviewRegistrationCampaigns.manageInterviewRegistrationCampaigns');
 });
+
+
+//Activity Logs
+Route::get('/activity-logs', function () {
+    return view('modules/logs/activityLogs');
+});
+ 
+//public 
+
+Route::get('/terms&conditions', fn () => view('pages.landing.pages.termsAndCondition'));
+Route::get('/privacypolicy', fn () => view('pages.landing.pages.privacyPolicy'));
+Route::get('/refundpolicy', fn () => view('pages.landing.pages.refundPolicy'));
+
+Route::get('/about-us', fn () => view('pages.landing.pages.aboutUs'));
+Route::get('/contact-us', fn () => view('pages.landing.pages.contactUs'));
+
+//admin manage
+
+Route::get('/terms-and-conditions/manage', fn () => view('pages.users.pages.landingPages.manageTermsAndCondition'));
+Route::get('/refund-policy/manage', fn () => view('pages.users.pages.landingPages.manageRefundPolicy'));
+Route::get('/privacy-policy/manage', fn () => view('pages.users.pages.landingPages.managePrivacyPolicy'));
+Route::get('/about-us/manage', fn () => view('pages.users.pages.landingPages.manageAboutUs'));
+Route::get('/enquiry/manage', fn () => view('pages.users.pages.landingPages.manageEnquiry'));

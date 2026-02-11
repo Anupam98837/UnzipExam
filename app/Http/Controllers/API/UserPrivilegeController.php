@@ -412,6 +412,10 @@ private function buildTreeFromPrivilegeIds(array $privIds): array
     $actor = $this->actor($r);
     $now   = now();
 
+    // ✅ Activity log old snapshot
+    $oldRowForLog = $this->getUserPrivilegeRow($userId, true);
+    $oldForLogArr = $oldRowForLog ? (array) $oldRowForLog : null;
+
     // normalize actions using DB (authoritative)
     $newTree = $this->normalizeIncomingTree($data['tree']);
     $newIds  = $this->extractPrivilegeIdsFromTree($newTree)['ids'];
@@ -441,6 +445,26 @@ private function buildTreeFromPrivilegeIds(array $privIds): array
                 'saved_tree' => $newTree,
             ];
         });
+
+        // ✅ Activity + Notification log (POST)
+        $newRowForLog = $this->getUserPrivilegeRow($userId, true);
+        $newForLogArr = $newRowForLog ? (array) $newRowForLog : null;
+
+        $this->writeActivityLog($r, 'sync', (int)($result['row']->id ?? 0), $oldForLogArr, $newForLogArr, 'Synced user privileges (tree stored).');
+        $this->writeNotificationLog(
+            $r,
+            'user_privileges_synced',
+            'Privileges synced',
+            'User privileges were synced.',
+            (int)($result['row']->id ?? 0),
+            [
+                'target_user_id' => (int)$userId,
+                'target_user_uuid' => $this->getUserUuid((int)$userId),
+                'added' => $result['added'],
+                'removed' => $result['removed'],
+                'saved_count' => count($result['saved_ids']),
+            ]
+        );
 
         return response()->json([
             'message'    => 'Privileges synced successfully (tree stored).',
@@ -479,6 +503,10 @@ public function assign(Request $r)
 
     $actor = $this->actor($r);
     $now   = now();
+
+    // ✅ Activity log old snapshot
+    $oldRowForLog = $this->getUserPrivilegeRow($userId, true);
+    $oldForLogArr = $oldRowForLog ? (array) $oldRowForLog : null;
 
     $incomingIds = [];
 
@@ -525,6 +553,25 @@ public function assign(Request $r)
             ];
         });
 
+        // ✅ Activity + Notification log (POST)
+        $newRowForLog = $this->getUserPrivilegeRow($userId, true);
+        $newForLogArr = $newRowForLog ? (array) $newRowForLog : null;
+
+        $this->writeActivityLog($r, 'assign', (int)($result['row']->id ?? 0), $oldForLogArr, $newForLogArr, 'Assigned privilege(s) (tree stored).');
+        $this->writeNotificationLog(
+            $r,
+            'user_privileges_assigned',
+            'Privileges assigned',
+            'Privilege(s) were assigned to a user.',
+            (int)($result['row']->id ?? 0),
+            [
+                'target_user_id' => (int)$userId,
+                'target_user_uuid' => $this->getUserUuid((int)$userId),
+                'added' => $result['added'],
+                'saved_count' => count($result['ids']),
+            ]
+        );
+
         return response()->json([
             'message'     => 'Privilege(s) assigned (tree stored).',
             'user_uuid'   => $this->getUserUuid($userId),
@@ -558,6 +605,10 @@ public function assign(Request $r)
         $privId = (int) $data['privilege_id'];
         $actor  = $this->actor($r);
         $now    = now();
+
+        // ✅ Activity log old snapshot
+        $oldRowForLog = $this->getUserPrivilegeRow($userId, true);
+        $oldForLogArr = $oldRowForLog ? (array) $oldRowForLog : null;
 
         try {
             $affected = DB::transaction(function () use ($r, $userId, $privId, $actor, $now) {
@@ -602,6 +653,26 @@ public function assign(Request $r)
                 return 1;
             });
 
+            if ($affected) {
+                // ✅ Activity + Notification log (POST)
+                $newRowForLog = $this->getUserPrivilegeRow($userId, true);
+                $newForLogArr = $newRowForLog ? (array) $newRowForLog : null;
+
+                $this->writeActivityLog($r, 'unassign', (int)($newRowForLog->id ?? 0), $oldForLogArr, $newForLogArr, 'Unassigned a privilege from user.');
+                $this->writeNotificationLog(
+                    $r,
+                    'user_privilege_unassigned',
+                    'Privilege unassigned',
+                    'A privilege was unassigned from a user.',
+                    (int)($newRowForLog->id ?? 0),
+                    [
+                        'target_user_id' => (int)$userId,
+                        'target_user_uuid' => $this->getUserUuid((int)$userId),
+                        'privilege_id' => (int)$privId,
+                    ]
+                );
+            }
+
             return $affected
                 ? response()->json(['message' => 'Privilege unassigned.', 'user_uuid' => $this->getUserUuid($userId)])
                 : response()->json(['message' => 'Privilege not found for this user.'], 404);
@@ -628,11 +699,18 @@ public function assign(Request $r)
             $affected = 0;
             $userId = 0;
 
+            // ✅ Activity log old snapshot
+            $oldRowForLog = null;
+            $oldForLogArr = null;
+
             if (!empty($data['uuid'])) {
                 $row = DB::table('user_privileges')->where('uuid', $data['uuid'])->first();
                 if (!$row) return response()->json(['message' => 'Not found'], 404);
 
                 $userId = (int) $row->user_id;
+
+                $oldRowForLog = $row;
+                $oldForLogArr = (array) $row;
 
                 $affected = DB::table('user_privileges')
                     ->where('uuid', $data['uuid'])
@@ -641,6 +719,9 @@ public function assign(Request $r)
             } else {
                 $userId = $this->resolveUserIdFromRequest($data);
                 if (!$userId) return response()->json(['message' => 'user_id or user_uuid (or uuid) is required'], 422);
+
+                $oldRowForLog = $this->getUserPrivilegeRow((int)$userId, true);
+                $oldForLogArr = $oldRowForLog ? (array) $oldRowForLog : null;
 
                 $affected = DB::table('user_privileges')
                     ->where('user_id', $userId)
@@ -651,6 +732,23 @@ public function assign(Request $r)
             if (!$affected) {
                 return response()->json(['message' => 'User privilege record not found (or already deleted).'], 404);
             }
+
+            // ✅ Activity + Notification log (DELETE)
+            $newRowForLog = $this->getUserPrivilegeRow((int)$userId, true);
+            $newForLogArr = $newRowForLog ? (array) $newRowForLog : null;
+
+            $this->writeActivityLog($r, 'delete', (int)($newRowForLog->id ?? 0), $oldForLogArr, $newForLogArr, 'User privileges removed (soft delete).');
+            $this->writeNotificationLog(
+                $r,
+                'user_privileges_deleted',
+                'Privileges removed',
+                'User privileges were removed.',
+                (int)($newRowForLog->id ?? 0),
+                [
+                    'target_user_id' => (int)$userId,
+                    'target_user_uuid' => $this->getUserUuid((int)$userId),
+                ]
+            );
 
             return response()->json([
                 'message'   => 'User privileges removed successfully.',
@@ -1393,4 +1491,175 @@ public function myPrivileges(Request $request)
     ]);
 }
 
+    /* =========================================================
+     | ✅ Activity log + Notifications log helpers (DB + fallback)
+     * ========================================================= */
+
+    private function safeGetColumns(string $table): array
+    {
+        try {
+            if (!Schema::hasTable($table)) return [];
+            return Schema::getColumnListing($table);
+        } catch (\Throwable $e) {
+            return [];
+        }
+    }
+
+    private function diffChangedKeys(array $old, array $new, array $ignore = []): array
+    {
+        $ignoreFlip = array_flip($ignore);
+        $keys = array_unique(array_merge(array_keys($old), array_keys($new)));
+        $changed = [];
+
+        foreach ($keys as $k) {
+            if (isset($ignoreFlip[$k])) continue;
+
+            $ov = $old[$k] ?? null;
+            $nv = $new[$k] ?? null;
+
+            if (is_string($ov) && is_string($nv)) {
+                if (trim($ov) !== trim($nv)) $changed[] = $k;
+            } else {
+                if ($ov !== $nv) $changed[] = $k;
+            }
+        }
+
+        return array_values($changed);
+    }
+
+    private function writeActivityLog(Request $request, string $action, ?int $entityId, ?array $old, ?array $new, ?string $note = null): void
+    {
+        if (!Schema::hasTable('user_data_activity_log')) return;
+
+        try {
+            $cols = $this->safeGetColumns('user_data_activity_log');
+            if (empty($cols)) return;
+
+            $has = fn ($c) => in_array($c, $cols, true);
+
+            $actor = $this->actor($request);
+            $actorId = (int)($actor['id'] ?? 0);
+            $actorRole = (string)($actor['role'] ?? '');
+
+            $payload = [];
+
+            if ($has('uuid')) $payload['uuid'] = (string) Str::uuid();
+
+            if ($has('module')) $payload['module'] = 'UserPrivilege';
+            if ($has('table_name')) $payload['table_name'] = 'user_privileges';
+            if ($has('entity_type')) $payload['entity_type'] = 'user_privileges';
+
+            if ($has('entity_id')) $payload['entity_id'] = $entityId;
+            if ($has('record_id')) $payload['record_id'] = $entityId;
+
+            if ($has('action')) $payload['action'] = $action;
+            if ($has('activity')) $payload['activity'] = $action;
+
+            if ($has('performed_by')) $payload['performed_by'] = $actorId ?: 0;
+            if ($has('performed_by_role')) $payload['performed_by_role'] = $actorRole ?: null;
+            if ($has('actor_id')) $payload['actor_id'] = $actorId ?: null;
+            if ($has('user_id')) $payload['user_id'] = $actorId ?: null;
+
+            $ip = $request->ip();
+            $ua = substr((string)$request->userAgent(), 0, 1000);
+
+            if ($has('ip')) $payload['ip'] = $ip;
+            if ($has('ip_address')) $payload['ip_address'] = $ip;
+            if ($has('user_agent')) $payload['user_agent'] = $ua;
+
+            if ($has('old_values')) $payload['old_values'] = $old ? json_encode($old, JSON_UNESCAPED_UNICODE) : null;
+            if ($has('new_values')) $payload['new_values'] = $new ? json_encode($new, JSON_UNESCAPED_UNICODE) : null;
+
+            if ($has('changed_fields')) {
+                $changed = [];
+                if (is_array($old) && is_array($new)) {
+                    $changed = $this->diffChangedKeys($old, $new, ['created_at','updated_at','deleted_at']);
+                }
+                $payload['changed_fields'] = $changed ? json_encode($changed, JSON_UNESCAPED_UNICODE) : null;
+            }
+
+            if ($note && $has('log_note')) $payload['log_note'] = $note;
+
+            if ($has('created_at')) $payload['created_at'] = now();
+            if ($has('updated_at')) $payload['updated_at'] = now();
+
+            DB::table('user_data_activity_log')->insert($payload);
+        } catch (\Throwable $e) {
+            \Log::error('UserPrivilege.activity_log: failed', ['error' => $e->getMessage()]);
+        }
+    }
+
+    private function writeNotificationLog(Request $request, string $event, string $title, string $message, ?int $entityId = null, array $extra = []): void
+    {
+        // Try DB tables if present; otherwise fallback to app logs only.
+        $tablesToTry = ['notifications_log', 'notification_logs', 'user_notifications_log', 'user_notification_logs'];
+
+        $actor = $this->actor($request);
+        $actorId = (int)($actor['id'] ?? 0);
+        $actorRole = (string)($actor['role'] ?? '');
+
+        foreach ($tablesToTry as $table) {
+            if (!Schema::hasTable($table)) continue;
+
+            try {
+                $cols = $this->safeGetColumns($table);
+                if (empty($cols)) continue;
+
+                $has = fn ($c) => in_array($c, $cols, true);
+
+                $row = [];
+                if ($has('uuid')) $row['uuid'] = (string) Str::uuid();
+
+                // event/type
+                if ($has('event')) $row['event'] = $event;
+                if ($has('type') && !$has('event')) $row['type'] = $event;
+
+                // title/message
+                if ($has('title')) $row['title'] = $title;
+                if ($has('message')) $row['message'] = $message;
+                if ($has('body') && !$has('message')) $row['body'] = $message;
+                if ($has('description') && !$has('message') && !$has('body')) $row['description'] = $message;
+
+                // actor
+                if ($has('performed_by')) $row['performed_by'] = $actorId ?: 0;
+                if ($has('performed_by_role')) $row['performed_by_role'] = $actorRole ?: null;
+                if ($has('user_id') && !isset($row['user_id'])) $row['user_id'] = $actorId ?: null;
+
+                // entity
+                if ($has('entity_id')) $row['entity_id'] = $entityId;
+                if ($has('record_id')) $row['record_id'] = $entityId;
+                if ($has('entity_type')) $row['entity_type'] = 'user_privileges';
+
+                // payload/data
+                if ($has('payload')) $row['payload'] = json_encode($extra, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                if ($has('data') && !$has('payload')) $row['data'] = json_encode($extra, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+                // meta
+                if ($has('ip_address')) $row['ip_address'] = $request->ip();
+                if ($has('ip')) $row['ip'] = $request->ip();
+                if ($has('user_agent')) $row['user_agent'] = substr((string)$request->userAgent(), 0, 1000);
+
+                if ($has('created_at')) $row['created_at'] = now();
+                if ($has('updated_at')) $row['updated_at'] = now();
+
+                if (empty($row)) break;
+
+                DB::table($table)->insert($row);
+                return; // ✅ inserted in DB, stop trying
+            } catch (\Throwable $e) {
+                \Log::error('UserPrivilege.notification_log: failed', ['table' => $table, 'error' => $e->getMessage()]);
+            }
+        }
+
+        // fallback: app logs
+        \Log::info('UserPrivilege.notification_log: fallback', [
+            'event' => $event,
+            'title' => $title,
+            'message' => $message,
+            'entity_id' => $entityId,
+            'extra' => $extra,
+            'actor' => $actor,
+            'ip' => $request->ip(),
+        ]);
+    }
 }

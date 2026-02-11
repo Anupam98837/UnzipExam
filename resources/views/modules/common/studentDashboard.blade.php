@@ -337,7 +337,7 @@
       <div class="stdash-stat-meta" id="stdashBestMeta">Best: —</div>
     </div>
 
-    <div class="stdash-stat-card">
+    <div class="stdash-stat-card ">
       <div class="stdash-stat-top">
         <div class="stdash-stat-icon">
           <i class="fa-solid fa-chart-line"></i>
@@ -546,9 +546,7 @@ function escapeHtml(str) {
     "'": '&#39;'
   }[s]));
 }
-
-
-    function periodLabelText(p) {
+  function periodLabelText(p) {
       switch (p) {
         case '7d': return 'Last 7 days';
         case '30d': return 'Last 30 days';

@@ -331,223 +331,237 @@ class DashboardController extends Controller
      | GET /api/dashboard/student
      * ========================================================= */
 
-    public function studentDashboard(Request $request)
-    {
-        // Allow student; also useful to let admin/super_admin inspect a student's view
-        if ($resp = $this->requireRole($request, ['student','admin','super_admin'])) {
-            return $resp;
-        }
-
-        $actor  = $this->actor($request);
-        $userId = (int) ($actor['id'] ?? 0);
-
-        if (!$userId) {
-            return response()->json([
-                'status'  => 'error',
-                'message' => 'Unable to resolve user from token',
-            ], 403);
-        }
-
-        try {
-            $period    = (string) $request->query('period', '30d');
-            $range     = $this->getDateRange($period);
-            $startDate = $range['start'];
-            $endDate   = $range['end'];
-            $period    = $range['period'];
-            $today     = Carbon::today();
-
-            /* ---------- Summary counts for this student ---------- */
-            $assignedQuizzesCount = DB::table('user_quiz_assignments')
-                ->where('user_id', $userId)
-                ->whereNull('deleted_at')
-                ->where('status', 'active')
-                ->count();
-
-            $totalAttempts = DB::table('quizz_attempts')
-                ->whereNull('deleted_at')
-                ->where('user_id', $userId)
-                ->count();
-
-            $completedAttempts = DB::table('quizz_attempts')
-                ->whereNull('deleted_at')
-                ->where('user_id', $userId)
-                ->whereIn('status', ['submitted','auto_submitted'])
-                ->count();
-
-            $resultsTotal = DB::table('quizz_results')
-                ->where('user_id', $userId)
-                ->count();
-
-            $avgRow = DB::table('quizz_results')
-                ->where('user_id', $userId)
-                ->select(DB::raw('AVG(percentage) as avg_percentage'))
-                ->first();
-
-            $avgPercentage = $avgRow && $avgRow->avg_percentage !== null
-                ? round((float) $avgRow->avg_percentage, 2)
-                : 0.0;
-
-            $bestRow = DB::table('quizz_results')
-                ->where('user_id', $userId)
-                ->orderByDesc('percentage')
-                ->select('quiz_id','percentage','marks_obtained','total_marks')
-                ->first();
-
-            $bestPerformance = $bestRow ? [
-                'quiz_id'        => (int) $bestRow->quiz_id,
-                'percentage'     => (float) $bestRow->percentage,
-                'marks_obtained' => (int) $bestRow->marks_obtained,
-                'total_marks'    => (int) $bestRow->total_marks,
-            ] : null;
-
-            $summaryCounts = [
-                'assigned_quizzes'    => $assignedQuizzesCount,
-                'total_attempts'      => $totalAttempts,
-                'completed_attempts'  => $completedAttempts,
-                'total_results'       => $resultsTotal,
-                'average_percentage'  => $avgPercentage,
-                'best_performance'    => $bestPerformance,
-            ];
-
-            /* ---------- Quick stats for today ---------- */
-            $todayAttemptsStarted = DB::table('quizz_attempts')
-                ->whereNull('deleted_at')
-                ->where('user_id', $userId)
-                ->whereDate('created_at', $today)
-                ->count();
-
-            $todayAttemptsCompleted = DB::table('quizz_attempts')
-                ->whereNull('deleted_at')
-                ->where('user_id', $userId)
-                ->whereIn('status', ['submitted','auto_submitted'])
-                ->whereDate('finished_at', $today)
-                ->count();
-
-            $todayTimeSpent = DB::table('quizz_attempt_answers as qaa')
-                ->join('quizz_attempts as qa', 'qa.id', '=', 'qaa.attempt_id')
-                ->where('qa.user_id', $userId)
-                ->whereDate('qaa.answered_at', $today)
-                ->sum('qaa.time_spent_sec');
-
-            $quickStats = [
-                'today_attempts_started'   => $todayAttemptsStarted,
-                'today_attempts_completed' => $todayAttemptsCompleted,
-                'today_time_spent_sec'     => (int) $todayTimeSpent,
-            ];
-
-            /* ---------- Attempts over time for this student ---------- */
-            $attemptsOverTime = DB::table('quizz_attempts')
-                ->select(
-                    DB::raw('DATE(created_at) as date'),
-                    DB::raw('COUNT(*) as count')
-                )
-                ->whereNull('deleted_at')
-                ->where('user_id', $userId)
-                ->whereBetween('created_at', [$startDate, $endDate])
-                ->groupBy(DB::raw('DATE(created_at)'))
-                ->orderBy('date')
-                ->get();
-
-            /* ---------- Scores over time for this student ---------- */
-            $scoresOverTime = DB::table('quizz_results')
-                ->select(
-                    DB::raw('DATE(created_at) as date'),
-                    DB::raw('AVG(percentage) as avg_percentage')
-                )
-                ->where('user_id', $userId)
-                ->whereBetween('created_at', [$startDate, $endDate])
-                ->groupBy(DB::raw('DATE(created_at)'))
-                ->orderBy('date')
-                ->get();
-
-            /* ---------- Recent attempts (last 5) ---------- */
-            $recentAttempts = DB::table('quizz_attempts as qa')
-                ->join('quizz as q', 'q.id', '=', 'qa.quiz_id')
-                ->leftJoin('quizz_results as qr', 'qr.attempt_id', '=', 'qa.id')
-                ->whereNull('qa.deleted_at')
-                ->where('qa.user_id', $userId)
-                ->orderByDesc('qa.created_at')
-                ->limit(5)
-                ->get([
-                    'qa.id                   as attempt_id',
-                    'qa.uuid                 as attempt_uuid',
-                    'qa.status               as attempt_status',
-                    'qa.started_at           as started_at',
-                    'qa.finished_at          as finished_at',
-                    'qa.server_deadline_at   as server_deadline_at',
-                    'q.id                    as quiz_id',
-                    'q.uuid                  as quiz_uuid',
-                    'q.quiz_name',
-                    'q.total_questions',
-                    'q.total_time',
-                    'qr.id                   as result_id',
-                    'qr.percentage           as result_percentage',
-                    'qr.marks_obtained',
-                    'qr.total_marks',
-                ]);
-
-            /* ---------- Upcoming / active quizzes (assignments not yet completed) ---------- */
-            $completedSub = DB::table('quizz_attempts')
-                ->select('quiz_id')
-                ->where('user_id', $userId)
-                ->whereIn('status', ['submitted','auto_submitted'])
-                ->groupBy('quiz_id');
-
-            $upcomingQuizzes = DB::table('user_quiz_assignments as uqa')
-                ->join('quizz as q', 'q.id', '=', 'uqa.quiz_id')
-                ->leftJoinSub($completedSub, 'cq', function ($join) {
-                    $join->on('cq.quiz_id', '=', 'q.id');
-                })
-                ->where('uqa.user_id', $userId)
-                ->whereNull('uqa.deleted_at')
-                ->where('uqa.status', 'active')
-                ->whereNull('q.deleted_at')
-                ->where('q.status', 'active')
-                ->whereNull('cq.quiz_id')
-                ->orderByDesc('uqa.assigned_at')
-                ->limit(5)
-                ->get([
-                    'q.id                as quiz_id',
-                    'q.uuid              as quiz_uuid',
-                    'q.quiz_name',
-                    'q.total_questions',
-                    'q.total_time',
-                    'q.result_set_up_type',
-                    'uqa.assignment_code',
-                    'uqa.assigned_at',
-                ]);
-
-            return response()->json([
-                'status'  => 'success',
-                'message' => 'Student dashboard data fetched successfully',
-                'data'    => [
-                    'summary_counts'     => $summaryCounts,
-                    'quick_stats'        => $quickStats,
-                    'attempts_over_time' => $attemptsOverTime,
-                    'scores_over_time'   => $scoresOverTime,
-                    'recent_attempts'    => $recentAttempts,
-                    'upcoming_quizzes'   => $upcomingQuizzes,
-                    'date_range' => [
-                        'start'  => $startDate->toDateString(),
-                        'end'    => $endDate->toDateString(),
-                        'period' => $period,
-                    ],
-                ],
-            ]);
-        } catch (\Throwable $e) {
-            Log::error('[Dashboard Student] Failed to build dashboard', [
-                'user_id' => $userId,
-                'error'   => $e->getMessage(),
-                'trace'   => $e->getTraceAsString(),
-            ]);
-
-            return response()->json([
-                'status'  => 'error',
-                'message' => 'Failed to fetch student dashboard data',
-            ], 500);
-        }
+   public function studentDashboard(Request $request)
+{
+    // Allow student; also useful to let admin/super_admin inspect a student's view
+    if ($resp = $this->requireRole($request, ['student','admin','super_admin'])) {
+        return $resp;
     }
 
+    $actor   = $this->actor($request);
+    $userId  = (int) ($actor['id'] ?? 0);
+    $role    = (string) ($actor['role'] ?? '');
+    $isStudent = ($role === 'student'); // ✅ only students should be restricted by publish_to_student
+
+    if (!$userId) {
+        return response()->json([
+            'status'  => 'error',
+            'message' => 'Unable to resolve user from token',
+        ], 403);
+    }
+
+    try {
+        $period    = (string) $request->query('period', '30d');
+        $range     = $this->getDateRange($period);
+        $startDate = $range['start'];
+        $endDate   = $range['end'];
+        $period    = $range['period'];
+        $today     = Carbon::today();
+
+        // ✅ helper: always return a FRESH builder for quizz_results with publish restriction for students
+        $resultsBase = function () use ($userId, $isStudent) {
+            $q = DB::table('quizz_results')->where('user_id', $userId);
+            if ($isStudent) {
+                $q->where('publish_to_student', 1);
+            }
+            return $q;
+        };
+
+        /* ---------- Summary counts for this student ---------- */
+        $assignedQuizzesCount = DB::table('user_quiz_assignments')
+            ->where('user_id', $userId)
+            ->whereNull('deleted_at')
+            ->where('status', 'active')
+            ->count();
+
+        $totalAttempts = DB::table('quizz_attempts')
+            ->whereNull('deleted_at')
+            ->where('user_id', $userId)
+            ->count();
+
+        $completedAttempts = DB::table('quizz_attempts')
+            ->whereNull('deleted_at')
+            ->where('user_id', $userId)
+            ->whereIn('status', ['submitted','auto_submitted'])
+            ->count();
+
+        // ✅ results count only if published_to_student (for student role)
+        $resultsTotal = $resultsBase()->count();
+
+        // ✅ avg only if published_to_student (for student role)
+        $avgRow = $resultsBase()
+            ->select(DB::raw('AVG(percentage) as avg_percentage'))
+            ->first();
+
+        $avgPercentage = $avgRow && $avgRow->avg_percentage !== null
+            ? round((float) $avgRow->avg_percentage, 2)
+            : 0.0;
+
+        // ✅ best only if published_to_student (for student role)
+        $bestRow = $resultsBase()
+            ->orderByDesc('percentage')
+            ->select('quiz_id','percentage','marks_obtained','total_marks')
+            ->first();
+
+        $bestPerformance = $bestRow ? [
+            'quiz_id'        => (int) $bestRow->quiz_id,
+            'percentage'     => (float) $bestRow->percentage,
+            'marks_obtained' => (int) $bestRow->marks_obtained,
+            'total_marks'    => (int) $bestRow->total_marks,
+        ] : null;
+
+        $summaryCounts = [
+            'assigned_quizzes'    => $assignedQuizzesCount,
+            'total_attempts'      => $totalAttempts,
+            'completed_attempts'  => $completedAttempts,
+            'total_results'       => $resultsTotal,
+            'average_percentage'  => $avgPercentage,
+            'best_performance'    => $bestPerformance,
+        ];
+
+        /* ---------- Quick stats for today ---------- */
+        $todayAttemptsStarted = DB::table('quizz_attempts')
+            ->whereNull('deleted_at')
+            ->where('user_id', $userId)
+            ->whereDate('created_at', $today)
+            ->count();
+
+        $todayAttemptsCompleted = DB::table('quizz_attempts')
+            ->whereNull('deleted_at')
+            ->where('user_id', $userId)
+            ->whereIn('status', ['submitted','auto_submitted'])
+            ->whereDate('finished_at', $today)
+            ->count();
+
+        $todayTimeSpent = DB::table('quizz_attempt_answers as qaa')
+            ->join('quizz_attempts as qa', 'qa.id', '=', 'qaa.attempt_id')
+            ->where('qa.user_id', $userId)
+            ->whereDate('qaa.answered_at', $today)
+            ->sum('qaa.time_spent_sec');
+
+        $quickStats = [
+            'today_attempts_started'   => $todayAttemptsStarted,
+            'today_attempts_completed' => $todayAttemptsCompleted,
+            'today_time_spent_sec'     => (int) $todayTimeSpent,
+        ];
+
+        /* ---------- Attempts over time for this student ---------- */
+        $attemptsOverTime = DB::table('quizz_attempts')
+            ->select(
+                DB::raw('DATE(created_at) as date'),
+                DB::raw('COUNT(*) as count')
+            )
+            ->whereNull('deleted_at')
+            ->where('user_id', $userId)
+            ->whereBetween('created_at', [$startDate, $endDate])
+            ->groupBy(DB::raw('DATE(created_at)'))
+            ->orderBy('date')
+            ->get();
+
+        /* ---------- Scores over time for this student (ONLY published for students) ---------- */
+        $scoresOverTime = $resultsBase()
+            ->select(
+                DB::raw('DATE(created_at) as date'),
+                DB::raw('AVG(percentage) as avg_percentage')
+            )
+            ->whereBetween('created_at', [$startDate, $endDate])
+            ->groupBy(DB::raw('DATE(created_at)'))
+            ->orderBy('date')
+            ->get();
+
+        /* ---------- Recent attempts (last 5) ---------- */
+        $recentAttempts = DB::table('quizz_attempts as qa')
+            ->join('quizz as q', 'q.id', '=', 'qa.quiz_id')
+            // ✅ attach result ONLY if published_to_student for student role
+            ->leftJoin('quizz_results as qr', function ($join) use ($isStudent) {
+                $join->on('qr.attempt_id', '=', 'qa.id');
+                if ($isStudent) {
+                    $join->where('qr.publish_to_student', 1);
+                }
+            })
+            ->whereNull('qa.deleted_at')
+            ->where('qa.user_id', $userId)
+            ->orderByDesc('qa.created_at')
+            ->limit(5)
+            ->get([
+                'qa.id                   as attempt_id',
+                'qa.uuid                 as attempt_uuid',
+                'qa.status               as attempt_status',
+                'qa.started_at           as started_at',
+                'qa.finished_at          as finished_at',
+                'qa.server_deadline_at   as server_deadline_at',
+                'q.id                    as quiz_id',
+                'q.uuid                  as quiz_uuid',
+                'q.quiz_name',
+                'q.total_questions',
+                'q.total_time',
+                'qr.id                   as result_id',
+                'qr.percentage           as result_percentage',
+                'qr.marks_obtained',
+                'qr.total_marks',
+            ]);
+
+        /* ---------- Upcoming / active quizzes (assignments not yet completed) ---------- */
+        $completedSub = DB::table('quizz_attempts')
+            ->select('quiz_id')
+            ->where('user_id', $userId)
+            ->whereIn('status', ['submitted','auto_submitted'])
+            ->groupBy('quiz_id');
+
+        $upcomingQuizzes = DB::table('user_quiz_assignments as uqa')
+            ->join('quizz as q', 'q.id', '=', 'uqa.quiz_id')
+            ->leftJoinSub($completedSub, 'cq', function ($join) {
+                $join->on('cq.quiz_id', '=', 'q.id');
+            })
+            ->where('uqa.user_id', $userId)
+            ->whereNull('uqa.deleted_at')
+            ->where('uqa.status', 'active')
+            ->whereNull('q.deleted_at')
+            ->where('q.status', 'active')
+            ->whereNull('cq.quiz_id')
+            ->orderByDesc('uqa.assigned_at')
+            ->limit(5)
+            ->get([
+                'q.id                as quiz_id',
+                'q.uuid              as quiz_uuid',
+                'q.quiz_name',
+                'q.total_questions',
+                'q.total_time',
+                'q.result_set_up_type',
+                'uqa.assignment_code',
+                'uqa.assigned_at',
+            ]);
+
+        return response()->json([
+            'status'  => 'success',
+            'message' => 'Student dashboard data fetched successfully',
+            'data'    => [
+                'summary_counts'     => $summaryCounts,
+                'quick_stats'        => $quickStats,
+                'attempts_over_time' => $attemptsOverTime,
+                'scores_over_time'   => $scoresOverTime,   // ✅ empty if not published (for students)
+                'recent_attempts'    => $recentAttempts,   // ✅ result_* null if not published (for students)
+                'upcoming_quizzes'   => $upcomingQuizzes,
+                'date_range' => [
+                    'start'  => $startDate->toDateString(),
+                    'end'    => $endDate->toDateString(),
+                    'period' => $period,
+                ],
+            ],
+        ]);
+    } catch (\Throwable $e) {
+        Log::error('[Dashboard Student] Failed to build dashboard', [
+            'user_id' => $userId,
+            'error'   => $e->getMessage(),
+            'trace'   => $e->getTraceAsString(),
+        ]);
+
+        return response()->json([
+            'status'  => 'error',
+            'message' => 'Failed to fetch student dashboard data',
+        ], 500);
+    }
+}
         /* =========================================================
      | Examiner dashboard
      | GET /api/dashboard/examiner

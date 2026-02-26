@@ -418,7 +418,7 @@ html.theme-dark .badge-code{
     <!-- ✅ NEW -->
     <th style="width:180px;">Folder</th>
 
-    <th style="width:140px;" class="text-center">Quizzes</th>
+    <th style="width:140px;" class="text-center">CV</th>
     <!-- <th style="width:160px;" class="text-center">Bubble Games</th> -->
     <th style="width:110px;" class="text-end">Actions</th>
   </tr>

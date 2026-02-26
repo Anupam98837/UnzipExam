@@ -818,7 +818,7 @@ function renderQuestion(){
 
   $('#prev-btn').disabled = currentIndex === 0;
   $('#next-btn .lbl').innerHTML =
-    (currentIndex < questions.length - 1)
+    (currentIndex < questions.length - 1) 
       ? `Next<i class="fa-solid fa-arrow-right ms-2"></i>`
       : `Submit<i class="fa-solid fa-paper-plane ms-2"></i>`;
 

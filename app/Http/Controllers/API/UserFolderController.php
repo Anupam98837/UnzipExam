@@ -42,8 +42,7 @@ class UserFolderController extends Controller
         $out = [];
         foreach ($rows as $r) {
             $id = (int) $r->id;
-            if (!isset($exclude[$id])) $out[] = ['id' => $id, 'role' => 'admin', 'read' => 0];
-        }
+         }
         return $out;
     }
 

@@ -126,91 +126,171 @@ class AboutUsController extends Controller
             ]
         ]);
     }
+/**
+ * POST /api/about-us
+ * Create or Update
+ */
+public function store(Request $request)
+{
+    /* =========================================================
+     | DEBUG: request snapshot (before validation)
+     * ========================================================= */
+    try {
+        Log::info('[AboutUs][STORE] Incoming request', [
+            'content_type'    => $request->header('Content-Type'),
+            'accept'          => $request->header('Accept'),
+            'method'          => $request->method(),
+            'url'             => $request->fullUrl(),
+            'ip'              => $request->ip(),
+            'auth_role'       => $request->attributes->get('auth_role'),
+            'auth_actor_id'   => $request->attributes->get('auth_tokenable_id'),
+            'has_file_image'  => $request->hasFile('image'),
+            'file_valid'      => $request->hasFile('image') ? $request->file('image')->isValid() : null,
+            'file_mime'       => $request->hasFile('image') ? $request->file('image')->getMimeType() : null,
+            'file_ext'        => $request->hasFile('image') ? $request->file('image')->getClientOriginalExtension() : null,
+            'file_size_bytes' => $request->hasFile('image') ? $request->file('image')->getSize() : null,
+            'keys'            => array_keys($request->all()),
+            // avoid dumping huge content in logs
+            'title_len'       => is_string($request->input('title')) ? strlen($request->input('title')) : null,
+            'content_type_php'=> gettype($request->input('content')),
+            'content_len'     => is_string($request->input('content')) ? strlen($request->input('content')) : null,
+            // helpful when frontend accidentally sends image path string
+            'image_input_type'=> gettype($request->input('image')),
+            'image_input_val' => is_string($request->input('image')) ? $request->input('image') : null,
+        ]);
+    } catch (\Throwable $e) {
+        Log::error('[AboutUs][STORE] Debug snapshot failed', ['error' => $e->getMessage()]);
+    }
 
-    /**
-     * POST /api/about-us
-     * Create or Update
-     */
-    public function store(Request $request)
-    {
-        $validator = Validator::make($request->all(), [
-            'title'   => ['required', 'string', 'max:255'],
-            'content' => ['required', 'string'],
-            'image'   => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+    $validator = Validator::make($request->all(), [
+        'title'   => ['required', 'string', 'max:255'],
+        'content' => ['required', 'string'],
+        'image'   => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+    ]);
+
+    if ($validator->fails()) {
+        /* =========================================================
+         | DEBUG: validation failure details
+         * ========================================================= */
+        Log::warning('[AboutUs][STORE] Validation failed', [
+            'errors'        => $validator->errors()->toArray(),
+            // show a safe subset of payload
+            'payload_peek'  => [
+                'title'   => $request->input('title'),
+                'content' => is_string($request->input('content')) ? substr($request->input('content'), 0, 200) : $request->input('content'),
+                'image'   => is_string($request->input('image')) ? $request->input('image') : null,
+            ],
+            'has_file_image'=> $request->hasFile('image'),
+            'file_mime'     => $request->hasFile('image') ? $request->file('image')->getMimeType() : null,
+            'file_size_kb'  => $request->hasFile('image') ? round($request->file('image')->getSize() / 1024, 2) : null,
         ]);
 
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'errors'  => $validator->errors()
-            ], 422);
-        }
+        return response()->json([
+            'success' => false,
+            'errors'  => $validator->errors()
+        ], 422);
+    }
 
-        $now = Carbon::now();
-        $existing = $this->getAboutUsEntry();
-        $before = $existing ? (array)$existing : null;
+    $now = Carbon::now();
+    $existing = $this->getAboutUsEntry();
+    $before = $existing ? (array)$existing : null;
 
+    /* =========================================================
+     | DEBUG: existing record snapshot
+     * ========================================================= */
+    Log::info('[AboutUs][STORE] Existing record', [
+        'exists'   => (bool) $existing,
+        'id'       => $existing->id ?? null,
+        'has_image'=> !empty($existing->image ?? null),
+        'image'    => $existing->image ?? null,
+    ]);
+
+    // upload image
+    try {
         $imagePath = $this->uploadImage($existing, $request);
+        Log::info('[AboutUs][STORE] Image resolved', [
+            'imagePath' => $imagePath,
+        ]);
+    } catch (\Throwable $e) {
+        Log::error('[AboutUs][STORE] uploadImage failed', [
+            'error' => $e->getMessage(),
+        ]);
 
-        if ($existing) {
-            // UPDATE
-            DB::table('about_us')->where('id', $existing->id)->update([
-                'title'      => $request->title,
-                'content'    => $request->content,
-                'image'      => $imagePath,
-                'updated_at' => $now,
-            ]);
+        return response()->json([
+            'success' => false,
+            'message' => 'Image upload failed',
+            'error'   => $e->getMessage(),
+        ], 500);
+    }
 
-            $about = $this->getAboutUsEntry();
-
-            // ✅ ACTIVITY LOG (POST -> update)
-            $this->logActivity(
-                $request,
-                'update',
-                'Updated About Us (via POST)',
-                'about_us',
-                (int)$existing->id,
-                ['title', 'content', 'image'],
-                $before,
-                $about ? (array)$about : null
-            );
-
-            return response()->json([
-                'success' => true,
-                'message' => 'About Us updated successfully',
-                'about'   => $about
-            ], 200);
-        }
-
-        // CREATE
-        DB::table('about_us')->insert([
+    if ($existing) {
+        // UPDATE
+        DB::table('about_us')->where('id', $existing->id)->update([
             'title'      => $request->title,
             'content'    => $request->content,
             'image'      => $imagePath,
-            'created_at' => $now,
             'updated_at' => $now,
         ]);
 
-        $created = $this->getAboutUsEntry();
+        $about = $this->getAboutUsEntry();
 
-        // ✅ ACTIVITY LOG (POST -> store)
+        Log::info('[AboutUs][STORE] Updated successfully', [
+            'id'    => (int) $existing->id,
+            'image' => $about->image ?? null
+        ]);
+
         $this->logActivity(
             $request,
-            'store',
-            'Created About Us',
+            'update',
+            'Updated About Us (via POST)',
             'about_us',
-            $created ? (int)$created->id : null,
+            (int)$existing->id,
             ['title', 'content', 'image'],
-            null,
-            $created ? (array)$created : null
+            $before,
+            $about ? (array)$about : null
         );
 
         return response()->json([
             'success' => true,
-            'message' => 'About Us created successfully',
-            'about'   => $created
-        ], 201);
+            'message' => 'About Us updated successfully',
+            'about'   => $about
+        ], 200);
     }
+
+    // CREATE
+    DB::table('about_us')->insert([
+        'title'      => $request->title,
+        'content'    => $request->content,
+        'image'      => $imagePath,
+        'created_at' => $now,
+        'updated_at' => $now,
+    ]);
+
+    $created = $this->getAboutUsEntry();
+
+    Log::info('[AboutUs][STORE] Created successfully', [
+        'id'    => $created->id ?? null,
+        'image' => $created->image ?? null
+    ]);
+
+    $this->logActivity(
+        $request,
+        'store',
+        'Created About Us',
+        'about_us',
+        $created ? (int)$created->id : null,
+        ['title', 'content', 'image'],
+        null,
+        $created ? (array)$created : null
+    );
+
+    return response()->json([
+        'success' => true,
+        'message' => 'About Us created successfully',
+        'about'   => $created
+    ], 201);
+}
+
 
     /**
      * GET /api/about-us/check

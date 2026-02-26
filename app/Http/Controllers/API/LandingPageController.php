@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Storage;
-
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Auth;
@@ -209,65 +208,67 @@ class LandingPageController extends Controller
      * - Normal web: redirects with flash message
      */
     public function updatesStore(Request $request)
-    {
-        $validated = $request->validate([
-            'title'         => ['required', 'string'],
-            'description'   => ['nullable', 'string'],
-            'display_order' => ['nullable', 'integer', 'min:0'],
+{
+    $validated = $request->validate([
+        'title'         => ['required', 'string'],
+        'description'   => ['nullable', 'string'],
+        'display_order' => ['nullable', 'integer', 'min:0'],
+    ]);
+
+    // ✅ Get actor from your middleware attrs first, fallback to Auth::id()
+    $actorId = (int) ($request->attributes->get('auth_tokenable_id') ?? Auth::id() ?? 0);
+
+    try {
+        $this->logInfo('updatesStore: inserting update', [
+            'payload' => $validated,
+            'actorId' => $actorId,
         ]);
 
-        try {
-            $this->logInfo('updatesStore: inserting update', ['payload' => $validated]);
+        // ✅ Build insert data
+        $insert = [
+            'uuid'          => (string) Str::uuid(),
+            'title'         => $validated['title'],
+            'description'   => $validated['description'] ?? null,
+            'display_order' => $validated['display_order'] ?? 0,
+            'created_by'    => $actorId ?: null,   // if your DB requires NOT NULL, set 0 instead of null
+            'created_at'    => now(),
+            'updated_at'    => now(),
+            'deleted_at'    => null,
+        ];
 
-            $id = DB::table('landingpage_updates')->insertGetId([
-                'uuid'          => (string) Str::uuid(),
-                'title'         => $validated['title'],
-                'description'   => $validated['description'] ?? null,
-                'display_order' => $validated['display_order'] ?? 0,
-                'created_by'    => Auth::id(),
-                'created_at'    => now(),
-                'updated_at'    => now(),
-                'deleted_at'    => null,
-            ]);
+        // ✅ Prevent “Unknown column …” crashes (auto-drop non-existing columns)
+        $cols = Schema::getColumnListing('landingpage_updates');
+        $insert = array_intersect_key($insert, array_flip($cols));
 
-            $this->logInfo('updatesStore: insert success', ['id' => $id]);
+        $id = DB::table('landingpage_updates')->insertGetId($insert);
 
-            $newRow = DB::table('landingpage_updates')->where('id', $id)->first();
-            $this->logActivityDb($request, 'create', 'landingpage_updates created', [
-                'endpoint' => 'updatesStore',
-                'payload' => $validated,
-            ], 'landingpage_updates', (int)$id, null, $newRow);
+        $this->logInfo('updatesStore: insert success', ['id' => $id]);
 
-        } catch (\Throwable $e) {
-            $this->logError($e, 'updatesStore: insert failed', ['payload' => $validated]);
+        $newRow = DB::table('landingpage_updates')->where('id', $id)->first();
+        $this->logActivityDb($request, 'create', 'landingpage_updates created', [
+            'endpoint' => 'updatesStore',
+            'payload'  => $validated,
+        ], 'landingpage_updates', (int) $id, null, $newRow);
 
-            if ($request->expectsJson()) {
-                return response()->json([
-                    'status'  => 'error',
-                    'message' => 'Failed to create update.',
-                    'error'   => $e->getMessage(),
-                ], 500);
-            }
+        return response()->json([
+            'status'  => 'success',
+            'message' => 'Update created successfully.',
+            'data'    => $newRow,
+        ], 201);
 
-            throw $e;
-        }
+    } catch (\Throwable $e) {
+        $this->logError($e, 'updatesStore: insert failed', [
+            'payload' => $validated,
+            'actorId' => $actorId,
+        ]);
 
-        // If request expects JSON (your JS fetch has Accept: application/json)
-        if ($request->expectsJson()) {
-            $new = DB::table('landingpage_updates')->where('id', $id)->first();
-
-            return response()->json([
-                'status'  => 'success',
-                'message' => 'Update created successfully.',
-                'data'    => $new,
-            ], 201);
-        }
-
-        // Fallback for normal web form
-        return redirect()
-            ->route('landing.updates.index')
-            ->with('success', 'Update created successfully.');
+        return response()->json([
+            'status'  => 'error',
+            'message' => 'Failed to create update.',
+            'error'   => $e->getMessage(), // ✅ now your frontend can show exact reason
+        ], 500);
     }
+}
 
     /**
      * Admin: update an existing update.

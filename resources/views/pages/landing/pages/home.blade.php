@@ -1,4 +1,4 @@
-@include('landing.components.header')
+@include('pages.landing.components.header')
 
 <!-- Hero Section - Exam Portal -->
 <section class="lp-hero">
@@ -25,11 +25,11 @@
       
       <!-- CTA Buttons -->
       <div class="lp-hero-ctas">
-        <a href="/register" class="lp-btn-primary lp-btn-large">
+        <a href="/register" class="lp-btn-primary lp-btn-large d-none">
           Get Started Free
           <i class="fa-solid fa-arrow-right"></i>
         </a>
-        <a href="/demo" class="lp-btn-secondary lp-btn-large">
+        <a href="/demo" class="lp-btn-secondary lp-btn-large d-none">
           <i class="fa-solid fa-play-circle"></i>
           Watch Demo
         </a>
@@ -85,57 +85,40 @@
     
     <!-- Right visuals: exam-related images -->
     <div class="lp-hero-visual lp-animate lp-animate-delay-1" data-lp-animate="fade">
-      <div class="lp-hero-image-container">
-        <div class="lp-hero-stack-wrap">
-          <button type="button" class="lp-hero-nav lp-hero-nav-prev" id="heroPrevBtn">
-            <i class="fa-solid fa-chevron-left"></i>
-          </button>
-          <div class="lp-hero-stack" id="heroImageStack">
-            <div class="lp-hero-card-img is-active">
-              <img src="https://images.pexels.com/photos/5905857/pexels-photo-5905857.jpeg?auto=compress&cs=tinysrgb&w=1200" alt="Online Examination">
-              <div class="image-overlay"></div>
-            </div>
-            <div class="lp-hero-card-img is-next">
-              <img src="https://images.pexels.com/photos/4144923/pexels-photo-4144923.jpeg?auto=compress&cs=tinysrgb&w=1200" alt="Digital Assessment">
-              <div class="image-overlay"></div>
-            </div>
-            <div class="lp-hero-card-img is-far">
-              <img src="https://images.pexels.com/photos/5940831/pexels-photo-5940831.jpeg?auto=compress&cs=tinysrgb&w=1200" alt="Student Taking Test">
-              <div class="image-overlay"></div>
-            </div>
-            <div class="lp-hero-card-img is-far">
-              <img src="https://images.pexels.com/photos/3807755/pexels-photo-3807755.jpeg?auto=compress&cs=tinysrgb&w=1200" alt="Secure Testing">
-              <div class="image-overlay"></div>
-            </div>
-            <div class="lp-hero-card-img is-prev">
-              <img src="https://images.pexels.com/photos/5940841/pexels-photo-5940841.jpeg?auto=compress&cs=tinysrgb&w=1200" alt="Online Learning">
-              <div class="image-overlay"></div>
-            </div>
-          </div>
-          <button type="button" class="lp-hero-nav lp-hero-nav-next" id="heroNextBtn">
-            <i class="fa-solid fa-chevron-right"></i>
-          </button>
+  <div class="lp-hero-image-container">
+    <div class="lp-hero-stack-wrap">
+      <button type="button" class="lp-hero-nav lp-hero-nav-prev" id="heroPrevBtn">
+        <i class="fa-solid fa-chevron-left"></i>
+      </button>
+
+      <!-- ✅ Dynamic stack: JS will inject .lp-hero-card-img here -->
+      <div class="lp-hero-stack" id="heroImageStack"></div>
+
+      <button type="button" class="lp-hero-nav lp-hero-nav-next" id="heroNextBtn">
+        <i class="fa-solid fa-chevron-right"></i>
+      </button>
+    </div>
+
+    <!-- Floating cards for modern effect -->
+    <div class="lp-floating-cards">
+      <div class="float-card float-card-1">
+        <i class="fa-solid fa-users"></i>
+        <div>
+          <strong>2M+</strong>
+          <span>Active Users</span>
         </div>
-        
-        <!-- Floating cards for modern effect -->
-        <div class="lp-floating-cards">
-          <div class="float-card float-card-1">
-            <i class="fa-solid fa-users"></i>
-            <div>
-              <strong>2M+</strong>
-              <span>Active Users</span>
-            </div>
-          </div>
-          <div class="float-card float-card-2">
-            <i class="fa-solid fa-star"></i>
-            <div>
-              <strong>4.9/5</strong>
-              <span>Rating</span>
-            </div>
-          </div>
+      </div>
+      <div class="float-card float-card-2">
+        <i class="fa-solid fa-star"></i>
+        <div>
+          <strong>4.9/5</strong>
+          <span>Rating</span>
         </div>
       </div>
     </div>
+  </div>
+</div>
+
   </div>
   
   <!-- Background decoration -->
@@ -2123,6 +2106,63 @@
     text-align: left;
   }
 }
+.lp-hero-nav-prev{left:1px;}
+.lp-hero-nav-next{right:1px;}
+/* =========================================================
+   Hero Image Stack — Slide States
+   ========================================================= */
+
+/* Hide all cards by default */
+.lp-hero-card-img {
+  opacity: 0;
+  transform: scale(0.92) translateX(60px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Active (center/front) slide */
+.lp-hero-card-img.is-active {
+  opacity: 1;
+  transform: scale(1) translateX(0);
+  pointer-events: auto;
+  z-index: 3;
+}
+
+/* Next slide (peeking from right) */
+.lp-hero-card-img.is-next {
+  opacity: 0.45;
+  transform: scale(0.94) translateX(48px);
+  z-index: 2;
+}
+
+/* Prev slide (peeking from left) */
+.lp-hero-card-img.is-prev {
+  opacity: 0.45;
+  transform: scale(0.94) translateX(-48px);
+  z-index: 2;
+}
+
+/* All other slides — fully hidden */
+.lp-hero-card-img.is-far {
+  opacity: 0;
+  transform: scale(0.88) translateX(80px);
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* Smooth transitions */
+.lp-hero-card-img {
+  transition: opacity 0.55s cubic-bezier(0.4, 0, 0.2, 1),
+              transform 0.55s cubic-bezier(0.4, 0, 0.2, 1);
+}
+/* Fix float cards appearing above the image stack */
+.lp-floating-cards {
+  z-index: 10;
+}
+
+.float-card {
+  z-index: 10;
+}
 </style>
 
-@include('landing.components.footer')
+@include('pages.landing.components.footer')

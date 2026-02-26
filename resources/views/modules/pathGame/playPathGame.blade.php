@@ -879,8 +879,45 @@ background: linear-gradient(135deg,
     }
   </style>
 </head>
-
 <body>
+
+<!-- Tab Switch Overlay -->
+<div id="pgxViolationOverlay" style="
+  position:fixed; top:0; left:0; width:100%; height:100%;
+  background:rgba(0,0,0,0.95); z-index:9999;
+  display:none; align-items:center; justify-content:center;
+  backdrop-filter:blur(10px);">
+  <div style="background:white; padding:3rem; border-radius:20px;
+    text-align:center; max-width:500px; box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+    <div style="font-size:4rem; color:#ef4444; margin-bottom:1rem;">
+      <i class="fa-solid fa-triangle-exclamation"></i>
+    </div>
+    <div style="font-size:1.5rem; font-weight:700; color:#111827; margin-bottom:1rem;">Tab Switch Detected!</div>
+    <div style="color:#6b7280; margin-bottom:2rem; line-height:1.6;">
+      You have left the exam window. This action has been logged.<br><br>
+      <strong>Please return to the exam and stay focused.</strong>
+    </div>
+    <div style="font-size:2rem; font-weight:700; color:#ef4444; margin-bottom:1rem;">
+      Violation #<span id="pgxViolationCount">1</span>
+    </div>
+    <button id="pgxReturnBtn" onclick="document.getElementById('pgxViolationOverlay').style.display='none'; pgxTabLogged=false; pgxRequestFullscreen();"
+      style="padding:12px 24px; font-size:15px; border-radius:14px; border:none; cursor:pointer;
+        background:linear-gradient(135deg,#5b5bd6,#9b4dff); color:#fff; font-weight:900; display:inline-flex; align-items:center; gap:8px;">
+      <i class="fa-solid fa-arrow-left"></i> Return to Game
+    </button>
+  </div>
+</div>
+
+<!-- Violation Badge -->
+<div id="pgxViolationBadge" style="
+  position:fixed; top:80px; right:20px; z-index:1000;
+  background:#fee; border:2px solid #ef4444;
+  padding:0.5rem 1rem; border-radius:10px;
+  font-weight:600; color:#dc2626; display:none;">
+  <i class="fa-solid fa-exclamation-triangle me-2"></i>
+  Violations: <span id="pgxBadgeCount">0</span>
+</div>
+
 <div class="pgx-exam" id="pgxExam">
   <div class="pgx-shell">
 
@@ -896,7 +933,7 @@ background: linear-gradient(135deg,
       </div>
 
       <div class="pgx-actions">
-        <a class="pgx-btn" href="/dashboard" id="pgxQuitBtn"><i class="fa-solid fa-house"></i> Dashboard</a>
+        <a class="pgx-btn" href="/quizzes" id="pgxQuitBtn"><i class="fa-solid fa-house"></i> Dashboard</a>
         <button class="pgx-btn success" id="pgxValidateBtn" type="button">
           <i class="fa-solid fa-check"></i> Validate
         </button>
@@ -939,10 +976,9 @@ background: linear-gradient(135deg,
           {{-- ✅ PRO GRID BOARD --}}
           <div class="pgx-board" id="pgxBoardWrap">
             <div id="pgxBoard" class="pgx-gridBoard" style="--N:3">
-
               {{-- Tiles layer only --}}
               <div id="pgxTilesLayer" class="pgx-tilesLayer" style="--N:3">
-                <div class="text-white fw-bold d-flex align-items-center gap-2">
+               <div class="text-white fw-bold d-flex align-items-center gap-2">
                   <span class="spinner-border spinner-border-sm"></span>
                   Loading tiles…
                 </div>
@@ -1080,58 +1116,6 @@ background: linear-gradient(135deg,
   </div>
 </div>
 
-
-{{-- ✅ INTRO MODAL --}}
-<div class="modal fade" id="pgxIntroModal" tabindex="-1"
-     data-bs-backdrop="static" data-bs-keyboard="false" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered modal-lg">
-    <div class="modal-content"
-         style="border-radius:18px;border:1px solid rgba(2,6,23,.12);box-shadow:0 18px 60px rgba(2,6,23,.24);overflow:hidden;">
-      <div class="modal-header"
-           style="background:linear-gradient(135deg, rgba(91,91,214,.12), rgba(155,77,255,.14));border-bottom:1px solid rgba(2,6,23,.10);">
-        <div class="d-flex align-items-center gap-2">
-          <div style="width:44px;height:44px;border-radius:14px;display:flex;align-items:center;justify-content:center;background:rgba(91,91,214,.18);border:1px solid rgba(91,91,214,.28);">
-            <i class="fa-solid fa-circle-info" style="color:var(--pgx-accent,#9b4dff)"></i>
-          </div>
-          <div class="min-w-0">
-            <div id="pgxIntroTitle" style="font-weight:950;font-size:1.02rem;line-height:1.15;">Path Game • Instructions</div>
-            <div class="small text-muted">Read before starting</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="modal-body" style="background:var(--pgx-card,#fff);">
-        <div class="pgx-introCard mb-3">
-          <div class="pgx-introTitle"><i class="fa-solid fa-align-left"></i> Description</div>
-          <div id="pgxIntroDesc" class="pgx-introBody">Loading…</div>
-        </div>
-
-        <div class="pgx-introCard">
-          <div class="pgx-introTitle"><i class="fa-solid fa-book-open-reader"></i> Instructions</div>
-          <div id="pgxIntroInstr" class="pgx-introBody">Loading…</div>
-        </div>
-
-        <div class="mt-3 small text-muted d-flex flex-wrap gap-2">
-          <span class="badge rounded-pill text-bg-light"><i class="fa-solid fa-layer-group me-1"></i> <span id="pgxIntroDim">--×--</span></span>
-          <span class="badge rounded-pill text-bg-light"><i class="fa-solid fa-clock me-1"></i> <span id="pgxIntroTime">--</span>s</span>
-          <span class="badge rounded-pill text-bg-light"><i class="fa-solid fa-play me-1"></i> Timer starts after Start</span>
-        </div>
-      </div>
-
-      <div class="modal-footer"
-           style="background:var(--pgx-card,#fff);border-top:1px solid rgba(2,6,23,.10);">
-        <button type="button" id="pgxIntroBack" class="btn btn-light" style="border-radius:14px;">
-          <i class="fa-solid fa-arrow-left me-2"></i>Back
-        </button>
-        <button type="button" id="pgxIntroStart" class="btn btn-primary" style="border-radius:14px;font-weight:900;">
-          <i class="fa-solid fa-play me-2"></i>Start Game
-        </button>
-      </div>
-    </div>
-  </div>
-</div>
-
-
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
@@ -1144,6 +1128,54 @@ background: linear-gradient(135deg,
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
 
 <script>
+  /* ========== Fullscreen & Violation System ========== */
+let pgxViolationCount = 0;
+let pgxIsFullscreen   = false;
+let pgxTabLogged      = false;
+let pgxMonitoring     = false;
+
+function pgxRequestFullscreen(){
+  const el = document.documentElement;
+  if(el.requestFullscreen) el.requestFullscreen().catch(()=>{});
+  else if(el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+  else if(el.msRequestFullscreen) el.msRequestFullscreen();
+}
+
+function pgxUpdateFullscreen(){
+  pgxIsFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement);
+}
+
+document.addEventListener('visibilitychange', ()=>{
+  if(!pgxMonitoring) return;
+  if(document.hidden){
+    if(pgxTabLogged) return;
+    pgxTabLogged = true;
+    pgxViolationCount++;
+    document.getElementById('pgxBadgeCount').textContent = pgxViolationCount;
+    document.getElementById('pgxViolationBadge').style.display = 'block';
+    document.getElementById('pgxViolationCount').textContent = pgxViolationCount;
+    document.getElementById('pgxViolationOverlay').style.display = 'flex';
+  } else {
+    pgxTabLogged = false;
+  }
+});
+
+document.addEventListener('fullscreenchange', ()=>{
+  pgxUpdateFullscreen();
+  if(!pgxIsFullscreen && pgxMonitoring) pgxRequestFullscreen();
+});
+document.addEventListener('webkitfullscreenchange', pgxUpdateFullscreen);
+
+document.addEventListener('mouseover', ()=>{ if(pgxMonitoring && !pgxIsFullscreen) pgxRequestFullscreen(); });
+document.addEventListener('click',     ()=>{ if(pgxMonitoring && !pgxIsFullscreen) pgxRequestFullscreen(); });
+document.addEventListener('contextmenu',(e)=>{ if(!pgxMonitoring) return; e.preventDefault(); if(!pgxIsFullscreen) pgxRequestFullscreen(); });
+document.addEventListener('keydown',(e)=>{
+  if(!pgxMonitoring) return;
+  if(e.key==='F11'){ e.preventDefault(); return; }
+  if((e.ctrlKey||e.metaKey) && ['w','t','n'].includes(e.key.toLowerCase())){ e.preventDefault(); return; }
+  if(e.altKey && e.key==='Tab'){ e.preventDefault(); return; }
+});
+
 (() => {
   /* =========================================================
     PATH GAME PLAY SCRIPT (Updated + Replay v2 Patch)
@@ -2317,7 +2349,7 @@ background: linear-gradient(135deg,
 
   function updateSidebar(){
     elDim.textContent = `${state.N}×${state.N}`;
-    introDimEl.textContent = `${state.N}×${state.N}`;
+    if(introDimEl) introDimEl.textContent = `${state.N}×${state.N}`;
 
     const rotCountTiles = state.tiles.filter(t=> !!t.rotatable).length;
     elRotTiles.textContent = String(rotCountTiles);
@@ -2538,8 +2570,9 @@ background: linear-gradient(135deg,
 
       Swal.close();
       clearCache();
+            pgxMonitoring = false;
       notify('success','Submitted successfully','Redirecting…');
-      setTimeout(()=> location.href='/dashboard', 900);
+      setTimeout(()=> location.href='/quizzes', 900);
 
     }catch(e){
       Swal.close();
@@ -2553,39 +2586,68 @@ background: linear-gradient(135deg,
   elSubmitBtn.addEventListener('click', ()=> submitAttempt(false));
 
   /* ========= Intro modal + Start gating ========= */
-  async function openIntroModal(meta){
-    const modal = new bootstrap.Modal(introEl, { backdrop:'static', keyboard:false });
-    modal.show();
+async function openIntroModal(meta){
+    await Swal.fire({
+      icon: 'info',
+      title: meta?.title ? `${meta.title}` : 'Path Game',
+      html: `
+        <p style="color:#6b7280; margin-bottom:1rem; font-size:.92rem;">
+          ${stripHtml(meta?.description || 'Arrange tiles to create a valid path from Rocket to Earth.')}
+        </p>
+        <ul style="text-align:left; list-style:none; margin:0; padding:0;">
+          <li style="display:flex; align-items:flex-start; gap:.6rem; padding:.5rem .75rem;
+            border-radius:10px; margin-bottom:.4rem; font-size:.9rem;
+            background:#fef2f2; color:#7f1d1d; border:1px solid #fecaca;">
+            <i class="fa-solid fa-expand" style="margin-top:.15rem; flex-shrink:0; color:#ef4444;"></i>
+            <span>You <strong>must stay in fullscreen</strong> mode. Exiting triggers automatic re-entry.</span>
+          </li>
+          <li style="display:flex; align-items:flex-start; gap:.6rem; padding:.5rem .75rem;
+            border-radius:10px; margin-bottom:.4rem; font-size:.9rem;
+            background:#fef2f2; color:#7f1d1d; border:1px solid #fecaca;">
+            <i class="fa-solid fa-arrow-right-from-bracket" style="margin-top:.15rem; flex-shrink:0; color:#ef4444;"></i>
+            <span>Do <strong>not switch tabs</strong>. Each switch is recorded as a violation.</span>
+          </li>
+          <li style="display:flex; align-items:flex-start; gap:.6rem; padding:.5rem .75rem;
+            border-radius:10px; margin-bottom:.4rem; font-size:.9rem;
+            background:#fef2f2; color:#7f1d1d; border:1px solid #fecaca;">
+            <i class="fa-solid fa-rotate" style="margin-top:.15rem; flex-shrink:0; color:#ef4444;"></i>
+            <span>Grid: <strong>${state.N}×${state.N}</strong> — Time: <strong>${state.time_limit_sec}s</strong> — Rotate tiles to build the path.</span>
+          </li>
+          <li style="display:flex; align-items:flex-start; gap:.6rem; padding:.5rem .75rem;
+            border-radius:10px; margin-bottom:.4rem; font-size:.9rem;
+            background:#f0fdf4; color:#14532d; border:1px solid #bbf7d0;">
+            <i class="fa-solid fa-circle-check" style="margin-top:.15rem; flex-shrink:0; color:#16a34a;"></i>
+            <span>Click <strong>"Start Game"</strong> to enter fullscreen and start the timer. Good luck!</span>
+          </li>
+        </ul>`, 
+      confirmButtonText: '<i class="fa-solid fa-play me-2"></i>Start Game',
+      allowOutsideClick: false,
+      allowEscapeKey: false,
+      customClass: { confirmButton: 'btn btn-primary px-4', cancelButton: 'btn btn-light px-4' },
+      buttonsStyling: true,
+    }).then(result => {
+      if(!result.isConfirmed){ history.back(); return; }
 
-    introBackBtn.onclick = ()=>{ modal.hide(); history.back(); };
-    introStartBtn.onclick = async ()=>{
-      modal.hide();
       GAME_ACTIVE = true;
-
       if(!state.startedAtMs) state.startedAtMs = nowMs();
       if(!state.startedAtWall) state.startedAtWall = Date.now();
 
-      // ✅ Replay start + initial rotations snapshot
       state.replay.initial_deg_by_index = buildDegByIndex();
       pushTimeline("start", { current_index: 0 });
       pushSnapshot();
 
+      // Activate violation monitoring
+      pgxMonitoring = true;
+      pgxRequestFullscreen();
+      document.getElementById('pgxViolationBadge').style.display = 'block';
+
       startTimer();
       setRunState('Playing','primary');
-
       if(elStartIcon) elStartIcon.style.display = '';
-
       notify('success','Started','Arrange path till last column, then Launch 🚀');
       refreshLaunchReadyDebounced();
-    };
-
-    introTitleEl.textContent = `${(meta?.title || 'Path Game')} • Instructions`;
-    introDescEl.innerHTML = (meta?.description || 'No description provided.');
-    introInstrEl.innerHTML = (meta?.instructions_html || meta?.instructions || 'Rotate allowed tiles to create a valid path from Rocket to Earth.');
-    introDimEl.textContent = `${state.N}×${state.N}`;
-    introTimeEl.textContent = String(state.time_limit_sec || 60);
+    });
   }
-
   function stripHtml(s){
     return String(s||'').replace(/<[^>]*>?/gm,'').trim();
   }
@@ -2685,13 +2747,20 @@ background: linear-gradient(135deg,
         initial_deg_by_index: {},
         final_deg_by_index: {}
       };
-
+elBoardWrap.style.opacity = '0.4';
+      elBoardWrap.style.pointerEvents = 'none';
       renderTimer();
       renderBoard();
       setRunState('Ready','secondary');
       saveCache();
-
       setRocketVisible(false);
+
+      // Reveal board smoothly once ready
+      requestAnimationFrame(()=>{
+        elBoardWrap.style.transition = 'opacity .4s ease';
+        elBoardWrap.style.opacity = '1';
+        elBoardWrap.style.pointerEvents = '';
+      });
     }
 
     window.addEventListener('resize', ()=>{

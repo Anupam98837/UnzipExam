@@ -543,9 +543,8 @@
     .dgx-btn2:hover{ transform: translateY(-1px); }
     .dgx-btn2:active{ transform: translateY(0px); }
     .dgx-btn2.primary{
-      background: linear-gradient(135deg, #2563eb, #1d4ed8); /* blue */
-  color:#fff; /* ✅ white text */
-  border:1px solid rgba(255,255,255,.18);
+      background: linear-gradient(135deg, var(--dgx-brand), var(--dgx-brand2));
+      color:#fff;
       border-color: rgba(255,255,255,.08);
     }
     .dgx-btn2.danger{ background: rgba(239,68,68,.10); border-color: rgba(239,68,68,.20); color:#ef4444; }
@@ -613,44 +612,6 @@
 </head>
 
 <body>
-  <!-- Fullscreen Warning Overlay -->
-<div id="fullscreen-warning-overlay" style="
-  position:fixed; top:0; left:0; width:100%; height:100%;
-  background:rgba(0,0,0,0.95); z-index:9999;
-  display:none; align-items:center; justify-content:center;
-  backdrop-filter:blur(10px);">
-  <div style="background:white; padding:3rem; border-radius:20px;
-    text-align:center; max-width:500px; box-shadow:0 20px 60px rgba(0,0,0,0.3);">
-    <div style="font-size:4rem; color:#ef4444; margin-bottom:1rem;">
-      <i class="fa-solid fa-triangle-exclamation"></i>
-    </div>
-    <div style="font-size:1.5rem; font-weight:700; color:#111827; margin-bottom:1rem;">
-      Tab Switch Detected!
-    </div>
-    <div style="color:#6b7280; margin-bottom:2rem; line-height:1.6;">
-      You have left the exam window. This action has been logged.
-      <br><br>
-      <strong>Please return to the exam and stay focused.</strong>
-    </div>
-    <div style="font-size:2rem; font-weight:700; color:#ef4444; margin-bottom:1rem;">
-      Violation #<span id="dgxViolationCount">1</span>
-    </div>
-    <button id="dgxReturnBtn" class="dgx-btn2 primary"
-      style="margin:0 auto; padding:12px 24px; font-size:15px; display:inline-flex; align-items:center; gap:8px;">
-      <i class="fa-solid fa-arrow-left"></i> Return to Game
-    </button>
-  </div>
-</div>
-
-<!-- Violation Badge -->
-<div id="dgxViolationBadge" style="
-  position:fixed; top:80px; right:20px; z-index:1000;
-  background:#fee; border:2px solid #ef4444;
-  padding:0.5rem 1rem; border-radius:10px;
-  font-weight:600; color:#dc2626; display:none;">
-  <i class="fa-solid fa-exclamation-triangle me-2"></i>
-  Violations: <span id="dgxBadgeCount">0</span>
-</div>
 <div class="dgx-exam" id="dgxExam">
   <div class="dgx-shell">
 
@@ -662,9 +623,6 @@
           <span class="dgx-pill"><i class="fa-solid fa-border-all"></i> <span id="dgxDim">--×--</span></span>
           <span class="dgx-pill"><i class="fa-solid fa-key"></i> Keys: <span id="dgxKeysNeed">--</span></span>
           <span class="dgx-pill"><i class="fa-solid fa-database"></i> Auto-saved</span>
-          <span class="dgx-pill" id="dgxFullscreenPill">
-  <i class="fa-solid fa-expand"></i> <span id="dgxFullscreenText">Fullscreen</span>
-</span> 
         </div>
       </div>
 
@@ -827,121 +785,6 @@
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 <script>
-  /* ========== Fullscreen & Violation System ========== */
-let dgxViolationCount = 0;
-let dgxIsFullscreen   = false;
-let dgxTabLogged      = false;
-let dgxMonitoring     = false;   // flips to true when game starts
-
-function dgxRequestFullscreen() {
-  const el = document.documentElement;
-  if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
-  else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
-  else if (el.msRequestFullscreen) el.msRequestFullscreen();
-}
-
-function dgxUpdateFullscreenStatus() {
-  dgxIsFullscreen = !!(
-    document.fullscreenElement ||
-    document.webkitFullscreenElement ||
-    document.msFullscreenElement
-  );
-  const text = document.getElementById('dgxFullscreenText');
-  const pill = document.getElementById('dgxFullscreenPill');
-  const icon = pill?.querySelector('i');
-  if (dgxIsFullscreen) {
-    if (text) text.textContent = 'Fullscreen';
-    if (icon) icon.className = 'fa-solid fa-expand';
-  } else {
-    if (text) text.textContent = 'Windowed';
-    if (icon) icon.className = 'fa-solid fa-compress';
-  }
-}
-
-function dgxLogViolation(type) {
-  dgxViolationCount++;
-  const badge = document.getElementById('dgxViolationBadge');
-  const count = document.getElementById('dgxBadgeCount');
-  if (count) count.textContent = String(dgxViolationCount);
-  if (badge) {
-    badge.style.display = 'block';
-    badge.style.animation = 'none';
-    void badge.offsetWidth;
-    badge.style.animation = 'dgxBadgePulse 1s ease 3';
-  }
-  console.warn(`Violation #${dgxViolationCount}: ${type}`);
-  return dgxViolationCount;
-}
-
-function dgxHandleTabSwitch() {
-  if (dgxTabLogged || !dgxMonitoring) return;
-  dgxTabLogged = true;
-  const n = dgxLogViolation('Tab Switch');
-  const el = document.getElementById('dgxViolationCount');
-  if (el) el.textContent = String(n);
-  document.getElementById('fullscreen-warning-overlay').style.display = 'flex';
-}
-
-function dgxHandleFullscreenExit() {
-  if (!dgxMonitoring) return;
-  dgxRequestFullscreen();   // silent auto re-entry, no modal, no violation
-}
-
-// Return button on tab-switch overlay
-document.getElementById('dgxReturnBtn')?.addEventListener('click', () => {
-  document.getElementById('fullscreen-warning-overlay').style.display = 'none';
-  dgxTabLogged = false;
-  dgxRequestFullscreen();
-});
-
-// Tab switch detection
-document.addEventListener('visibilitychange', () => {
-  if (document.hidden) dgxHandleTabSwitch();
-  else dgxTabLogged = false;
-});
-
-// Fullscreen change — update status then silently re-enter if exited
-document.addEventListener('fullscreenchange', () => {
-  dgxUpdateFullscreenStatus();
-  if (!dgxIsFullscreen && dgxMonitoring) dgxHandleFullscreenExit();
-});
-document.addEventListener('webkitfullscreenchange', dgxUpdateFullscreenStatus);
-document.addEventListener('msfullscreenchange',     dgxUpdateFullscreenStatus);
-
-// Auto re-enter fullscreen on hover/click if monitoring
-document.addEventListener('mouseover', () => {
-  if (dgxMonitoring && !dgxIsFullscreen) dgxRequestFullscreen();
-});
-document.addEventListener('click', () => {
-  if (dgxMonitoring && !dgxIsFullscreen) dgxRequestFullscreen();
-});
-
-// Block right-click during game
-document.addEventListener('contextmenu', (e) => {
-  if (!dgxMonitoring) return;
-  e.preventDefault();
-  if (!dgxIsFullscreen) dgxRequestFullscreen();
-});
-
-// Block dangerous key combos
-document.addEventListener('keydown', (e) => {
-  if (!dgxMonitoring) return;
-  if (e.key === 'F11') { e.preventDefault(); return; }
-  if ((e.ctrlKey || e.metaKey) && ['w','t','n'].includes(e.key.toLowerCase())) {
-    e.preventDefault(); return;
-  }
-  if (e.altKey && e.key === 'Tab') { e.preventDefault(); return; }
-});
-
-// Badge pulse animation
-const dgxStyle = document.createElement('style');
-dgxStyle.textContent = `
-  @keyframes dgxBadgePulse {
-    0%,100%{ opacity:1; transform:scale(1); }
-    50%{ opacity:.7; transform:scale(1.06); }
-  }
-`;
-document.head.appendChild(dgxStyle);
 (() => {
   /* =========================================================
     Door Game Play Script — UPDATED
@@ -1694,7 +1537,6 @@ document.head.appendChild(dgxStyle);
 
       Swal.close();
       clearCache();
-      dgxMonitoring = false;   
       state.suppressUnloadPrompt = true;
 
       notify('success','Submitted successfully','Redirecting…');
@@ -1963,57 +1805,16 @@ async function boot(){
       (state.status === 'timeout') ? 'Timeout' :
       (state.status === 'fail') ? 'Fail' : '—';
 
-   renderTimer();
-    renderBoard();
-    updateSidebar();
-    setTimeout(() => centerOnCurrent(), 180);
-
-    await Swal.fire({
-      icon: 'info',
-      title: 'Welcome Back!',
-      html: `
-        <p style="color:#6b7280; margin-bottom:1rem; font-size:.92rem;">
-          Your previous attempt has been restored.
-        </p>
-        <ul style="text-align:left; list-style:none; margin:0; padding:0;">
-          <li style="display:flex; align-items:flex-start; gap:.6rem; padding:.5rem .75rem;
-            border-radius:10px; margin-bottom:.4rem; font-size:.9rem;
-            background:#fef2f2; color:#7f1d1d; border:1px solid #fecaca;">
-            <i class="fa-solid fa-expand" style="margin-top:.15rem; flex-shrink:0; color:#ef4444;"></i>
-            <span>Stay in <strong>fullscreen</strong> mode for the entire game.</span>
-          </li>
-          <li style="display:flex; align-items:flex-start; gap:.6rem; padding:.5rem .75rem;
-            border-radius:10px; margin-bottom:.4rem; font-size:.9rem;
-            background:#fef2f2; color:#7f1d1d; border:1px solid #fecaca;">
-            <i class="fa-solid fa-arrow-right-from-bracket" style="margin-top:.15rem; flex-shrink:0; color:#ef4444;"></i>
-            <span>Do <strong>not switch tabs</strong>. Each switch is recorded as a violation.</span>
-          </li>
-          <li style="display:flex; align-items:flex-start; gap:.6rem; padding:.5rem .75rem;
-            border-radius:10px; margin-bottom:.4rem; font-size:.9rem;
-            background:#f0fdf4; color:#14532d; border:1px solid #bbf7d0;">
-            <i class="fa-solid fa-circle-check" style="margin-top:.15rem; flex-shrink:0; color:#16a34a;"></i>
-            <span>Click <strong>"Resume Game"</strong> to continue. Good luck!</span>
-          </li>
-        </ul>`,
-      confirmButtonText: '<i class="fa-solid fa-rotate-right me-2"></i>Resume Game',
-      allowOutsideClick: false,
-      allowEscapeKey: false,
-      customClass: { confirmButton: 'dgx-btn2 primary px-4' },
-      buttonsStyling: false,
-    });
-
-    // Only runs after clicking Resume Game
-    // Only runs after clicking Resume Game
+    // ✅ Auto-start immediately
     GAME_ACTIVE = true;
-    dgxMonitoring = true;
-    dgxRequestFullscreen();
-    document.getElementById('dgxViolationBadge').style.display = 'block';
-
-    renderBoard(); // ← re-render now that GAME_ACTIVE is true (fixes disabled arrows)
-    setTimeout(() => centerOnCurrent(), 80);
 
     // ✅ Fix timing base after refresh
     fixPerfTimingAfterRestore();
+
+    renderTimer();
+    renderBoard();
+    updateSidebar();
+    setTimeout(()=> centerOnCurrent(), 180);
 
     if(state.status === 'in_progress'){
       setRunState('Playing', 'primary');
@@ -2043,72 +1844,25 @@ async function boot(){
   }
 
   // 2) No cache → fetch game and start immediately
-// 2) No cache → fetch game, show modal, then start
   try{
     const game = await fetchJson(API.game);
-    hydrateFromGame(game); // renders board in preview (non-interactive)
+    hydrateFromGame(game);
 
-    await Swal.fire({
-      icon: 'info',
-      title: 'Before You Begin',
-      html: `
-        <p style="color:#6b7280; margin-bottom:1rem; font-size:.92rem;">
-          Please read the rules carefully before starting.
-        </p>
-        <ul style="text-align:left; list-style:none; margin:0; padding:0;">
-          <li style="display:flex; align-items:flex-start; gap:.6rem; padding:.5rem .75rem;
-            border-radius:10px; margin-bottom:.4rem; font-size:.9rem;
-            background:#fef2f2; color:#7f1d1d; border:1px solid #fecaca;">
-            <i class="fa-solid fa-expand" style="margin-top:.15rem; flex-shrink:0; color:#ef4444;"></i>
-            <span>You <strong>must stay in fullscreen</strong> mode. Exiting triggers automatic re-entry.</span>
-          </li>
-          <li style="display:flex; align-items:flex-start; gap:.6rem; padding:.5rem .75rem;
-            border-radius:10px; margin-bottom:.4rem; font-size:.9rem;
-            background:#fef2f2; color:#7f1d1d; border:1px solid #fecaca;">
-            <i class="fa-solid fa-arrow-right-from-bracket" style="margin-top:.15rem; flex-shrink:0; color:#ef4444;"></i>
-            <span>Do <strong>not switch tabs</strong> or minimize the window. Each switch is a violation.</span>
-          </li>
-          <li style="display:flex; align-items:flex-start; gap:.6rem; padding:.5rem .75rem;
-            border-radius:10px; margin-bottom:.4rem; font-size:.9rem;
-            background:#fef2f2; color:#7f1d1d; border:1px solid #fecaca;">
-            <i class="fa-solid fa-triangle-exclamation" style="margin-top:.15rem; flex-shrink:0; color:#ef4444;"></i>
-            <span>All violations are <strong>tracked and visible</strong> on screen at all times.</span>
-          </li>
-          <li style="display:flex; align-items:flex-start; gap:.6rem; padding:.5rem .75rem;
-            border-radius:10px; margin-bottom:.4rem; font-size:.9rem;
-            background:#f0fdf4; color:#14532d; border:1px solid #bbf7d0;">
-            <i class="fa-solid fa-circle-check" style="margin-top:.15rem; flex-shrink:0; color:#16a34a;"></i>
-            <span>Click <strong>"Start Game"</strong> to enter fullscreen and start the timer. Good luck!</span>
-          </li>
-        </ul>`,
-      confirmButtonText: '<i class="fa-solid fa-play me-2"></i>Start Game',
-      allowOutsideClick: false,
-      allowEscapeKey: false,
-      customClass: { confirmButton: 'dgx-btn2 primary px-4' },
-      buttonsStyling: false,
-    });
-
-    // Only runs after clicking Start Game
-    // Only runs after clicking Start Game
     GAME_ACTIVE = true;
-    dgxMonitoring = true;
-    dgxRequestFullscreen();
-    document.getElementById('dgxViolationBadge').style.display = 'block';
 
+    // ✅ Start time begins immediately on page load
     state.startedAtMs = nowMs();
     state.lastMoveAtMs = state.startedAtMs;
 
-    renderBoard(); // ← re-render now that GAME_ACTIVE is true (fixes disabled arrows)
-    setTimeout(() => centerOnCurrent(), 80);
-
     setRunState('Playing', 'primary');
     startTimer();
-    notify('success', 'Game started', 'Good luck!');
 
+    notify('success','Game started','Good luck!');
   }catch(err){
     await Swal.fire({ icon:'error', title:'Failed to load game', text: err.message || '' });
   }
 }
+
   /* ================= Events ================= */
 
   // keyboard arrows
@@ -2189,4 +1943,3 @@ async function boot(){
 </script>
 </body>
 </html>
- 

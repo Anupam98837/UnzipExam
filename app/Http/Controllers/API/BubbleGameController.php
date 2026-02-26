@@ -849,182 +849,212 @@ class BubbleGameController extends Controller
             'data' => $duplicate
         ], 201);
     }
+/* =========================
+ * MY BUBBLE GAMES (student)  (GET only)
+ * ========================= */
+public function myBubbleGames(Request $r)
+{
+    if ($resp = $this->requireRole($r, ['student', 'admin', 'super_admin'])) return $resp;
 
-    /* =========================
-     * MY BUBBLE GAMES (student)  (GET only)
-     * ========================= */
-    public function myBubbleGames(Request $r)
-    {
-        if ($resp = $this->requireRole($r, ['student', 'admin', 'super_admin'])) return $resp;
+    $actor  = $this->actor($r);
+    $userId = (int) ($actor['id'] ?? 0);
+    $role   = (string) ($actor['role'] ?? '');
 
-        $actor  = $this->actor($r);
-        $userId = (int) ($actor['id'] ?? 0);
-        $role   = (string) ($actor['role'] ?? '');
-
-        if (!$userId) {
-            return response()->json(['success' => false, 'message' => 'Unable to resolve user from token'], 403);
-        }
-
-        $page    = max(1, (int) $r->query('page', 1));
-        $perPage = max(1, min(50, (int) $r->query('per_page', 12)));
-        $search  = trim((string) $r->query('q', ''));
-
-        $qCountSub = DB::table('bubble_game_questions')
-            ->select('bubble_game_id', DB::raw('COUNT(*) as total_questions'))
-            ->where('status', '=', 'active')
-            ->groupBy('bubble_game_id');
-
-        $resultSub = DB::table('bubble_game_results')
-            ->select('bubble_game_id', DB::raw('MAX(id) as latest_id'))
-            ->where('user_id', $userId)
-            ->whereNull('deleted_at')
-            ->groupBy('bubble_game_id');
-
-        $attemptStatSub = DB::table('bubble_game_results')
-            ->select([
-                'bubble_game_id',
-                DB::raw('COUNT(*) as attempts_count'),
-                DB::raw('COALESCE(MAX(attempt_no), 0) as max_attempt_no'),
-            ])
-            ->where('user_id', $userId)
-            ->whereNull('deleted_at')
-            ->groupBy('bubble_game_id');
-
-        $assignSub = DB::table('user_bubble_game_assignments as uga')
-            ->select([
-                'uga.bubble_game_id',
-                DB::raw('MAX(uga.assigned_at) as assigned_at'),
-            ])
-            ->where('uga.user_id', '=', $userId)
-            ->where('uga.status', '=', 'active')
-            ->whereNull('uga.deleted_at')
-            ->groupBy('uga.bubble_game_id');
-
-        $q = DB::table('bubble_game as bg')
-            ->leftJoinSub($qCountSub, 'qc', function ($join) {
-                $join->on('qc.bubble_game_id', '=', 'bg.id');
-            })
-            ->leftJoinSub($resultSub, 'lr', function ($join) {
-                $join->on('lr.bubble_game_id', '=', 'bg.id');
-            })
-            ->leftJoin('bubble_game_results as bgr', 'bgr.id', '=', 'lr.latest_id')
-            ->leftJoinSub($attemptStatSub, 'ats', function ($join) {
-                $join->on('ats.bubble_game_id', '=', 'bg.id');
-            })
-            ->leftJoinSub($assignSub, 'asgn', function ($join) {
-                $join->on('asgn.bubble_game_id', '=', 'bg.id');
-            })
-            ->whereNull('bg.deleted_at')
-            ->where('bg.status', '=', 'active');
-
-        if (!in_array($role, ['admin', 'super_admin'], true)) {
-            $q->whereNotNull('asgn.assigned_at');
-        }
-
-        if ($search !== '') {
-            $q->where(function ($w) use ($search) {
-                $w->where('bg.title', 'like', "%{$search}%")
-                  ->orWhere('bg.description', 'like', "%{$search}%");
-            });
-        }
-
-        $select = [
-            'bg.id',
-            'bg.uuid',
-            'bg.title',
-            'bg.description',
-            'bg.max_attempts',
-            'bg.per_question_time_sec',
-            'bg.allow_skip',
-            'bg.status',
-            'bg.created_at',
-
-            DB::raw('COALESCE(qc.total_questions, 0) as total_questions'),
-            DB::raw('COALESCE(ats.attempts_count, 0) as attempts_count'),
-            DB::raw('COALESCE(ats.max_attempt_no, 0) as max_attempt_no'),
-            'asgn.assigned_at as assigned_at',
-
-            'bgr.id         as result_id',
-            'bgr.created_at as result_created_at',
-            'bgr.score      as result_score',
-            'bgr.attempt_no as result_attempt_no',
-        ];
-
-        $paginator = $q->select($select)
-            ->orderBy('bg.created_at', 'desc')
-            ->paginate($perPage, ['*'], 'page', $page);
-
-        $items = collect($paginator->items())->map(function ($row) {
-            $totalQuestions = (int) ($row->total_questions ?? 0);
-            $perQSec        = (int) ($row->per_question_time_sec ?? 0);
-
-            $totalMinutes = null;
-            if ($totalQuestions > 0 && $perQSec > 0) {
-                $totalMinutes = (int) ceil(($totalQuestions * $perQSec) / 60);
-            }
-
-            $allowed = ($row->max_attempts !== null) ? (int) $row->max_attempts : 1;
-
-            $usedByCount = (int) ($row->attempts_count ?? 0);
-            $usedByMaxNo = (int) ($row->max_attempt_no ?? 0);
-            $used = max($usedByCount, $usedByMaxNo);
-
-            $remaining = $allowed > 0 ? max($allowed - $used, 0) : 0;
-
-            $maxReached = ($allowed > 0) ? ($used >= $allowed) : false;
-            $canAttempt = !$maxReached;
-
-            $myStatus = $row->result_id ? 'completed' : 'upcoming';
-
-            return [
-                'id'              => (int) $row->id,
-                'uuid'            => (string) $row->uuid,
-                'assigned_at'     => $row->assigned_at
-                    ? \Carbon\Carbon::parse($row->assigned_at)->toDateTimeString()
-                    : null,
-
-                'title'           => (string) ($row->title ?? 'Bubble Game'),
-                'excerpt'         => (string) ($row->description ?? ''),
-                'total_time'      => $totalMinutes,
-                'total_questions' => $totalQuestions,
-
-                'total_attempts'  => $allowed,
-
-                'max_attempts_allowed' => $allowed,
-                'my_attempts'           => $used,
-                'remaining_attempts'    => $remaining,
-                'max_attempt_reached'   => $maxReached,
-                'can_attempt'           => $canAttempt,
-
-                'is_public'       => false,
-                'status'          => (string) ($row->status ?? 'active'),
-
-                'created_at'      => $row->created_at
-                    ? \Carbon\Carbon::parse($row->created_at)->toDateTimeString()
-                    : null,
-
-                'my_status'       => $myStatus,
-
-                'result' => $row->result_id ? [
-                    'id'         => (int) $row->result_id,
-                    'created_at' => $row->result_created_at
-                        ? \Carbon\Carbon::parse($row->result_created_at)->toDateTimeString()
-                        : null,
-                    'score'      => $row->result_score !== null ? (int) $row->result_score : null,
-                    'attempt_no' => $row->result_attempt_no !== null ? (int) $row->result_attempt_no : null,
-                ] : null,
-            ];
-        })->values();
-
-        return response()->json([
-            'success'    => true,
-            'data'       => $items,
-            'pagination' => [
-                'total'        => (int) $paginator->total(),
-                'per_page'     => (int) $paginator->perPage(),
-                'current_page' => (int) $paginator->currentPage(),
-                'last_page'    => (int) $paginator->lastPage(),
-            ],
-        ]);
+    if (!$userId) {
+        return response()->json(['success' => false, 'message' => 'Unable to resolve user from token'], 403);
     }
+
+    $page    = max(1, (int) $r->query('page', 1));
+    $perPage = max(1, min(50, (int) $r->query('per_page', 12)));
+    $search  = trim((string) $r->query('q', ''));
+
+    // ✅ Column safety (won’t break if column doesn’t exist)
+    $hasInstr        = \Schema::hasColumn('bubble_game', 'instructions');
+    $hasInstrAlt     = \Schema::hasColumn('bubble_game', 'instruction');
+    $hasInstrHtml    = \Schema::hasColumn('bubble_game', 'instructions_html');
+    $hasInstrHtmlAlt = \Schema::hasColumn('bubble_game', 'instruction_html');
+
+    $qCountSub = DB::table('bubble_game_questions')
+        ->select('bubble_game_id', DB::raw('COUNT(*) as total_questions'))
+        ->where('status', '=', 'active')
+        ->groupBy('bubble_game_id');
+
+    $resultSub = DB::table('bubble_game_results')
+        ->select('bubble_game_id', DB::raw('MAX(id) as latest_id'))
+        ->where('user_id', $userId)
+        ->whereNull('deleted_at')
+        ->groupBy('bubble_game_id');
+
+    $attemptStatSub = DB::table('bubble_game_results')
+        ->select([
+            'bubble_game_id',
+            DB::raw('COUNT(*) as attempts_count'),
+            DB::raw('COALESCE(MAX(attempt_no), 0) as max_attempt_no'),
+        ])
+        ->where('user_id', $userId)
+        ->whereNull('deleted_at')
+        ->groupBy('bubble_game_id');
+
+    $assignSub = DB::table('user_bubble_game_assignments as uga')
+        ->select([
+            'uga.bubble_game_id',
+            DB::raw('MAX(uga.assigned_at) as assigned_at'),
+        ])
+        ->where('uga.user_id', '=', $userId)
+        ->where('uga.status', '=', 'active')
+        ->whereNull('uga.deleted_at')
+        ->groupBy('uga.bubble_game_id');
+
+    $q = DB::table('bubble_game as bg')
+        ->leftJoinSub($qCountSub, 'qc', function ($join) {
+            $join->on('qc.bubble_game_id', '=', 'bg.id');
+        })
+        ->leftJoinSub($resultSub, 'lr', function ($join) {
+            $join->on('lr.bubble_game_id', '=', 'bg.id');
+        })
+        ->leftJoin('bubble_game_results as bgr', 'bgr.id', '=', 'lr.latest_id')
+        ->leftJoinSub($attemptStatSub, 'ats', function ($join) {
+            $join->on('ats.bubble_game_id', '=', 'bg.id');
+        })
+        ->leftJoinSub($assignSub, 'asgn', function ($join) {
+            $join->on('asgn.bubble_game_id', '=', 'bg.id');
+        })
+        ->whereNull('bg.deleted_at')
+        ->where('bg.status', '=', 'active');
+
+    if (!in_array($role, ['admin', 'super_admin'], true)) {
+        $q->whereNotNull('asgn.assigned_at');
+    }
+
+    if ($search !== '') {
+        $q->where(function ($w) use ($search, $hasInstr, $hasInstrAlt) {
+            $w->where('bg.title', 'like', "%{$search}%")
+              ->orWhere('bg.description', 'like', "%{$search}%");
+
+            // ✅ include instructions in search if available
+            if ($hasInstr)    $w->orWhere('bg.instructions', 'like', "%{$search}%");
+            if ($hasInstrAlt) $w->orWhere('bg.instruction', 'like', "%{$search}%");
+        });
+    }
+
+    $select = [
+        'bg.id',
+        'bg.uuid',
+        'bg.title',
+
+        // ✅ description always
+        'bg.description as description',
+
+        // ✅ instructions (safe fallback)
+        $hasInstr
+            ? 'bg.instructions as instructions'
+            : ($hasInstrAlt ? 'bg.instruction as instructions' : DB::raw("'' as instructions")),
+
+        // ✅ instructions_html (safe fallback)
+        $hasInstrHtml
+            ? 'bg.instructions_html as instructions_html'
+            : ($hasInstrHtmlAlt ? 'bg.instruction_html as instructions_html' : DB::raw("'' as instructions_html")),
+
+        'bg.max_attempts',
+        'bg.per_question_time_sec',
+        'bg.allow_skip',
+        'bg.status',
+        'bg.created_at',
+
+        DB::raw('COALESCE(qc.total_questions, 0) as total_questions'),
+        DB::raw('COALESCE(ats.attempts_count, 0) as attempts_count'),
+        DB::raw('COALESCE(ats.max_attempt_no, 0) as max_attempt_no'),
+        'asgn.assigned_at as assigned_at',
+
+        'bgr.id         as result_id',
+        'bgr.created_at as result_created_at',
+        'bgr.score      as result_score',
+        'bgr.attempt_no as result_attempt_no',
+    ];
+
+    $paginator = $q->select($select)
+        ->orderBy('bg.created_at', 'desc')
+        ->paginate($perPage, ['*'], 'page', $page);
+
+    $items = collect($paginator->items())->map(function ($row) {
+        $totalQuestions = (int) ($row->total_questions ?? 0);
+        $perQSec        = (int) ($row->per_question_time_sec ?? 0);
+
+        $totalMinutes = null;
+        if ($totalQuestions > 0 && $perQSec > 0) {
+            $totalMinutes = (int) ceil(($totalQuestions * $perQSec) / 60);
+        }
+
+        $allowed = ($row->max_attempts !== null) ? (int) $row->max_attempts : 1;
+
+        $usedByCount = (int) ($row->attempts_count ?? 0);
+        $usedByMaxNo = (int) ($row->max_attempt_no ?? 0);
+        $used = max($usedByCount, $usedByMaxNo);
+
+        $remaining = $allowed > 0 ? max($allowed - $used, 0) : 0;
+
+        $maxReached = ($allowed > 0) ? ($used >= $allowed) : false;
+        $canAttempt = !$maxReached;
+
+        $myStatus = $row->result_id ? 'completed' : 'upcoming';
+
+        return [
+            'id'              => (int) $row->id,
+            'uuid'            => (string) $row->uuid,
+            'assigned_at'     => $row->assigned_at
+                ? \Carbon\Carbon::parse($row->assigned_at)->toDateTimeString()
+                : null,
+
+            'title'           => (string) ($row->title ?? 'Bubble Game'),
+
+            // ✅ NEW: send both separately
+            'description'     => (string) ($row->description ?? ''),
+            'instructions_html' => (string) ($row->instructions_html ?? ''),
+
+            // ✅ keep old behavior (so UI won’t break)
+            'excerpt'         => (string) ($row->description ?? ''),
+
+            'total_time'      => $totalMinutes,
+            'total_questions' => $totalQuestions,
+
+            'total_attempts'  => $allowed,
+
+            'max_attempts_allowed' => $allowed,
+            'my_attempts'           => $used,
+            'remaining_attempts'    => $remaining,
+            'max_attempt_reached'   => $maxReached,
+            'can_attempt'           => $canAttempt,
+
+            'is_public'       => false,
+            'status'          => (string) ($row->status ?? 'active'),
+
+            'created_at'      => $row->created_at
+                ? \Carbon\Carbon::parse($row->created_at)->toDateTimeString()
+                : null,
+
+            'my_status'       => $myStatus,
+
+            'result' => $row->result_id ? [
+                'id'         => (int) $row->result_id,
+                'created_at' => $row->result_created_at
+                    ? \Carbon\Carbon::parse($row->result_created_at)->toDateTimeString()
+                    : null,
+                'score'      => $row->result_score !== null ? (int) $row->result_score : null,
+                'attempt_no' => $row->result_attempt_no !== null ? (int) $row->result_attempt_no : null,
+            ] : null,
+        ];
+    })->values();
+
+    return response()->json([
+        'success'    => true,
+        'data'       => $items,
+        'pagination' => [
+            'total'        => (int) $paginator->total(),
+            'per_page'     => (int) $paginator->perPage(),
+            'current_page' => (int) $paginator->currentPage(),
+            'last_page'    => (int) $paginator->lastPage(),
+        ],
+    ]);
+}
+
 }

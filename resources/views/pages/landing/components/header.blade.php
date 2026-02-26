@@ -487,24 +487,25 @@
       background: var(--surface);
       border-bottom-color: var(--line-soft);
     }
+    
   </style>
 </head>
 
 <body>
   <!-- Global Overlay -->
   <!-- @include('partials.overlay') -->
-  
-  <!-- Announcement Bar -->
+ {{-- Announcement Bar (Updates) --}}
+<a href="{{ url('/updates/all') }}" class="lp-announcement-link" aria-label="View all updates">
   <div class="lp-announcement-bar">
-    <div class="lp-announcement-scroll">
-      <span><i class="fa-solid fa-sparkles"></i> New batch of competitive exams available now!</span>
-      <span><i class="fa-solid fa-calendar-check"></i> Check your upcoming scheduled exams</span>
-      <span><i class="fa-solid fa-trophy"></i> Mock test series for entrance exams now live</span>
-      <span><i class="fa-solid fa-sparkles"></i> New batch of competitive exams available now!</span>
-      <span><i class="fa-solid fa-calendar-check"></i> Check your upcoming scheduled exams</span>
-      <span><i class="fa-solid fa-trophy"></i> Mock test series for entrance exams now live</span>
+    <div class="lp-announcement-scroll" id="lpUpdatesScroll">
+      {{-- Fallback (shown until JS loads / if API fails) --}}
+      <!-- <span><i class="fa-solid fa-sparkles"></i> Welcome to UnzipExam — stay tuned for updates!</span>
+      <span><i class="fa-solid fa-calendar-check"></i> New quizzes and games added regularly</span>
+      <span><i class="fa-solid fa-trophy"></i> Mock tests are live — start practicing today</span> -->
     </div>
   </div>
+</a>
+
   
   <!-- Header -->
   <header class="lp-header" id="mainHeader">
@@ -543,7 +544,7 @@
       <!-- Actions -->
       <div class="lp-header-actions">
         <button class="lp-btn-login" id="lpLoginBtn">Log in</button>
-        <button class="lp-btn-signup" id="lpSignupBtn">Sign up</button>
+        <button class="lp-btn-signup d-none" id="lpSignupBtn">Sign up</button>
       </div>
       
       <!-- Mobile Toggle -->

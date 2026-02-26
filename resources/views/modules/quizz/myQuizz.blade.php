@@ -1,302 +1,84 @@
 {{-- resources/views/exam/my-quizzes-and-games.blade.php --}}
-@extends('pages.users.layout.structure')
-
-@section('title','My Quizzes & Games')
-
 @section('content')
 <style>
-  .qz-wrap{
-    max-width:1100px;
-    margin:16px auto 40px;
-  }
-  .qz-card-shell{
-    border-radius:16px;
-    border:1px solid var(--line-strong);
-    background:var(--surface);
-    box-shadow:var(--shadow-2);
-    overflow:hidden;
-  }
-  .qz-head{
-    padding:16px 18px;
-    border-bottom:1px solid var(--line-strong);
-    background:var(--surface);
-    display:flex;
-    align-items:center;
-    gap:12px;
-  }
-  .qz-head-icon{
-    width:34px;height:34px;
-    border-radius:999px;
-    border:1px solid var(--line-strong);
-    display:flex;align-items:center;justify-content:center;
-    color:var(--accent-color);
-    background:var(--surface-2);
-  }
-  .qz-head-title{
-    font-family:var(--font-head);
-    font-weight:700;
-    color:var(--ink);
-    margin:0;
-    display:flex;
-    align-items:center;
-    gap:10px;
-    flex-wrap:wrap;
-  }
-  .qz-head-sub{color:var(--muted-color); font-size:var(--fs-13);}
+  .qz-wrap{ max-width:1100px; margin:16px auto 40px; }
+  .qz-card-shell{ border-radius:16px; border:1px solid var(--line-strong); background:var(--surface); box-shadow:var(--shadow-2); overflow:hidden; }
+  .qz-head{ padding:16px 18px; border-bottom:1px solid var(--line-strong); background:var(--surface); display:flex; align-items:center; gap:12px; }
+  .qz-head-icon{ width:34px;height:34px; border-radius:999px; border:1px solid var(--line-strong); display:flex;align-items:center;justify-content:center; color:var(--accent-color); background:var(--surface-2); }
+  .qz-head-title{ font-family:var(--font-head); font-weight:700; color:var(--ink); margin:0; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .qz-head-sub{ color:var(--muted-color); font-size:var(--fs-13); }
 
-  .qz-count-pill{
-    display:inline-flex;
-    align-items:center;
-    justify-content:center;
-    min-width:26px;
-    height:20px;
-    padding:0 8px;
-    border-radius:999px;
-    border:1px solid var(--line-strong);
-    background:var(--surface-2);
-    color:var(--muted-color);
-    font-size:11px;
-  }
+  .qz-count-pill{ display:inline-flex; align-items:center; justify-content:center; min-width:26px; height:20px; padding:0 8px; border-radius:999px; border:1px solid var(--line-strong); background:var(--surface-2); color:var(--muted-color); font-size:11px; }
 
-  .qz-head-tools{
-    margin-left:auto;
-    display:flex;
-    align-items:center;
-    gap:8px;
-  }
-  .qz-search{min-width:260px;}
-  .qz-search .form-control{
-    border-radius:999px;
-    padding-left:32px;
-  }
-  .qz-search-icon{
-    position:absolute;
-    left:10px; top:50%;
-    transform:translateY(-50%);
-    color:var(--muted-color);
-    font-size:13px;
-  }
+  .qz-head-tools{ margin-left:auto; display:flex; align-items:center; gap:8px; }
+  .qz-search{ min-width:260px; }
+  .qz-search .form-control{ border-radius:999px; padding-left:32px; }
+  .qz-search-icon{ position:absolute; left:10px; top:50%; transform:translateY(-50%); color:var(--muted-color); font-size:13px; }
 
-  .qz-body{padding:14px 16px 16px; position:relative;}
+  .qz-body{ padding:14px 16px 16px; position:relative; }
 
-  .qz-loader-wrap{
-    position:absolute;
-    inset:0;
-    display:none;
-    align-items:center;
-    justify-content:center;
-    background:rgba(0,0,0,.03);
-    z-index:2;
-  }
-  .qz-loader-wrap.show{display:flex;}
-  .qz-loader{
-    width:20px;height:20px;
-    border:3px solid #0001;
-    border-top-color:var(--accent-color);
-    border-radius:50%;
-    animation:rot 1s linear infinite;
-  }
-  @keyframes rot{to{transform:rotate(360deg)}}
+  .qz-loader-wrap{ position:absolute; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.03); z-index:2; }
+  .qz-loader-wrap.show{ display:flex; }
+  .qz-loader{ width:20px;height:20px; border:3px solid #0001; border-top-color:var(--accent-color); border-radius:50%; animation:rot 1s linear infinite; }
+  @keyframes rot{ to{ transform:rotate(360deg) } }
 
-  .qz-error{
-    font-size:12px;
-    color:var(--danger-color);
-    margin-top:6px;
-    display:none;
-  }
-  .qz-error.show{display:block;}
+  .qz-error{ font-size:12px; color:var(--danger-color); margin-top:6px; display:none; }
+  .qz-error.show{ display:block; }
 
-  .qz-empty{
-    border:1px dashed var(--line-strong);
-    border-radius:12px;
-    padding:22px 16px;
-    text-align:center;
-    color:var(--muted-color);
-    background:var(--surface-2);
-    font-size:var(--fs-13);
-  }
+  .qz-empty{ border:1px dashed var(--line-strong); border-radius:12px; padding:22px 16px; text-align:center; color:var(--muted-color); background:var(--surface-2); font-size:var(--fs-13); }
 
   /* ======= Table ======= */
-  .qz-table-wrap{
-    border:1px solid var(--line-strong);
-    border-radius:14px;
-    overflow:auto;
-    background:var(--surface);
-  }
-  .qz-table{width:100%; margin:0;}
-  .qz-table thead th{
-    position:sticky;
-    top:0;
-    z-index:1;
-    background:var(--surface);
-    border-bottom:1px solid var(--line-strong);
-    font-size:var(--fs-12);
-    text-transform:uppercase;
-    letter-spacing:.06em;
-    color:var(--muted-color);
-    padding:10px 12px;
-    white-space:nowrap;
-  }
-  .qz-table tbody td{
-    border-color:var(--line-soft);
-    padding:10px 12px;
-    vertical-align:top;
-    font-size:var(--fs-13);
-    color:var(--ink);
-  }
+  .qz-table-wrap{ border:1px solid var(--line-strong); border-radius:14px; overflow:auto; background:var(--surface); }
+  .qz-table{ width:100%; margin:0; }
+  .qz-table thead th{ position:sticky; top:0; z-index:1; background:var(--surface); border-bottom:1px solid var(--line-strong); font-size:var(--fs-12); text-transform:uppercase; letter-spacing:.06em; color:var(--muted-color); padding:10px 12px; white-space:nowrap; }
+  .qz-table tbody td{ border-color:var(--line-soft); padding:10px 12px; vertical-align:top; font-size:var(--fs-13); color:var(--ink); }
 
-  .qz-title-cell{
-    display:flex;
-    gap:10px;
-    align-items:flex-start;
-    min-width:260px;
-  }
-  .qz-avatar{
-    width:36px;height:36px;
-    border-radius:14px;
-    background:var(--surface-2);
-    border:1px solid var(--line-strong);
-    display:flex;align-items:center;justify-content:center;
-    color:var(--accent-color);
-    flex-shrink:0;
-  }
-  .qz-title-text{min-width:0; flex:1;}
-  .qz-title{
-    font-family:var(--font-head);
-    font-weight:700;
-    font-size:.98rem;
-    color:var(--ink);
-    margin:0;
-    line-height:1.2;
-    display:flex;
-    align-items:center;
-    flex-wrap:wrap;
-    gap:6px;
-  }
-  .qz-submeta{
-    margin-top:4px;
-    font-size:11px;
-    color:var(--muted-color);
-  }
+  .qz-title-cell{ display:flex; gap:10px; align-items:flex-start; min-width:260px; }
+  .qz-avatar{ width:36px;height:36px; border-radius:14px; background:var(--surface-2); border:1px solid var(--line-strong); display:flex;align-items:center;justify-content:center; color:var(--accent-color); flex-shrink:0; }
+  .qz-title-text{ min-width:0; flex:1; }
+  .qz-title{ font-family:var(--font-head); font-weight:700; font-size:.98rem; color:var(--ink); margin:0; line-height:1.2; display:flex; align-items:center; flex-wrap:wrap; gap:6px; }
+  .qz-submeta{ margin-top:4px; font-size:11px; color:var(--muted-color); }
 
-  .qz-chip{
-    font-size:11px;
-    padding:2px 7px;
-    border-radius:999px;
-    border:1px solid var(--line-strong);
-    background:var(--surface);
-    color:var(--muted-color);
-    display:inline-flex;
-    align-items:center;
-    gap:4px;
-    white-space:nowrap;
-  }
-  .qz-chip i{font-size:10px;}
-  .qz-chip-primary{
-    background:var(--t-primary);
-    border-color:rgba(20,184,166,.3);
-    color:#0f766e;
-  }
-  .qz-chip-success{
-    background:var(--t-success);
-    border-color:rgba(22,163,74,.25);
-    color:#15803d;
-  }
-  .qz-chip-warn{
-    background:var(--t-warn);
-    border-color:rgba(245,158,11,.25);
-    color:#92400e;
-  }
+  .qz-chip{ font-size:11px; padding:2px 7px; border-radius:999px; border:1px solid var(--line-strong); background:var(--surface); color:var(--muted-color); display:inline-flex; align-items:center; gap:4px; white-space:nowrap; }
+  .qz-chip i{ font-size:10px; }
+  .qz-chip-primary{ background:var(--t-primary); border-color:rgba(20,184,166,.3); color:#0f766e; }
+  .qz-chip-success{ background:var(--t-success); border-color:rgba(22,163,74,.25); color:#15803d; }
+  .qz-chip-warn{ background:var(--t-warn); border-color:rgba(245,158,11,.25); color:#92400e; }
 
-  .qz-status-stack{
-    display:flex;
-    flex-wrap:wrap;
-    gap:6px;
-  }
+  .qz-status-stack{ display:flex; flex-wrap:wrap; gap:6px; }
 
-  .qz-num{
-    font-variant-numeric:tabular-nums;
-    white-space:nowrap;
-    color:var(--ink);
-  }
+  .qz-num{ font-variant-numeric:tabular-nums; white-space:nowrap; color:var(--ink); }
 
-  .qz-actions{
-    display:flex;
-    justify-content:flex-end;
-    gap:8px;
-    white-space:nowrap;
-  }
-  .qz-actions .btn{
-    border-radius:999px;
-    padding-inline:12px;
-  }
+  .qz-actions{ display:flex; justify-content:flex-end; gap:8px; white-space:nowrap; }
+  .qz-actions .btn{ border-radius:999px; padding-inline:12px; }
 
   .qz-inst-btn{
-    border-radius:999px;
-    padding:5px 10px;
+    border-radius:999px; padding:5px 10px;
     border:1px dashed var(--line-strong);
     background:var(--surface-2);
     color:var(--muted-color);
     transition:transform .14s ease, border-color .14s ease, background .14s ease;
   }
-  .qz-inst-btn:hover{
-    transform:translateY(-1px);
-    border-color:var(--accent-color);
-    background:var(--surface);
-    color:var(--ink);
-  }
-  .qz-inst-btn:disabled{
-    opacity:.55;
-    cursor:not-allowed;
-    transform:none;
-  }
+  .qz-inst-btn:hover{ transform:translateY(-1px); border-color:var(--accent-color); background:var(--surface); color:var(--ink); }
+  .qz-inst-btn:disabled{ opacity:.55; cursor:not-allowed; transform:none; }
 
-  .qz-pagination{
-    margin-top:14px;
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    gap:10px;
-    font-size:var(--fs-13);
-    color:var(--muted-color);
-  }
-  .qz-pagination .btn{
-    border-radius:999px;
-    padding-inline:12px;
-  }
+  .qz-pagination{ margin-top:14px; display:flex; justify-content:space-between; align-items:center; gap:10px; font-size:var(--fs-13); color:var(--muted-color); }
+  .qz-pagination .btn{ border-radius:999px; padding-inline:12px; }
 
   @media (max-width: 576px){
-    .qz-head{
-      flex-direction:column;
-      align-items:flex-start;
-    }
-    .qz-head-tools{
-      margin-left:0;
-      width:100%;
-      justify-content:space-between;
-    }
-    .qz-search{min-width:0; flex:1;}
+    .qz-head{ flex-direction:column; align-items:flex-start; }
+    .qz-head-tools{ margin-left:0; width:100%; justify-content:space-between; }
+    .qz-search{ min-width:0; flex:1; }
   }
 
   /* =========================
    * Instructions Modal
    * ========================= */
-  body.modal-open{overflow:hidden;}
+  body.modal-open{ overflow:hidden; }
 
-  .qz-ins-modal{
-    position:fixed;
-    inset:0;
-    z-index:1050;
-    display:none;
-    align-items:center;
-    justify-content:center;
-  }
-  .qz-ins-modal.show{display:flex;}
-  .qz-ins-backdrop{
-    position:absolute;
-    inset:0;
-    background:rgba(0,0,0,.45);
-  }
+  .qz-ins-modal{ position:fixed; inset:0; z-index:1050; display:none; align-items:center; justify-content:center; }
+  .qz-ins-modal.show{ display:flex; }
+  .qz-ins-backdrop{ position:absolute; inset:0; background:rgba(0,0,0,.45); }
   .qz-ins-dialog{
     position:relative;
     width:100%;
@@ -311,58 +93,20 @@
     flex-direction:column;
     overflow:hidden;
   }
-  .qz-ins-head{
-    display:flex;
-    align-items:flex-start;
-    gap:10px;
-    margin-bottom:8px;
-  }
-  .qz-ins-eyebrow{
-    font-size:var(--fs-11);
-    text-transform:uppercase;
-    letter-spacing:.08em;
-    color:var(--muted-color);
-    font-weight:600;
-    margin-bottom:2px;
-  }
-  .qz-ins-title{
-    font-family:var(--font-head);
-    font-size:1.02rem;
-    font-weight:700;
-    color:var(--ink);
-    margin:0;
-  }
-  .qz-ins-meta{
-    margin-top:3px;
-    font-size:var(--fs-12);
-    color:var(--muted-color);
-  }
-  .qz-ins-meta span+span::before{
-    content:"•";
-    margin:0 6px;
-    opacity:.6;
-  }
+  .qz-ins-head{ display:flex; align-items:flex-start; gap:10px; margin-bottom:8px; }
+  .qz-ins-eyebrow{ font-size:var(--fs-11); text-transform:uppercase; letter-spacing:.08em; color:var(--muted-color); font-weight:600; margin-bottom:2px; }
+  .qz-ins-title{ font-family:var(--font-head); font-size:1.02rem; font-weight:700; color:var(--ink); margin:0; }
+  .qz-ins-meta{ margin-top:3px; font-size:var(--fs-12); color:var(--muted-color); }
+  .qz-ins-meta span+span::before{ content:"•"; margin:0 6px; opacity:.6; }
   .qz-ins-close{
-    margin-left:auto;
-    border:none;
-    background:transparent;
-    width:30px;height:30px;
-    border-radius:999px;
-    display:flex;
-    align-items:center;
-    justify-content:center;
+    margin-left:auto; border:none; background:transparent;
+    width:30px;height:30px; border-radius:999px;
+    display:flex; align-items:center; justify-content:center;
     color:var(--muted-color);
     transition:background .15s ease, color .15s ease;
   }
-  .qz-ins-close:hover{
-    background:var(--surface-2);
-    color:var(--ink);
-  }
-  .qz-ins-body{
-    overflow:auto;
-    padding-top:6px;
-    padding-bottom:8px;
-  }
+  .qz-ins-close:hover{ background:var(--surface-2); color:var(--ink); }
+  .qz-ins-body{ overflow:auto; padding-top:6px; padding-bottom:8px; }
   .qz-ins-box{
     border:1px solid var(--line-strong);
     background:var(--surface-2);
@@ -374,17 +118,12 @@
     white-space:normal;
   }
   .qz-ins-foot{
-    display:flex;
-    justify-content:flex-end;
+    display:flex; justify-content:flex-end; align-items:center; gap:8px;
     padding-top:6px;
     border-top:1px solid var(--line-strong);
   }
-  .qz-ins-foot .btn{
-    border-radius:999px;
-    padding-inline:14px;
-  }
+  .qz-ins-foot .btn{ border-radius:999px; padding-inline:14px; }
 
-  /* Dark tweaks */
   html.theme-dark .qz-card-shell{background:var(--surface);}
   html.theme-dark .qz-head{background:#020b13;}
   html.theme-dark .qz-table-wrap{background:#020b13;}
@@ -436,10 +175,7 @@
           <tr>
             <th style="min-width:320px;">Title</th>
             <th style="min-width:50px;">Duration</th>
-
-            {{-- ✅ NEW COLUMN --}}
             <th style="display:none;min-width:170px;">Assigned At</th>
-
             <th style="min-width:50px;">Instructions</th>
             <th style="min-width:50px;">Status</th>
             <th style="min-width:50px;">Attempts</th>
@@ -463,7 +199,7 @@
   </div>
 </div>
 
-{{-- ✅ Instructions Modal --}}
+{{-- ✅ Reused Instructions Modal --}}
 <div class="qz-ins-modal" id="qzInsModal" aria-hidden="true">
   <div class="qz-ins-backdrop" data-close="ins-modal"></div>
 
@@ -486,6 +222,9 @@
 
     <div class="qz-ins-foot">
       <button type="button" class="btn btn-light btn-sm" data-close="ins-modal">Close</button>
+      <button type="button" class="btn btn-primary btn-sm d-none" id="qzInsStartBtn">
+        <i class="fa-solid fa-play me-1"></i> Start
+      </button>
     </div>
   </div>
 </div>
@@ -495,27 +234,17 @@
 <script>
 document.addEventListener('DOMContentLoaded', function () {
 
-  // =======================
-  // APIs (all in one list)
-  // =======================
   const API_QUIZZES = '/api/quizz/my';
   const API_GAMES   = '/api/bubble-games/my';
   const API_DOOR    = '/api/door-games/my';
-
-  // ✅ NEW: PATH GAMES
   const API_PATH    = '/api/path-games/my';
 
-  // Start routes
-  const START_QUIZ_ROUTE = '/exam/';                 // /exam/{quiz_uuid}
-  const START_GAME_ROUTE = '/tests/play?game=';      // bubble games play
-  const START_DOOR_ROUTE = '/door-tests/play?game='; // door games play
+  const START_QUIZ_ROUTE = '/exam/';
+  const START_GAME_ROUTE = '/tests/play?game=';
+  const START_DOOR_ROUTE = '/door-tests/play?game=';
+  const START_PATH_ROUTE = '/path-finding/play?game=';
 
-  // ✅ NEW: PATH START ROUTE (change if your path play url is different)
-  const START_PATH_ROUTE = '/path-tests/play?game='; // path games play
-
-  // =======================
   // DOM
-  // =======================
   const loader = document.getElementById('qzLoader');
   const errEl  = document.getElementById('qzError');
   const emptyEl = document.getElementById('qzEmpty');
@@ -531,15 +260,17 @@ document.addEventListener('DOMContentLoaded', function () {
   const btnNext = document.getElementById('qzNext');
   const pageInfo = document.getElementById('qzPageInfo');
 
-  // Instructions modal DOM
-  const insModal   = document.getElementById('qzInsModal');
-  const insTitle   = document.getElementById('qzInsTitle');
-  const insMeta    = document.getElementById('qzInsMeta');
-  const insContent = document.getElementById('qzInsContent');
+  // Modal DOM
+  const insModal    = document.getElementById('qzInsModal');
+  const insEyebrow  = document.getElementById('qzInsEyebrow');
+  const insTitle    = document.getElementById('qzInsTitle');
+  const insMeta     = document.getElementById('qzInsMeta');
+  const insContent  = document.getElementById('qzInsContent');
+  const insStartBtn = document.getElementById('qzInsStartBtn');
 
-  // =======================
-  // Auth helpers
-  // =======================
+  let insStartUrl = null;
+
+  // Auth
   function getToken() {
     return sessionStorage.getItem('token') || localStorage.getItem('token') || null;
   }
@@ -558,18 +289,14 @@ document.addEventListener('DOMContentLoaded', function () {
     return t;
   }
 
-  // =======================
-  // ✅ Date helpers (Safari + Edge safe)
-  // =======================
+  // Date helpers
   function parseAnyDate(input) {
     if (!input) return null;
-
     if (input instanceof Date && !isNaN(input.getTime())) return input;
 
     const str = String(input).trim();
     if (!str) return null;
 
-    // Laravel: "YYYY-MM-DD HH:mm:ss" OR "YYYY-MM-DDTHH:mm:ss"
     const m = str.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/);
     if (m) {
       const y  = parseInt(m[1], 10);
@@ -578,8 +305,7 @@ document.addEventListener('DOMContentLoaded', function () {
       const h  = parseInt(m[4], 10);
       const mi = parseInt(m[5], 10);
       const s  = parseInt(m[6] || '0', 10);
-
-      const dt = new Date(y, mo, d, h, mi, s); // local time
+      const dt = new Date(y, mo, d, h, mi, s);
       if (!isNaN(dt.getTime())) return dt;
     }
 
@@ -589,15 +315,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
   function formatDateTime(d){
     if (!d) return '—';
-    try{
-      return d.toLocaleString();
-    }catch(e){
-      return '—';
-    }
+    try{ return d.toLocaleString(); }catch(e){ return '—'; }
   }
 
   function getAssignmentDate(item) {
-    // priority: assigned_at then created_at (fallback)
     const candidates = [
       item.assigned_at,
       item.assignment_time,
@@ -610,11 +331,124 @@ document.addEventListener('DOMContentLoaded', function () {
       if (d) return d;
     }
     return new Date(0);
+  }function coerceText(v){
+  if (v === null || v === undefined) return '';
+
+  if (typeof v === 'string') {
+    const s = v.trim();
+    return s ? s : '';
   }
 
-  // =======================
-  // UI helpers
-  // =======================
+  if (typeof v === 'number' || typeof v === 'boolean') {
+    return String(v);
+  }
+
+  // ✅ array: join text items
+  if (Array.isArray(v)) {
+    const parts = v.map(coerceText).filter(Boolean);
+    return parts.join('\n');
+  }
+
+  // ✅ object: try common content keys first
+  if (typeof v === 'object') {
+    const preferredKeys = [
+      'html','text','value','content','body','message',
+      'instructions_html','instruction_html','instructions','instruction',
+      'rules','rules_html','guidelines','how_to_play','howToPlay',
+      'description','desc','summary','excerpt','note','about'
+    ];
+
+    for (const k of preferredKeys) {
+      if (Object.prototype.hasOwnProperty.call(v, k)) {
+        const s = coerceText(v[k]);
+        if (s) return s;
+      }
+    }
+
+    // else: try any property
+    for (const [k,val] of Object.entries(v)) {
+      const s = coerceText(val);
+      if (s) return s;
+    }
+  }
+
+  return '';
+}
+
+function deepFindByKey(obj, keyRx, denyKeyRx, depth = 5, seen = new Set()){
+  if (!obj || typeof obj !== 'object' || depth < 0) return '';
+  if (seen.has(obj)) return '';
+  seen.add(obj);
+
+  // 1) direct key match
+  for (const [k, v] of Object.entries(obj)) {
+    if (denyKeyRx && denyKeyRx.test(k)) continue;
+    if (keyRx.test(k)) {
+      const s = coerceText(v);
+      if (s) return s;
+    }
+  }
+
+  // 2) recurse
+  for (const [k, v] of Object.entries(obj)) {
+    if (denyKeyRx && denyKeyRx.test(k)) continue;
+    if (v && typeof v === 'object') {
+      const found = deepFindByKey(v, keyRx, denyKeyRx, depth - 1, seen);
+      if (found) return found;
+    }
+  }
+
+  return '';
+}
+
+function extractInstructionsAny(item){
+  if (!item) return '';
+
+  // ✅ direct common keys (supports string/object/array)
+  const directKeys = [
+    'instructions_html','instruction_html',
+    'instructionsHtml','instructionHtml',
+    'instructions','instruction',
+    'instructions_text','instruction_text',
+    'rules','rules_html',
+    'guidelines','how_to_play','howToPlay'
+  ];
+
+  for (const k of directKeys) {
+    if (Object.prototype.hasOwnProperty.call(item, k)) {
+      const s = coerceText(item[k]);
+      if (s) return s;
+    }
+  }
+
+  // ✅ deep scan by key name
+  return deepFindByKey(
+    item,
+    /(instruction|instructions|rule|rules|guideline|how_to|howtoplay|howToPlay)/i,
+    /(description|desc|excerpt|summary|about|title|name)/i,
+    6
+  ) || '';
+}
+
+function extractDescriptionAny(item){
+  if (!item) return '';
+
+  const directKeys = ['description','desc','excerpt','summary','note','about','body'];
+  for (const k of directKeys) {
+    if (Object.prototype.hasOwnProperty.call(item, k)) {
+      const s = coerceText(item[k]);
+      if (s) return s;
+    }
+  }
+
+  return deepFindByKey(
+    item,
+    /(description|desc|excerpt|summary|about|note|body)/i,
+    /(instruction|instructions|rule|rules|guideline|how_to|howtoplay|howToPlay)/i,
+    6
+  ) || '';
+}
+
   function sanitize(text) {
     if (!text) return '';
     const div = document.createElement('div');
@@ -622,33 +456,31 @@ document.addEventListener('DOMContentLoaded', function () {
     return div.innerHTML;
   }
 
+  function renderMaybeHtml(str){
+    const s = (str ?? '').toString().trim();
+    if (!s) return '';
+    const looksHtml = /<\/?[a-z][\s\S]*>/i.test(s);
+    if (looksHtml) return s;
+    return sanitize(s).replace(/\n/g, '<br>');
+  }
+
   function myStatusBadge(status) {
-    if (status === 'completed') {
-      return '<span class="qz-chip qz-chip-success"><i class="fa-solid fa-circle-check"></i>Completed</span>';
-    }
-    if (status === 'in_progress') {
-      return '<span class="qz-chip qz-chip-primary"><i class="fa-solid fa-play"></i>In progress</span>';
-    }
+    if (status === 'completed') return '<span class="qz-chip qz-chip-success"><i class="fa-solid fa-circle-check"></i>Completed</span>';
+    if (status === 'in_progress') return '<span class="qz-chip qz-chip-primary"><i class="fa-solid fa-play"></i>In progress</span>';
     return '<span class="qz-chip"><i class="fa-regular fa-clock"></i>Pending</span>';
   }
 
   function typeChip(type) {
     if (type === 'door') return '<span class="qz-chip"><i class="fa-solid fa-door-open"></i>Door</span>';
     if (type === 'game') return '<span class="qz-chip"><i class="fa-solid fa-gamepad"></i>Game</span>';
-
-    // ✅ NEW: PATH
     if (type === 'path') return '<span class="qz-chip"><i class="fa-solid fa-route"></i>Path</span>';
-
     return '<span class="qz-chip"><i class="fa-solid fa-graduation-cap"></i>Quiz</span>';
   }
 
   function iconHtml(type) {
     if (type === 'door') return '<i class="fa-solid fa-door-open"></i>';
     if (type === 'game') return '<i class="fa-solid fa-gamepad"></i>';
-
-    // ✅ NEW: PATH
     if (type === 'path') return '<i class="fa-solid fa-route"></i>';
-
     return '<i class="fa-solid fa-graduation-cap"></i>';
   }
 
@@ -664,7 +496,6 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   function toDurationText(item) {
-    // priority: total_time (minutes) then time_limit_sec
     const t = item.total_time ?? item.total_time_minutes ?? item.duration ?? null;
 
     if (t !== null && t !== undefined && t !== '') {
@@ -673,7 +504,6 @@ document.addEventListener('DOMContentLoaded', function () {
       return String(t);
     }
 
-    // fallback: time_limit_sec (seconds -> minutes)
     const sec = item.time_limit_sec ?? item.time_limit ?? null;
     if (sec !== null && sec !== undefined && sec !== '') {
       const s = parseInt(sec, 10);
@@ -683,11 +513,33 @@ document.addEventListener('DOMContentLoaded', function () {
     return '—';
   }
 
-  function pickInstructions(item) {
-    return item.instructions_html || item.instructions || item.excerpt || item.description || item.note || '';
+  // ✅ FIXED: keep Instructions and Description separate (no cross fallback)
+  function pickInstructionsOnly(item) {
+    return (
+      item.instructions_html ??
+      item.instructions ??
+      item.instruction ??
+      item.rules ??
+      item.guidelines ??
+      item.how_to_play ??
+      ''
+    );
+  }
+  function pickDescriptionOnly(item) {
+    return (
+      item.description ??
+      item.excerpt ??
+      item.note ??
+      item.summary ??
+      ''
+    );
   }
 
   function pickAllowedAttempts(item) {
+    if (item.type === 'quiz' && item.total_attempts != null) {
+    const n = parseInt(item.total_attempts, 10);
+    return (isNaN(n) || n <= 0) ? 1 : n;
+  }
     const v =
       item.max_attempts_allowed ??
       item.max_attempts ??
@@ -701,35 +553,27 @@ document.addEventListener('DOMContentLoaded', function () {
     const n = parseInt(v, 10);
     return (isNaN(n) || n <= 0) ? 1 : n;
   }
+function pickUsedAttempts(item) {
+  const candidates = [
+    item.attempt_total_count, // ✅ now works for ALL types after normalizeItem()
+    item.my_attempts,
+    item.attempts_used,
+    item.attempts_taken,
+    item.attempt_count,
+    item.latest_attempt_no,
+    item.used_attempts,
+    (item.result && item.result.attempt_no ? item.result.attempt_no : null),
+  ];
 
-  function pickUsedAttempts(item) {
-    const candidates = [
-      item.my_attempts,
-      item.attempts_used,
-      item.attempts_taken,
-      item.attempt_count,
-      item.latest_attempt_no,
-      item.used_attempts,
-      (item.result && item.result.attempt_no ? item.result.attempt_no : null),
-    ];
-
-    for (const v of candidates) {
-      if (v !== undefined && v !== null && v !== '') {
-        const n = parseInt(v, 10);
-        if (!isNaN(n)) return n;
-      }
+  for (const v of candidates) {
+    if (v !== undefined && v !== null && v !== '') {
+      const n = parseInt(v, 10);
+      if (!isNaN(n)) return n;
     }
-
-    // QUIZ fallback
-    if (item.type === 'quiz') {
-      if (item.my_status === 'completed') return 1;
-      if (item.attempt && (item.attempt.id || item.attempt.status)) return 1;
-      if (item.result && item.result.id) return 1;
-    }
-
-    return 0;
   }
 
+  return 0;
+}
   function computeRemainingAttempts(item, allowed, used) {
     if (item.remaining_attempts !== undefined && item.remaining_attempts !== null) {
       const n = parseInt(item.remaining_attempts, 10);
@@ -738,7 +582,6 @@ document.addEventListener('DOMContentLoaded', function () {
     return Math.max((allowed || 0) - (used || 0), 0);
   }
 
-  // ✅ "No Attempts left" for Quiz + Game + Door + Path
   function computeActionMeta(type, item) {
     const myStatus = item.my_status || 'Pending';
     const status   = item.status || 'active';
@@ -770,52 +613,111 @@ document.addEventListener('DOMContentLoaded', function () {
 
     let title = '';
     if (status !== 'active') title = 'This item is not active';
-    if (enforceAttemptLimit && maxAttemptReached) {
-      title = `Maximum attempts reached (${used}/${allowed})`;
-    }
+    if (enforceAttemptLimit && maxAttemptReached) title = `Maximum attempts reached (${used}/${allowed})`;
 
     let startUrl = '#';
     if (type === 'quiz') startUrl = START_QUIZ_ROUTE + encodeURIComponent(item.uuid);
     if (type === 'game') startUrl = START_GAME_ROUTE + encodeURIComponent(item.uuid);
     if (type === 'door') startUrl = START_DOOR_ROUTE + encodeURIComponent(item.uuid);
-
-    // ✅ NEW: PATH
     if (type === 'path') startUrl = START_PATH_ROUTE + encodeURIComponent(item.uuid);
 
     return { myStatus, status, allowed, used, remaining, label, isDisabled, title, startUrl, maxAttemptReached };
   }
 
-  // =======================
-  // Instructions Modal
-  // =======================
-  function openInsModal(row) {
-    if (!row) return;
-
-    const duration = toDurationText(row);
-    const created = row.created_at ? new Date(row.created_at).toLocaleDateString() : '';
-
-    insTitle.innerHTML = `${sanitize(row.title || 'Item')} ${typeChip(row.type)}`;
-    insMeta.innerHTML = `
-      <span><i class="fa-regular fa-clock"></i> ${sanitize(duration)}</span>
-      ${created ? `<span><i class="fa-regular fa-calendar"></i> Added ${sanitize(created)}</span>` : ''}
-    `;
-
-    const inst = pickInstructions(row);
-    if (inst) {
-      insContent.innerHTML = String(inst).replace(/\n/g, '<br>');
-    } else {
-      insContent.innerHTML = '<span class="text-muted">No instructions available.</span>';
-    }
-
-    insModal.classList.add('show');
-    insModal.setAttribute('aria-hidden', 'false');
-    document.body.classList.add('modal-open');
+  function typeLabel(type){
+    if (type === 'quiz') return 'Quiz';
+    if (type === 'game') return 'Game';
+    if (type === 'door') return 'Door Game';
+    if (type === 'path') return 'Path Game';
+    return 'Item';
   }
+
+ function openInsModal(row, opts = {}) {
+  if (!row) return;
+
+  const mode = opts.mode || 'view'; // 'view' | 'start'
+  const meta = computeActionMeta(row.type, row);
+
+  const duration = toDurationText(row);
+  const created = row.created_at ? new Date(row.created_at).toLocaleDateString() : '';
+  const assignedDate = getAssignmentDate(row);
+  const assignedText = assignedDate && assignedDate.getTime() > 0 ? formatDateTime(assignedDate) : '';
+
+  insEyebrow.textContent = (mode === 'start')
+    ? `${meta.label || 'Start'} ${typeLabel(row.type)}`
+    : 'Instructions';
+
+  insTitle.innerHTML = `${sanitize(row.title || 'Item')} ${typeChip(row.type)}`;
+
+  insMeta.innerHTML = `
+    <span><i class="fa-regular fa-clock"></i> ${sanitize(duration)}</span>
+    ${assignedText ? `<span><i class="fa-regular fa-calendar-check"></i> Assigned ${sanitize(assignedText)}</span>` : (created ? `<span><i class="fa-regular fa-calendar"></i> Added ${sanitize(created)}</span>` : '')}
+    <span><i class="fa-solid fa-chart-simple"></i> Attempts ${sanitize(String(meta.used))}/${sanitize(String(meta.allowed))}</span>
+    <span>${myStatusBadge(meta.myStatus)}</span>
+  `;
+
+  // -------- content (mode-aware) --------
+  const desc = coerceText(row.description).trim();
+
+  const instHtml = coerceText(row.instructions_html).trim();
+  const instText = coerceText(row.instructions).trim();
+
+  const hasInst = !!(instHtml || instText);
+  const instRendered = instHtml ? instHtml : renderMaybeHtml(instText);
+
+  let html = '';
+
+  if (mode === 'view') {
+    // ✅ ONLY instructions
+    if (hasInst) {
+      html = `<div><b>Instructions</b></div><div style="margin-top:6px">${instRendered}</div>`;
+    } else {
+      html = `<span class="text-muted">No instructions available.</span>`;
+    }
+  } else {
+    // ✅ START/RETAKE: description + instructions
+    if (desc) {
+      html += `<div><b>Description</b></div><div style="margin-top:6px">${renderMaybeHtml(desc)}</div>`;
+    }
+    if (hasInst) {
+      if (desc) html += `<hr style="margin:12px 0; opacity:.35">`;
+      html += `<div><b>Instructions</b></div><div style="margin-top:6px">${instRendered}</div>`;
+    }
+    if (!desc && !hasInst) {
+      html = `<span class="text-muted">No description or instructions available.</span>`;
+    }
+  }
+
+  insContent.innerHTML = html;
+
+  // -------- start button logic --------
+  if (mode === 'start') {
+    insStartUrl = meta.startUrl;
+    insStartBtn.classList.remove('d-none');
+    insStartBtn.disabled = !!meta.isDisabled;
+    insStartBtn.innerHTML = `<i class="fa-solid fa-play me-1"></i> ${sanitize(meta.label || 'Start')}`;
+    if (meta.isDisabled && meta.title) insStartBtn.title = meta.title;
+    else insStartBtn.removeAttribute('title');
+  } else {
+    insStartUrl = null;
+    insStartBtn.classList.add('d-none');
+    insStartBtn.disabled = true;
+    insStartBtn.removeAttribute('title');
+  }
+
+  insModal.classList.add('show');
+  insModal.setAttribute('aria-hidden', 'false');
+  document.body.classList.add('modal-open');
+
+  // ✅ debug (optional)
+  if (!hasInst) console.log('NO INSTRUCTIONS -> RAW:', row._raw || row);
+}
 
   function closeInsModal() {
     insModal.classList.remove('show');
     insModal.setAttribute('aria-hidden', 'true');
     document.body.classList.remove('modal-open');
+    insStartUrl = null;
   }
 
   document.querySelectorAll('[data-close="ins-modal"]').forEach(el => {
@@ -825,29 +727,27 @@ document.addEventListener('DOMContentLoaded', function () {
   document.addEventListener('keydown', function(e){
     if (e.key === 'Escape' && insModal.classList.contains('show')) closeInsModal();
   });
+if (insStartBtn) {
+  insStartBtn.addEventListener('click', function(){
+  const url = insStartUrl;
+  if (!url || url === '#') return;
+  closeInsModal();
+  window.location.href = url;
+});
 
-  // =======================
-  // Client pagination + state
-  // =======================
-  const state = {
-    loadedOnce: false,
-    q: '',
-    perPage: 10,
-    page: 1,
-    all: [],
-    filtered: []
-  };
+}
+
+
+  // State
+  const state = { loadedOnce:false, q:'', perPage:10, page:1, all:[], filtered:[] };
 
   function applySearchAndPagination(resetPage) {
     const q = (state.q || '').trim().toLowerCase();
-
     state.filtered = state.all.filter(x => {
       const t = (x.title || '').toLowerCase();
       return q === '' ? true : t.includes(q);
     });
-
     if (resetPage) state.page = 1;
-
     renderTable();
     renderPagination();
     renderCount();
@@ -891,7 +791,10 @@ document.addEventListener('DOMContentLoaded', function () {
       const assignedText = formatDateTime(assignedDate);
 
       const addedText = row.created_at ? new Date(row.created_at).toLocaleDateString() : '';
-      const hasInstructions = !!(pickInstructions(row) || '').trim();
+
+      // ✅ FIXED: true instruction check (no fallback to description)
+      const hasInstructions = !!((row.instructions_html || row.instructions || '').toString().trim());
+      const hasDesc = !!((row.description || '').toString().trim());
 
       tr.innerHTML = `
         <td>
@@ -911,18 +814,18 @@ document.addEventListener('DOMContentLoaded', function () {
 
         <td class="qz-num">${sanitize(durationText)}</td>
 
-        {{-- ✅ NEW COLUMN CELL --}}
         <td class="qz-num d-none">${sanitize(assignedText)}</td>
 
         <td>
-          <button type="button"
-            class="btn btn-sm qz-inst-btn"
-            data-action="view-instructions"
-            ${hasInstructions ? '' : 'disabled'}
-            title="${hasInstructions ? 'View instructions' : 'No instructions'}">
-            <i class="fa-regular fa-eye"></i> View
-          </button>
-        </td>
+  <button type="button"
+    class="btn btn-sm qz-inst-btn"
+    data-action="view-instructions"
+    ${hasInstructions ? '' : 'disabled'}
+    title="${hasInstructions ? 'View instructions' : 'No instructions'}">
+    <i class="fa-regular fa-eye"></i> View
+  </button>
+</td>
+
 
         <td>
           <div class="qz-status-stack">
@@ -951,17 +854,18 @@ document.addEventListener('DOMContentLoaded', function () {
         startBtn.addEventListener('click', () => {
           if (!row.uuid) return;
           if (meta.isDisabled) return;
-          window.location.href = meta.startUrl;
+          openInsModal(row, { mode: 'start' });
         });
       }
 
       const viewBtn = tr.querySelector('[data-action="view-instructions"]');
-      if (viewBtn) {
-        viewBtn.addEventListener('click', () => {
-          if (!hasInstructions) return;
-          openInsModal(row);
-        });
-      }
+if (viewBtn) {
+  viewBtn.addEventListener('click', () => {
+    if (!hasInstructions) return;
+    openInsModal(row, { mode: 'view' }); // view = instructions only
+  });
+}
+
 
       frag.appendChild(tr);
     });
@@ -1008,9 +912,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   });
 
-  // =======================
-  // Fetch all items (merge)
-  // =======================
+  // Fetch
   async function fetchOne(url, token) {
     const params = new URLSearchParams();
     params.set('page', 1);
@@ -1039,55 +941,81 @@ document.addEventListener('DOMContentLoaded', function () {
 
     return { ok: true, data: (json.data || []) };
   }
+function toInt(v, def = 0) {
+  const n = parseInt(v, 10);
+  return isNaN(n) ? def : n;
+}
 
-  function normalizeItem(item, type) {
-    const timeSec = item.time_limit_sec ?? item.time_limit ?? null;
-    const durationMin = (timeSec && !isNaN(parseInt(timeSec, 10)))
-      ? Math.ceil(parseInt(timeSec, 10) / 60)
-      : null;
+function normalizeItem(item, type) {
+  const timeSec = item.time_limit_sec ?? item.time_limit ?? null;
+  const durationMin = (timeSec && !isNaN(parseInt(timeSec, 10)))
+    ? Math.ceil(parseInt(timeSec, 10) / 60)
+    : null;
 
-    return {
-      type: type, // quiz | game | door | path
-      uuid: item.uuid || item.id || null,
-      title: item.title || item.name || 'Item',
+  const instAny = extractInstructionsAny(item);
+  const descAny = extractDescriptionAny(item);
 
-      instructions: pickInstructions(item),
-      excerpt: item.excerpt || '',
-      description: item.description || '',
-      status: item.status || 'active',
-      my_status: item.my_status || item.myStatus || 'Pending',
-      is_public: item.is_public ?? item.public ?? 0,
+  // ✅ allowed attempts (prefer API keys you already send)
+  const allowedAttempts = toInt(
+    item.total_attempts ??
+    item.max_attempts_allowed ??
+    item.max_attempts ??
+    item.max_attempt ??
+    1,
+    1
+  );
 
-      total_time: item.total_time ?? item.total_time_minutes ?? item.duration ?? durationMin,
+  // ✅ used attempts (type-wise)
+  const usedAttempts =
+    (type === 'quiz')
+      ? toInt(item.attempt_total_count ?? 0, 0)     // quizzes
+      : toInt(item.my_attempts ?? item.attempts_count ?? item.max_attempt_no ?? 0, 0); // bubble/door/path
 
-      time_limit_sec: item.time_limit_sec ?? null,
+  // ✅ remaining attempts (prefer API if exists)
+  const remainingAttempts =
+    (item.remaining_attempts !== undefined && item.remaining_attempts !== null)
+      ? toInt(item.remaining_attempts, Math.max(allowedAttempts - usedAttempts, 0))
+      : Math.max(allowedAttempts - usedAttempts, 0);
 
-      attempt: item.attempt ?? null,
-      result: item.result ?? null,
+  return {
+    _raw: item,
 
-      total_attempts: item.total_attempts ?? null,
+    type,
+    uuid: item.uuid || item.id || null,
+    title: item.title || item.name || 'Item',
 
-      max_attempts_allowed: item.max_attempts_allowed,
-      max_attempts: item.max_attempts,
-      max_attempt: item.max_attempt,
-      attempts_allowed: item.attempts_allowed,
-      total_attempts_allowed: item.total_attempts_allowed,
+    // ✅ always strings
+    instructions_html: coerceText(item.instructions_html ?? item.instruction_html ?? ''),
+    instructions: coerceText(instAny || ''),
+    description: coerceText(descAny || ''),
 
-      my_attempts: item.my_attempts,
-      attempts_used: item.attempts_used,
-      attempts_taken: item.attempts_taken,
-      attempt_count: item.attempt_count,
-      latest_attempt_no: item.latest_attempt_no,
-      used_attempts: item.used_attempts,
-      remaining_attempts: item.remaining_attempts,
+    status: item.status || 'active',
+    my_status: item.my_status || item.myStatus || 'Pending',
+    is_public: item.is_public ?? item.public ?? 0,
 
-      max_attempt_reached: item.max_attempt_reached,
-      can_attempt: item.can_attempt,
+    total_time: item.total_time ?? item.total_time_minutes ?? item.duration ?? durationMin,
+    time_limit_sec: item.time_limit_sec ?? null,
 
-      assigned_at: item.assigned_at || null,
-      created_at: item.created_at || null
-    };
-  }
+    // ✅ unify attempts fields for UI
+    total_attempts: allowedAttempts,          // allowed
+    max_attempts_allowed: allowedAttempts,    // allowed (normalized)
+    my_attempts: usedAttempts,                // used (bubble uses this)
+    attempt_total_count: usedAttempts,        // ✅ ADDED: unified used key (quiz uses this natively)
+
+    remaining_attempts: remainingAttempts,
+
+    // preserve original flags if API sends them
+    max_attempt_reached: item.max_attempt_reached,
+    can_attempt: item.can_attempt,
+
+    attempt: item.attempt ?? null,
+    result: item.result ?? null,
+
+    assigned_at: item.assigned_at || null,
+    created_at: item.created_at || null
+  };
+}
+
 
   async function fetchAll() {
     const token = requireAuthToken();
@@ -1102,8 +1030,6 @@ document.addEventListener('DOMContentLoaded', function () {
         fetchOne(API_QUIZZES, token).catch(e => ({ ok:false, data:[], _err:e })),
         fetchOne(API_GAMES, token).catch(e => ({ ok:false, data:[], _err:e })),
         fetchOne(API_DOOR, token).catch(e => ({ ok:false, data:[], _err:e })),
-
-        // ✅ NEW: PATH fetch
         fetchOne(API_PATH, token).catch(e => ({ ok:false, data:[], _err:e })),
       ]);
 
@@ -1116,9 +1042,8 @@ document.addEventListener('DOMContentLoaded', function () {
       (qz.data || []).forEach(i => merged.push(normalizeItem(i, 'quiz')));
       (gm.data || []).forEach(i => merged.push(normalizeItem(i, 'game')));
       (dr.data || []).forEach(i => merged.push(normalizeItem(i, 'door')));
-      (pg.data || []).forEach(i => merged.push(normalizeItem(i, 'path'))); // ✅ NEW
+      (pg.data || []).forEach(i => merged.push(normalizeItem(i, 'path')));
 
-      // ✅ SORT: assigned_at (oldest -> newest), fallback created_at
       merged.sort((a,b) => {
         const ta = getAssignmentDate(a).getTime();
         const tb = getAssignmentDate(b).getTime();
@@ -1153,9 +1078,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
-  // =======================
   // Search (debounced)
-  // =======================
   let searchTimer = null;
   if (searchInput) {
     searchInput.addEventListener('input', function () {
@@ -1167,7 +1090,6 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  // Initial load
   fetchAll();
 
 });

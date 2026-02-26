@@ -138,8 +138,6 @@
       color: #ef4444;
       margin-bottom: 1rem;
     }
-
-    /* Violation badge — always visible once exam starts */
     #violation-badge {
       position: fixed;
       top: 80px;
@@ -152,16 +150,14 @@
       font-weight: 600;
       color: #dc2626;
       display: none;
+      animation: pulse 2s infinite;
     }
     #violation-badge.show {
       display: block;
     }
-    #violation-badge.pulse {
-      animation: pulse 1s ease 3;
-    }
     @keyframes pulse {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.7; transform: scale(1.05); }
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
     }
 
     /* Ready to start rules list */
@@ -208,10 +204,10 @@
     <div class="warning-message">
       You have left the exam window. This action has been logged.
       <br><br>
-      <strong>Please return to the exam and stay focused.</strong>
+      <strong>Multiple violations may result in automatic submission.</strong>
     </div>
     <div class="warning-count">
-      Violation #<span id="violation-count">1</span>
+      Violation <span id="violation-count">1</span> of <span id="max-violations">3</span>
     </div>
     <button id="return-to-exam-btn" class="btn btn-primary btn-lg">
       <i class="fa-solid fa-arrow-left me-2"></i>Return to Exam
@@ -219,10 +215,10 @@
   </div>
 </div>
 
-<!-- Violation Badge — shown after exam starts -->
+<!-- Violation Badge -->
 <div id="violation-badge">
   <i class="fa-solid fa-exclamation-triangle me-2"></i>
-  Violations: <span id="badge-count">0</span>
+  Violations: <span id="badge-count">0</span>/3
 </div>
 
 <header class="exam-header sticky-top">
@@ -237,6 +233,9 @@
       </span>
     </div>
     <div class="d-flex align-items-center gap-2">
+      <button id="fullscreen-btn" class="btn btn-light btn-sm" title="Enter Fullscreen" onclick="requestFullscreen()">
+        <i class="fa-solid fa-expand me-1"></i> Fullscreen
+      </button>
       <div id="timer-pill" class="timer-pill">
         <i class="fa-solid fa-clock"></i>
         <span id="time-left">--:--</span>
@@ -328,6 +327,7 @@ function typeset(el){
 
 <script>
 /* ================== Fullscreen & Tab Switch Detection ================== */
+const MAX_VIOLATIONS = 3;
 let violationCount = 0;
 let isFullscreenActive = false;
 let tabSwitchLogged = false;
@@ -345,52 +345,28 @@ function requestFullscreen() {
   }
 }
 
-// Trigger fullscreen on hover, left-click, and right-click anywhere on the page
-document.addEventListener('mouseover', () => {
-  if (EXAM_STARTED && !isFullscreenActive && !isSubmitting) {
-    requestFullscreen();
-  }
-});
-document.addEventListener('click', () => {
-  if (EXAM_STARTED && !isFullscreenActive && !isSubmitting) {
-    requestFullscreen();
-  }
-});
-document.addEventListener('contextmenu', (e) => {
-  if (EXAM_STARTED && !isSubmitting) {
-    e.preventDefault();
-    if (!isFullscreenActive) {
-      requestFullscreen();
-    }
-    return false;
-  }
-});
-
 function updateFullscreenStatus() {
   isFullscreenActive = !!(document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement);
 
   const statusBadge = document.getElementById('fullscreen-status');
+  const fsBtn = document.getElementById('fullscreen-btn');
   if (isFullscreenActive) {
     statusBadge.innerHTML = '<i class="fa-solid fa-expand me-1"></i> Fullscreen';
     statusBadge.className = 'badge rounded-pill text-bg-success';
+    if (fsBtn) fsBtn.classList.add('d-none');
   } else {
-    statusBadge.innerHTML = '<i class="fa-solid fa-compress me-1"></i> Windowed';
+    statusBadge.innerHTML = '<i class="fa-solid fa-compress me-1"></i> Exit Fullscreen';
     statusBadge.className = 'badge rounded-pill text-bg-warning';
+    if (fsBtn) fsBtn.classList.remove('d-none');
   }
 }
 
 function logViolation(type) {
   violationCount++;
 
-  // Update badge count and show it
-  const badge = document.getElementById('violation-badge');
+  // Update badge
   document.getElementById('badge-count').textContent = violationCount;
-  badge.classList.add('show');
-
-  // Pulse animation on each new violation
-  badge.classList.remove('pulse');
-  void badge.offsetWidth; // reflow to restart animation
-  badge.classList.add('pulse');
+  document.getElementById('violation-badge').classList.add('show');
 
   console.warn(`Violation #${violationCount}: ${type}`);
   // api('/api/exam/log-violation', { method: 'POST', body: JSON.stringify({ type, count: violationCount }) });
@@ -406,11 +382,48 @@ function handleTabSwitch() {
 
   // Show warning overlay
   document.getElementById('violation-count').textContent = currentCount;
+  document.getElementById('max-violations').textContent = MAX_VIOLATIONS;
   document.getElementById('fullscreen-warning-overlay').classList.add('active');
+
+  // Auto-submit if max violations reached
+  if (currentCount >= MAX_VIOLATIONS) {
+    setTimeout(() => {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Maximum Violations Reached',
+        text: 'Your exam will be auto-submitted due to multiple tab switches.',
+        timer: 3000,
+        timerProgressBar: true,
+        showConfirmButton: false
+      }).then(() => {
+        doSubmit(true);
+      });
+    }, 2000);
+  }
 }
+
 function handleFullscreenExit() {
-  if (!EXAM_STARTED || isSubmitting) return;
-  requestFullscreen();
+  if (!isFullscreenActive || !EXAM_STARTED || isSubmitting) return;
+
+  const currentCount = logViolation('Fullscreen Exit');
+
+  Swal.fire({
+    icon: 'warning',
+    title: 'Fullscreen Required',
+    text: `Please stay in fullscreen mode during the exam. Violation ${currentCount}/${MAX_VIOLATIONS} logged.`,
+    confirmButtonText: 'Enter Fullscreen',
+    allowOutsideClick: false,
+    allowEscapeKey: false
+  }).then(() => {
+    requestFullscreen();
+  });
+
+  // Auto-submit if max violations reached
+  if (currentCount >= MAX_VIOLATIONS) {
+    setTimeout(() => {
+      doSubmit(true);
+    }, 2000);
+  }
 }
 
 // Return to exam button
@@ -433,15 +446,23 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // Detect fullscreen change
-document.addEventListener('fullscreenchange', () => {
-  updateFullscreenStatus();
-  // Check AFTER updating — isFullscreenActive now reflects current state
-  if (!isFullscreenActive && EXAM_STARTED && !isSubmitting) {
-    handleFullscreenExit();
-  }
-});
+document.addEventListener('fullscreenchange', updateFullscreenStatus);
 document.addEventListener('webkitfullscreenchange', updateFullscreenStatus);
 document.addEventListener('msfullscreenchange', updateFullscreenStatus);
+
+// Detect fullscreen exit
+document.addEventListener('fullscreenchange', () => {
+  if (!isFullscreenActive) handleFullscreenExit();
+});
+
+// Prevent right-click during exam
+document.addEventListener('contextmenu', (e) => {
+  if (EXAM_STARTED && !isSubmitting) {
+    e.preventDefault();
+    return false;
+  }
+});
+
 // Prevent common shortcuts
 document.addEventListener('keydown', (e) => {
   if (!EXAM_STARTED || isSubmitting) return;
@@ -849,6 +870,7 @@ function renderQuestion(){
   const multi   = !!q.has_multiple_correct_answer;
   const label   = multi && rawType !== 'fill_in_the_blank' ? 'Multiple choice' : typeLabel(rawType);
 
+  // Determine the hint badge text
   let hintBadge = '';
   if (rawType !== 'fill_in_the_blank' && rawType !== 'true_false') {
     if (multi) {
@@ -1288,9 +1310,6 @@ async function bootExam(){
     const q = questions[currentIndex];
     if (q?.question_id) enterQuestion(q.question_id);
 
-    // Show violation badge now that exam has started
-    document.getElementById('violation-badge').classList.add('show');
-
     if (!bootExam.__bound) {
       bootExam.__bound = true;
 
@@ -1344,7 +1363,7 @@ document.addEventListener('DOMContentLoaded', () => {
         </li>
         <li>
           <i class="fa-solid fa-triangle-exclamation"></i>
-          <span>All violations are <strong>recorded and tracked</strong>. The violation count is always visible during your exam.</span>
+          <span>You are allowed a maximum of <strong>3 violations</strong>. Exceeding this limit will trigger <strong>automatic submission</strong> of your exam.</span>
         </li>
         <li class="rule-ok">
           <i class="fa-solid fa-circle-check"></i>

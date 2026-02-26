@@ -647,84 +647,277 @@ html.theme-dark .newsletter-form input {
 html.theme-dark .newsletter-form input:focus {
   border-color: var(--primary-color);
 }
-</style>
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</style><script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-  // Back to top button
-  const backToTop = document.getElementById('lpBackToTop');
-  
-  if (backToTop) {
-    // Show/hide based on scroll position
-    window.addEventListener('scroll', () => {
-      if (window.scrollY > 400) {
-        backToTop.classList.add('visible');
-      } else {
-        backToTop.classList.remove('visible');
+
+  /* =========================================================
+   * Helpers
+   * ========================================================= */
+  const escapeHtml = (str) => {
+    return String(str ?? '')
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#039;');
+  };
+
+  /* =========================================================
+   * 1) Updates Announcement Bar (DB -> marquee spans)
+   * Requires:
+   *   <div class="lp-announcement-scroll" id="lpUpdatesScroll"></div>
+   * ========================================================= */
+  const UPDATES_API = '/api/landing/updates?per_page=20'; // ✅ change if needed
+  const updatesWrap = document.getElementById('lpUpdatesScroll');
+
+  const pickIcon = (text) => {
+    const t = String(text || '').toLowerCase();
+    if (t.includes('exam') || t.includes('schedule') || t.includes('date') || t.includes('calendar')) return 'fa-calendar-check';
+    if (t.includes('result') || t.includes('rank') || t.includes('trophy') || t.includes('winner')) return 'fa-trophy';
+    if (t.includes('new') || t.includes('launch') || t.includes('live') || t.includes('batch')) return 'fa-sparkles';
+    return 'fa-bullhorn';
+  };
+
+  async function loadUpdatesMarquee(){
+    if (!updatesWrap) return;
+
+    try {
+      const res = await fetch(UPDATES_API, { headers: { 'Accept': 'application/json' } });
+      const data = await res.json().catch(() => ({}));
+
+      // Expected: { status:'success', data:[...] }
+      const rows = Array.isArray(data?.data) ? data.data : [];
+
+      if (!res.ok) {
+        console.error('Updates API error:', data);
+        return; // keep fallback spans
       }
-    });
-    
-    // Scroll to top on click with smooth animation
-    backToTop.addEventListener('click', () => {
-      window.scrollTo({
-        top: 0,
-        behavior: 'smooth'
+      if (!rows.length) return; // keep fallback spans
+
+      const items = rows
+        .map(r => (r?.title || '').trim())
+        .filter(Boolean)
+        .map(text => `<span><i class="fa-solid ${pickIcon(text)}"></i> ${escapeHtml(text)}</span>`);
+
+      if (!items.length) return;
+
+      // duplicate for smooth infinite scroll
+      updatesWrap.innerHTML = items.join('') + items.join('');
+
+      // optional: tune speed based on content
+      const totalChars = items.join('').length;
+      const seconds = Math.min(42, Math.max(18, Math.round(totalChars / 120)));
+      updatesWrap.style.animationDuration = seconds + 's';
+
+    } catch (e) {
+      console.error('Updates marquee failed:', e);
+      // keep fallback spans
+    }
+  }
+
+  loadUpdatesMarquee();
+
+
+  /* =========================================================
+   * 2) Hero Image Stack (DB -> slider stack with prev/next)
+   * Requires:
+   *   <div class="lp-hero-stack" id="heroImageStack"></div>
+   *   <button id="heroPrevBtn">...</button>
+   *   <button id="heroNextBtn">...</button>
+   * API should return: { status:'success', data:[{image_url,img_title,display_order}, ...] }
+   * ========================================================= */
+  initHeroStack({
+    endpoint: '/api/landing/hero-images/display', 
+    stackId: 'heroImageStack',
+    prevBtnId: 'heroPrevBtn',
+    nextBtnId: 'heroNextBtn',
+    autoPlay: true,
+    intervalMs: 5500,
+  });
+
+  async function initHeroStack(opts) {
+    const stack = document.getElementById(opts.stackId);
+    const prevBtn = document.getElementById(opts.prevBtnId);
+    const nextBtn = document.getElementById(opts.nextBtnId);
+
+    if (!stack) return;
+
+    let slides = [];
+    let activeIndex = 0;
+    let timer = null;
+
+    // Fetch slides from DB
+    try {
+      const url = opts.endpoint + (opts.endpoint.includes('?') ? '&' : '?') + 't=' + Date.now();
+      const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+      const json = await res.json().catch(() => ({}));
+
+      const rows = Array.isArray(json?.data) ? json.data : [];
+
+      if (!res.ok) {
+        console.error('Hero API error:', json);
+        return; // keep existing HTML (if any)
+      }
+
+      slides = rows
+        .map(r => ({
+          url: (r?.image_url || r?.image || r?.url || '').trim(),
+          title: (r?.img_title || r?.title || 'Hero Image').trim(),
+          order: Number.isFinite(+r?.display_order) ? +r.display_order : 0
+        }))
+        .filter(s => s.url);
+
+      slides.sort((a, b) => a.order - b.order);
+
+      if (!slides.length) return;
+
+    } catch (e) {
+      console.error('Hero fetch failed:', e);
+      return;
+    }
+
+    // Render slides
+    function render() {
+      stack.innerHTML = slides.map((s, i) => `
+        <div class="lp-hero-card-img" data-idx="${i}">
+          <img src="${escapeHtml(s.url)}" alt="${escapeHtml(s.title)}">
+          <div class="image-overlay"></div>
+        </div>
+      `).join('');
+
+      applyClasses();
+      toggleNav();
+    }
+
+    function applyClasses() {
+      const cards = stack.querySelectorAll('.lp-hero-card-img');
+      const n = cards.length;
+      if (!n) return;
+
+      cards.forEach(c => c.classList.remove('is-active','is-next','is-prev','is-far'));
+
+      const prev = (activeIndex - 1 + n) % n;
+      const next = (activeIndex + 1) % n;
+
+      cards[activeIndex].classList.add('is-active');
+      if (n > 1) cards[next].classList.add('is-next');
+      if (n > 2) cards[prev].classList.add('is-prev');
+
+      cards.forEach((c, idx) => {
+        if (idx !== activeIndex && idx !== next && idx !== prev) c.classList.add('is-far');
       });
+    }
+
+    function goNext() {
+      activeIndex = (activeIndex + 1) % slides.length;
+      applyClasses();
+    }
+
+    function goPrev() {
+      activeIndex = (activeIndex - 1 + slides.length) % slides.length;
+      applyClasses();
+    }
+
+    function toggleNav() {
+      const show = slides.length > 1;
+      if (prevBtn) prevBtn.style.display = show ? '' : 'none';
+      if (nextBtn) nextBtn.style.display = show ? '' : 'none';
+    }
+
+    // Controls
+    if (prevBtn) prevBtn.addEventListener('click', () => { stop(); goPrev(); start(); });
+    if (nextBtn) nextBtn.addEventListener('click', () => { stop(); goNext(); start(); });
+
+    // Pause on hover
+    const wrap = stack.closest('.lp-hero-stack-wrap') || stack;
+    wrap.addEventListener('mouseenter', stop);
+    wrap.addEventListener('mouseleave', start);
+
+    // Autoplay
+    function start() {
+      if (!opts.autoPlay || slides.length <= 1) return;
+      if (timer) return;
+      timer = setInterval(goNext, Math.max(1500, opts.intervalMs || 5500));
+    }
+    function stop() {
+      if (timer) clearInterval(timer);
+      timer = null;
+    }
+
+    render();
+    start();
+  }
+
+
+  /* =========================================================
+   * Back to top button
+   * ========================================================= */
+  const backToTop = document.getElementById('lpBackToTop');
+  if (backToTop) {
+    window.addEventListener('scroll', () => {
+      if (window.scrollY > 400) backToTop.classList.add('visible');
+      else backToTop.classList.remove('visible');
+    });
+
+    backToTop.addEventListener('click', () => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     });
   }
-  
-  // Language selector (placeholder functionality)
+
+  /* =========================================================
+   * Language selector (placeholder)
+   * ========================================================= */
   const languageBtn = document.querySelector('.lp-language-btn');
   if (languageBtn) {
     languageBtn.addEventListener('click', () => {
-      // Add language selection modal or dropdown here
       console.log('Language selector clicked');
-      // You can implement a dropdown menu here
     });
   }
-  
-  // Newsletter form submission
+
+  /* =========================================================
+   * Newsletter form submission (placeholder)
+   * ========================================================= */
   const newsletterForm = document.querySelector('.newsletter-form');
   if (newsletterForm) {
     newsletterForm.addEventListener('submit', (e) => {
       e.preventDefault();
       const email = newsletterForm.querySelector('input[type="email"]').value;
-      
-      // Add your newsletter subscription logic here
       console.log('Newsletter subscription:', email);
-      
-      // Show success message (you can replace this with a toast notification)
       alert('Thank you for subscribing to our newsletter!');
       newsletterForm.reset();
     });
   }
-  
-  // Track footer link clicks (analytics)
+
+  /* =========================================================
+   * Track footer link clicks (analytics)
+   * ========================================================= */
   const footerLinks = document.querySelectorAll('.lp-footer a');
   footerLinks.forEach(link => {
     link.addEventListener('click', (e) => {
       const linkText = e.target.textContent.trim();
       const linkHref = e.target.getAttribute('href');
       console.log('Footer link clicked:', linkText, linkHref);
-      // Add your analytics tracking here
     });
   });
-  
-  // Social media hover effect
+
+  /* =========================================================
+   * Social media hover effect
+   * ========================================================= */
   const socialLinks = document.querySelectorAll('.lp-footer-social a');
   socialLinks.forEach(link => {
     link.addEventListener('mouseenter', () => {
       const icon = link.querySelector('i');
-      icon.style.transform = 'scale(1.2) rotate(5deg)';
+      if (icon) icon.style.transform = 'scale(1.2) rotate(5deg)';
     });
-    
+
     link.addEventListener('mouseleave', () => {
       const icon = link.querySelector('i');
-      icon.style.transform = 'scale(1) rotate(0deg)';
+      if (icon) icon.style.transform = 'scale(1) rotate(0deg)';
     });
   });
+
 });
 </script>
 

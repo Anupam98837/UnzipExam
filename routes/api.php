@@ -29,6 +29,7 @@ use App\Http\Controllers\API\RefundPolicyController;
 use App\Http\Controllers\API\AboutUsController;
 use App\Http\Controllers\API\ContactUsController;
 use App\Http\Controllers\API\SessionTokenController;
+use App\Http\Controllers\API\LandingPageController;
 
 
 
@@ -633,9 +634,17 @@ Route::middleware('checkRole')->prefix('path-game-results')->group(function () {
     Route::post('/', [PathGameResultController::class, 'store']);
     Route::get('/{idOrUuid}', [PathGameResultController::class, 'show']);
 });
-
-
  
+
+// Admin: manage "Updates" strip (you can wrap with auth middleware)
+Route::prefix('landing')->group(function () {
+    Route::get('updates', [LandingPageController::class, 'updatesIndex'])->name('landing.updates.index');
+    Route::post('updates', [LandingPageController::class, 'updatesStore'])->name('landing.updates.store');
+    Route::put('updates/{id}', [LandingPageController::class, 'updatesUpdate'])->name('landing.updates.update');
+    Route::delete('updates/{id}', [LandingPageController::class, 'updatesDestroy'])->name('landing.updates.destroy');
+     // Updates
+    Route::post('/updates/reorder', [LandingPageController::class, 'updates_reorder']);
+});
 //Terms & Condition
 Route::prefix('terms')->group(function () {
     Route::get('/', [TermsController::class, 'index']);
@@ -682,3 +691,17 @@ Route::get('/contact-us/{id}', [ContactUsController::class, 'show']);
 Route::delete('/contact-us/{id}', [ContactUsController::class, 'destroy']);
 Route::get('/contact-us/export/csv', [ContactUsController::class, 'exportCsv']);
 Route::patch('/contact-us/{id}/read', [ContactUsController::class, 'markAsRead']);
+
+ 
+Route::get   ('landing/hero-images',        [LandingPageController::class, 'hero_index'])->name('landing.hero.index');
+Route::post  ('landing/hero-images',        [LandingPageController::class, 'hero_store'])->name('landing.hero.store');
+Route::put   ('landing/hero-images/{id}',   [LandingPageController::class, 'hero_update'])->name('landing.hero.update');
+Route::patch ('landing/hero-images/{id}',   [LandingPageController::class, 'hero_update']);
+Route::delete('landing/hero-images/{id}',   [LandingPageController::class, 'hero_destroy'])->name('landing.hero.destroy');
+ 
+// OPTIONAL: public display API for landing page
+Route::get('landing/hero-images/display', [LandingPageController::class, 'hero_display'])
+    ->name('landing.hero.display');
+// Upload from device
+Route::post('uploads/hero-image', [LandingPageController::class, 'upload']);
+     Route::post('landing/hero/reorder', [LandingPageController::class, 'hero_reorder']);

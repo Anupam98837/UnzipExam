@@ -765,7 +765,7 @@ html.theme-dark .vision-card {
                         <label class="form-label">
                             Featured Image <span class="text-danger">*</span>
                         </label>
-                        <p class="text-muted small mb-3">Recommended: 1200x600px JPG or PNG (max 5MB)</p>
+                        <p class="text-muted small mb-3">Recommended: 1200x600px JPG or PNG (max 2MB)</p>
                         
                         <div class="image-upload-area" id="dropzone">
                             <input type="file" id="imageInput" class="image-input" accept="image/*">
@@ -774,7 +774,7 @@ html.theme-dark .vision-card {
                                 <i class="fa-solid fa-cloud-arrow-up"></i>
                                 <h5>Drag & drop your image here</h5>
                                 <p>or click to browse files</p>
-                                <span class="text-muted small">Supports JPG, PNG, GIF up to 5MB</span>
+                                <span class="text-muted small">Supports JPG, PNG, GIF up to 2MB</span>
                             </div>
                             
                             <div class="upload-preview" id="dzPreview">
@@ -1241,9 +1241,9 @@ html.theme-dark .vision-card {
             return;
         }
         
-        // Check file size (5MB limit)
-        if (file.size > 5 * 1024 * 1024) {
-            showToast('error', 'Image size should be less than 5MB');
+        // Check file size 
+        if (file.size > 2 * 1024 * 1024) {
+            showToast('error', 'Image size should be less than 2MB');
             return;
         }
         

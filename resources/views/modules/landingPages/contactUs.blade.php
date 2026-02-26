@@ -1,13 +1,8 @@
 
 @section('title','Contact Us')
+<link rel="stylesheet" href="{{ asset('assets/css/common/main.css') }}">
 
 <style>
-:root{
-    --primary-color:   #951eaa;
-    --secondary-color: #5e1570;
-    --accent-color:    #c94ff0;
-}
-
 /* ===== Wrapper ===== */
 .contact-section{
     max-width:1200px;

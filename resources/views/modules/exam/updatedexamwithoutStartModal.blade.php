@@ -74,7 +74,6 @@
     .question-title{font-family:Poppins,system-ui,sans-serif;font-size:1.02rem;font-weight:600}
     .question-meta{font-size:.8rem;color:var(--muted,#6b7280)}
     .question-badge{font-size:.72rem;padding:.16rem .55rem;border-radius:999px;background:rgba(79,70,229,.06);color:var(--accent-color,#4f46e5);border:1px solid rgba(79,70,229,.2)}
-    .question-badge-hint{font-size:.72rem;padding:.16rem .55rem;border-radius:999px;background:rgba(22,163,74,.07);color:#15803d;border:1px solid rgba(22,163,74,.25)}
 
     .opt{border-radius:12px;border:1px solid var(--line-soft,#e5e7eb);padding:.65rem .75rem;margin-bottom:.35rem;background:var(--surface,#fff);cursor:pointer;transition:background .16s ease,border-color .16s ease,box-shadow .16s ease}
     .opt:hover{background:var(--page-hover,#f7f8fc);border-color:var(--accent-color,#4f46e5);box-shadow:0 6px 16px rgba(15,23,42,.05)}
@@ -89,141 +88,11 @@
 
     @media (min-width:992px){.col-fixed-260{flex:0 0 260px;max-width:260px}}
 
+    /* small safety: disable click feel when locked */
     .exam-locked{pointer-events:none;opacity:.85;filter:saturate(.85)}
-
-    /* Fullscreen Warning Overlay */
-    #fullscreen-warning-overlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0, 0, 0, 0.95);
-      z-index: 9999;
-      display: none;
-      align-items: center;
-      justify-content: center;
-      backdrop-filter: blur(10px);
-    }
-    #fullscreen-warning-overlay.active {
-      display: flex;
-    }
-    .warning-content {
-      background: white;
-      padding: 3rem;
-      border-radius: 20px;
-      text-align: center;
-      max-width: 500px;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-    }
-    .warning-icon {
-      font-size: 4rem;
-      color: #ef4444;
-      margin-bottom: 1rem;
-    }
-    .warning-title {
-      font-size: 1.5rem;
-      font-weight: 700;
-      color: #111827;
-      margin-bottom: 1rem;
-    }
-    .warning-message {
-      color: #6b7280;
-      margin-bottom: 2rem;
-      line-height: 1.6;
-    }
-    .warning-count {
-      font-size: 2rem;
-      font-weight: 700;
-      color: #ef4444;
-      margin-bottom: 1rem;
-    }
-
-    /* Violation badge — always visible once exam starts */
-    #violation-badge {
-      position: fixed;
-      top: 80px;
-      right: 20px;
-      z-index: 1000;
-      background: #fee;
-      border: 2px solid #ef4444;
-      padding: 0.5rem 1rem;
-      border-radius: 10px;
-      font-weight: 600;
-      color: #dc2626;
-      display: none;
-    }
-    #violation-badge.show {
-      display: block;
-    }
-    #violation-badge.pulse {
-      animation: pulse 1s ease 3;
-    }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.7; transform: scale(1.05); }
-    }
-
-    /* Ready to start rules list */
-    .exam-rules-list {
-      text-align: left;
-      margin: 0;
-      padding: 0;
-      list-style: none;
-    }
-    .exam-rules-list li {
-      display: flex;
-      align-items: flex-start;
-      gap: .6rem;
-      padding: .5rem .75rem;
-      border-radius: 10px;
-      margin-bottom: .4rem;
-      font-size: .9rem;
-      background: #fef2f2;
-      color: #7f1d1d;
-      border: 1px solid #fecaca;
-    }
-    .exam-rules-list li i {
-      margin-top: .15rem;
-      flex-shrink: 0;
-      color: #ef4444;
-    }
-    .exam-rules-list li.rule-ok {
-      background: #f0fdf4;
-      color: #14532d;
-      border-color: #bbf7d0;
-    }
-    .exam-rules-list li.rule-ok i { color: #16a34a; }
   </style>
 </head>
 <body>
-
-<!-- Fullscreen Warning Overlay -->
-<div id="fullscreen-warning-overlay">
-  <div class="warning-content">
-    <div class="warning-icon">
-      <i class="fa-solid fa-triangle-exclamation"></i>
-    </div>
-    <div class="warning-title">Tab Switch Detected!</div>
-    <div class="warning-message">
-      You have left the exam window. This action has been logged.
-      <br><br>
-      <strong>Please return to the exam and stay focused.</strong>
-    </div>
-    <div class="warning-count">
-      Violation #<span id="violation-count">1</span>
-    </div>
-    <button id="return-to-exam-btn" class="btn btn-primary btn-lg">
-      <i class="fa-solid fa-arrow-left me-2"></i>Return to Exam
-    </button>
-  </div>
-</div>
-
-<!-- Violation Badge — shown after exam starts -->
-<div id="violation-badge">
-  <i class="fa-solid fa-exclamation-triangle me-2"></i>
-  Violations: <span id="badge-count">0</span>
-</div>
 
 <header class="exam-header sticky-top">
   <div class="container-xxl d-flex align-items-center justify-content-between py-3">
@@ -232,15 +101,10 @@
       <span class="badge rounded-pill text-bg-light border">
         <i class="fa-solid fa-pencil me-1"></i> Live
       </span>
-      <span id="fullscreen-status" class="badge rounded-pill text-bg-success">
-        <i class="fa-solid fa-expand me-1"></i> Fullscreen
-      </span>
     </div>
-    <div class="d-flex align-items-center gap-2">
-      <div id="timer-pill" class="timer-pill">
-        <i class="fa-solid fa-clock"></i>
-        <span id="time-left">--:--</span>
-      </div>
+    <div id="timer-pill" class="timer-pill">
+      <i class="fa-solid fa-clock"></i>
+      <span id="time-left">--:--</span>
     </div>
   </div>
 </header>
@@ -327,141 +191,6 @@ function typeset(el){
 </script>
 
 <script>
-/* ================== Fullscreen & Tab Switch Detection ================== */
-let violationCount = 0;
-let isFullscreenActive = false;
-let tabSwitchLogged = false;
-
-function requestFullscreen() {
-  const elem = document.documentElement;
-  if (elem.requestFullscreen) {
-    elem.requestFullscreen().catch(err => {
-      console.warn('Fullscreen request failed:', err);
-    });
-  } else if (elem.webkitRequestFullscreen) {
-    elem.webkitRequestFullscreen();
-  } else if (elem.msRequestFullscreen) {
-    elem.msRequestFullscreen();
-  }
-}
-
-// Trigger fullscreen on hover, left-click, and right-click anywhere on the page
-document.addEventListener('mouseover', () => {
-  if (EXAM_STARTED && !isFullscreenActive && !isSubmitting) {
-    requestFullscreen();
-  }
-});
-document.addEventListener('click', () => {
-  if (EXAM_STARTED && !isFullscreenActive && !isSubmitting) {
-    requestFullscreen();
-  }
-});
-document.addEventListener('contextmenu', (e) => {
-  if (EXAM_STARTED && !isSubmitting) {
-    e.preventDefault();
-    if (!isFullscreenActive) {
-      requestFullscreen();
-    }
-    return false;
-  }
-});
-
-function updateFullscreenStatus() {
-  isFullscreenActive = !!(document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement);
-
-  const statusBadge = document.getElementById('fullscreen-status');
-  if (isFullscreenActive) {
-    statusBadge.innerHTML = '<i class="fa-solid fa-expand me-1"></i> Fullscreen';
-    statusBadge.className = 'badge rounded-pill text-bg-success';
-  } else {
-    statusBadge.innerHTML = '<i class="fa-solid fa-compress me-1"></i> Windowed';
-    statusBadge.className = 'badge rounded-pill text-bg-warning';
-  }
-}
-
-function logViolation(type) {
-  violationCount++;
-
-  // Update badge count and show it
-  const badge = document.getElementById('violation-badge');
-  document.getElementById('badge-count').textContent = violationCount;
-  badge.classList.add('show');
-
-  // Pulse animation on each new violation
-  badge.classList.remove('pulse');
-  void badge.offsetWidth; // reflow to restart animation
-  badge.classList.add('pulse');
-
-  console.warn(`Violation #${violationCount}: ${type}`);
-  // api('/api/exam/log-violation', { method: 'POST', body: JSON.stringify({ type, count: violationCount }) });
-
-  return violationCount;
-}
-
-function handleTabSwitch() {
-  if (tabSwitchLogged || !EXAM_STARTED || isSubmitting) return;
-
-  tabSwitchLogged = true;
-  const currentCount = logViolation('Tab Switch');
-
-  // Show warning overlay
-  document.getElementById('violation-count').textContent = currentCount;
-  document.getElementById('fullscreen-warning-overlay').classList.add('active');
-}
-function handleFullscreenExit() {
-  if (!EXAM_STARTED || isSubmitting) return;
-  requestFullscreen();
-}
-
-// Return to exam button
-document.getElementById('return-to-exam-btn')?.addEventListener('click', () => {
-  document.getElementById('fullscreen-warning-overlay').classList.remove('active');
-  tabSwitchLogged = false;
-  requestFullscreen();
-});
-
-// Detect visibility change (tab switch)
-document.addEventListener('visibilitychange', () => {
-  if (document.hidden) {
-    handleTabSwitch();
-    const cur = questions[currentIndex];
-    if (cur?.question_id) leaveQuestion(cur.question_id);
-    cacheSave();
-  } else {
-    tabSwitchLogged = false;
-  }
-});
-
-// Detect fullscreen change
-document.addEventListener('fullscreenchange', () => {
-  updateFullscreenStatus();
-  // Check AFTER updating — isFullscreenActive now reflects current state
-  if (!isFullscreenActive && EXAM_STARTED && !isSubmitting) {
-    handleFullscreenExit();
-  }
-});
-document.addEventListener('webkitfullscreenchange', updateFullscreenStatus);
-document.addEventListener('msfullscreenchange', updateFullscreenStatus);
-// Prevent common shortcuts
-document.addEventListener('keydown', (e) => {
-  if (!EXAM_STARTED || isSubmitting) return;
-
-  if (e.key === 'F11') {
-    e.preventDefault();
-    return false;
-  }
-
-  if ((e.ctrlKey || e.metaKey) && ['w', 't', 'n'].includes(e.key.toLowerCase())) {
-    e.preventDefault();
-    return false;
-  }
-
-  if (e.altKey && e.key === 'Tab') {
-    e.preventDefault();
-    return false;
-  }
-});
-
 /* ================== Globals ================== */
 const $  = s => document.querySelector(s);
 const $$ = s => Array.from(document.querySelectorAll(s));
@@ -504,8 +233,9 @@ let isSubmitting  = false;
 let activeQid     = null;
 let activeStartMs = null;
 
-let EXAM_STARTED  = false;
+let EXAM_STARTED  = true;
 
+/* ✅ guards */
 let AUTO_SUBMIT_FIRED = false;
 
 /* ================== Utilities ================== */
@@ -519,6 +249,7 @@ function disableExamUI(lock=true){
     if (el.tagName === 'BUTTON') el.disabled = !!lock;
   });
 
+  // inputs inside question
   $$('#question-wrap input, #question-wrap textarea, #question-wrap select').forEach(i=>{
     i.disabled = !!lock;
   });
@@ -527,6 +258,7 @@ function disableExamUI(lock=true){
 function ensureAttemptUuid(){
   if (ATTEMPT_UUID) return ATTEMPT_UUID;
 
+  // try reload from storage safely
   ATTEMPT_UUID = localStorage.getItem(STORAGE_ATTEMPT_KEY) || null;
   if (ATTEMPT_UUID) return ATTEMPT_UUID;
 
@@ -545,11 +277,15 @@ function ensureAttemptUuid(){
   return null;
 }
 
+/* ================== Deterministic server date parsing ==================
+   FIX: avoid browser differences for "YYYY-MM-DDTHH:mm:ss" parsing
+*/
 function parseServerDate(val){
   if(!val) return null;
   const s = String(val).trim();
   if(!s) return null;
 
+  // Match: YYYY-MM-DD HH:mm:ss[.ms] OR YYYY-MM-DDTHH:mm:ss[.ms]
   const m = s.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?(?:\.(\d+))?$/);
   if (m){
     const yyyy = Number(m[1]);
@@ -559,10 +295,12 @@ function parseServerDate(val){
     const mi   = Number(m[5]);
     const ss   = Number(m[6] || 0);
     const ms   = Number(String(m[7] || '0').slice(0,3));
+    // Local time (consistent)
     const d = new Date(yyyy, mm, dd, hh, mi, ss, ms);
     return isNaN(d.getTime()) ? null : d;
   }
 
+  // ISO with timezone (Z / +05:30) etc.
   const d = new Date(s);
   return isNaN(d.getTime()) ? null : d;
 }
@@ -580,9 +318,10 @@ const mmss = s => {
   return `${m}:${n}`;
 };
 
+/* ================== API helper (with timeout) ================== */
 async function api(path, opts = {}) {
   const controller = new AbortController();
-  const timeoutMs = Number(opts.timeoutMs || 20000);
+  const timeoutMs = Number(opts.timeoutMs || 20000); // FIX: prevent freeze
   const t = setTimeout(() => controller.abort(), timeoutMs);
 
   try{
@@ -643,6 +382,7 @@ function cacheLoad(){
     currentIndex  = Number.isFinite(Number(c.currentIndex)) ? Number(c.currentIndex) : 0;
     serverEndAt   = c.serverEndAt || null;
 
+    // normalize FIB to arrays
     questions.forEach(q => {
       if (String(q.question_type).toLowerCase() === 'fill_in_the_blank') {
         const cur = selections[q.question_id];
@@ -724,18 +464,6 @@ function startTimerFromServerEnd(){
       AUTO_SUBMIT_FIRED = true;
       if (timerHandle) { clearInterval(timerHandle); timerHandle = null; }
       disableExamUI(true);
-
-      Swal.fire({
-        icon: 'info',
-        title: 'Time\'s Up!',
-        text: 'Your exam time has ended. Submitting your answers automatically...',
-        allowOutsideClick: false,
-        allowEscapeKey: false,
-        showConfirmButton: false,
-        didOpen: () => Swal.showLoading()
-      });
-
-      await new Promise(resolve => setTimeout(resolve, 1500));
       await doSubmit(true);
     }
   };
@@ -849,15 +577,6 @@ function renderQuestion(){
   const multi   = !!q.has_multiple_correct_answer;
   const label   = multi && rawType !== 'fill_in_the_blank' ? 'Multiple choice' : typeLabel(rawType);
 
-  let hintBadge = '';
-  if (rawType !== 'fill_in_the_blank' && rawType !== 'true_false') {
-    if (multi) {
-      hintBadge = `<span class="question-badge-hint ms-1"><i class="fa-solid fa-list-check me-1"></i>One or more answers</span>`;
-    } else {
-      hintBadge = `<span class="question-badge-hint ms-1"><i class="fa-solid fa-circle-dot me-1"></i>One answer only</span>`;
-    }
-  }
-
   const toDisplay = s =>
     normalizeTeX(String(s || '')).replace(/\{dash\}/gi, '<span class="fib-underline">&nbsp;</span>');
 
@@ -869,10 +588,10 @@ function renderQuestion(){
       <div class="flex-grow-1">
         <div class="question-title mb-1">Q${currentIndex + 1}. ${titleHTML}</div>
         ${descHTML ? `<div class="small text-muted mb-2">${descHTML}</div>` : ``}
-        <div class="question-meta d-flex align-items-center flex-wrap gap-1">
+        <div class="question-meta">
           Marks: <b>${q.question_mark ?? 1}</b>
           <span class="mx-1">•</span>
-          <span class="question-badge">${label}</span>${hintBadge}
+          <span class="question-badge">${label}</span>
         </div>
       </div>
       <span class="badge rounded-pill text-bg-info ${reviews[q.question_id] ? '' : 'invisible'}">Review</span>
@@ -881,6 +600,7 @@ function renderQuestion(){
 
   const sel = selections[q.question_id];
 
+  // small html escape for fib inputs
   const escapeHtml = (str) => (str ?? '').toString()
     .replace(/&/g,'&amp;')
     .replace(/</g,'&lt;')
@@ -1050,6 +770,7 @@ function isAttemptMissingError(e){
 async function doSubmit(auto){
   if (isSubmitting) return;
 
+  // ensure attempt exists
   const au = ensureAttemptUuid();
   if (!au) {
     await Swal.fire({icon:'error', title:'Cannot submit', text:'Attempt id missing. Please refresh once and try again.'});
@@ -1077,13 +798,12 @@ async function doSubmit(auto){
     $('#submit-btn .btn-label').classList.add('d-none');
     $('#submit-btn .btn-spinner').classList.remove('d-none');
 
-    if (!auto) {
-      showSubmitting();
-    }
+    showSubmitting();
 
     const curQ = questions[currentIndex];
     if (curQ?.question_id) leaveQuestion(curQ.question_id);
 
+    // build answers safely
     const answers = questions.map(q => {
       const qid = Number(q.question_id);
       return {
@@ -1093,18 +813,11 @@ async function doSubmit(auto){
       };
     });
 
-    try {
-      await api(`/api/exam/attempts/${encodeURIComponent(au)}/bulk-answer`, {
-        method:'POST',
-        body: JSON.stringify({ answers }),
-        timeoutMs: 25000
-      });
-    } catch (bulkErr) {
-      if (isAttemptMissingError(bulkErr)) {
-        throw bulkErr;
-      }
-      console.warn('Bulk answer error:', bulkErr);
-    }
+    await api(`/api/exam/attempts/${encodeURIComponent(au)}/bulk-answer`, {
+      method:'POST',
+      body: JSON.stringify({ answers }),
+      timeoutMs: 25000
+    });
 
     await api(`/api/exam/attempts/${encodeURIComponent(au)}/submit`, {
       method:'POST',
@@ -1112,83 +825,43 @@ async function doSubmit(auto){
     });
 
     if (timerHandle) clearInterval(timerHandle);
+
     Swal.close();
     clearAllExamClientState();
 
     await Swal.fire({
       icon:'success',
-      title: auto ? 'Exam Auto-Submitted' : 'Exam Submitted Successfully',
-      text: auto ? 'Your exam time ended and your responses have been automatically recorded.' : 'Your responses have been recorded.',
-      confirmButtonText:'OK',
-      allowOutsideClick: false,
-      allowEscapeKey: false
+      title:'Exam submitted successfully',
+      text:'Your responses have been recorded.',
+      confirmButtonText:'OK'
     });
 
-    window.location.replace(`/quizzes`);
+    window.location.replace(`/dashboard`);
 
   }catch(e){
-    console.error('Submit error:', e);
+    console.error(e);
     Swal.close();
 
+    // FIX: if attempt already closed/invalid, don't keep user stuck
     if (isAttemptMissingError(e)) {
       clearAllExamClientState();
-
       await Swal.fire({
         icon:'info',
-        title: auto ? 'Exam Time Ended' : 'Exam Already Closed',
-        text: auto
-          ? 'Your exam time has ended. Your responses have been recorded automatically by the system.'
-          : 'This attempt is no longer active. Your responses may have already been recorded.',
-        confirmButtonText:'Go to Dashboard',
-        allowOutsideClick: false,
-        allowEscapeKey: false
-      });
-
-      window.location.replace('/quizzes');
-      return;
-    }
-
-    if (auto && (e?.status === 408 || e?.name === 'AbortError' || e?.message?.includes('timeout'))) {
-      clearAllExamClientState();
-      await Swal.fire({
-        icon:'warning',
-        title:'Connection Issue',
-        text: 'There was a connection issue while submitting. Your responses were saved and will be processed. Please check your dashboard.',
-        confirmButtonText:'Go to Dashboard',
-        allowOutsideClick: false,
-        allowEscapeKey: false
-      });
-      window.location.replace('/quizzes');
-      return;
-    }
-
-    if (!auto) {
-      Swal.fire({
-        icon:'error',
-        title:'Submit Failed',
-        text: e.message || 'Failed to submit exam. Please try again.',
+        title:'Exam already closed',
+        text:'This attempt is no longer active (time may be over or the attempt already finished). Redirecting to dashboard…',
         confirmButtonText:'OK'
       });
+      window.location.replace('/dashboard');
       return;
     }
 
-    clearAllExamClientState();
-    await Swal.fire({
-      icon:'info',
-      title:'Exam Ended',
-      text: 'Your exam time has ended. Please check your dashboard to verify your submission.',
-      confirmButtonText:'Go to Dashboard',
-      allowOutsideClick: false,
-      allowEscapeKey: false
-    });
-    window.location.replace('/quizzes');
-
+    Swal.fire({icon:'error',title:'Submit failed',text:e.message || 'Please try again.'});
   }finally{
     isSubmitting = false;
     $('#submit-btn').disabled = false;
     $('#submit-btn .btn-label').classList.remove('d-none');
     $('#submit-btn .btn-spinner').classList.add('d-none');
-    if (!auto) disableExamUI(false);
+    disableExamUI(false);
   }
 }
 
@@ -1199,6 +872,7 @@ async function bootExam(){
 
     const hasCache = cacheLoad();
 
+    // FIX: validate cached attempt once to avoid "Attempt not found" later
     if (ATTEMPT_UUID) {
       try{
         const data = await api(`/api/exam/attempts/${encodeURIComponent(ATTEMPT_UUID)}/questions`, { method:'GET', timeoutMs: 20000 });
@@ -1206,11 +880,13 @@ async function bootExam(){
 
         if (pack?.attempt?.server_end_at) serverEndAt = pack.attempt.server_end_at;
 
+        // only overwrite questions if cache empty (keeps navigation state)
         if (!hasCache || !questions.length) {
           questions  = pack.questions || [];
           selections = pack.selections || {};
         }
 
+        // if attempt already over, avoid weird auto-submit popups
         const left = computeTimeLeft();
         if (left !== null && left <= 0) {
           clearAllExamClientState();
@@ -1218,6 +894,7 @@ async function bootExam(){
           cacheSave();
         }
       }catch(e){
+        // cached attempt invalid → clear and start fresh
         if (isAttemptMissingError(e) || e?.status === 401 || e?.status === 403) {
           clearAllExamClientState();
         } else {
@@ -1226,6 +903,7 @@ async function bootExam(){
       }
     }
 
+    // start new attempt if needed
     if (!ATTEMPT_UUID) {
       const started = await api(`/api/exam/quizzes/${encodeURIComponent(QUIZ_KEY)}/start`, { method:'POST', timeoutMs: 20000 });
 
@@ -1243,6 +921,7 @@ async function bootExam(){
       cacheSave();
     }
 
+    // fetch questions if needed
     if (!hasCache || !questions.length) {
       const data = await api(`/api/exam/attempts/${encodeURIComponent(ATTEMPT_UUID)}/questions`, { method:'GET', timeoutMs: 20000 });
       const pack = data.data || data;
@@ -1252,6 +931,7 @@ async function bootExam(){
 
       if (pack?.attempt?.server_end_at) serverEndAt = pack.attempt.server_end_at;
 
+      // normalize FIB selections
       questions.forEach(q => {
         if (String(q.question_type).toLowerCase() === 'fill_in_the_blank') {
           const cur = selections[q.question_id];
@@ -1278,6 +958,7 @@ async function bootExam(){
     currentIndex = Math.min(Math.max(0, currentIndex), Math.max(0, questions.length - 1));
     renderQuestion();
 
+    // FIX: start timer only if parsable, else show placeholder
     if (parseServerDate(serverEndAt)) startTimerFromServerEnd();
     else {
       const timeEl = document.getElementById('time-left');
@@ -1287,9 +968,6 @@ async function bootExam(){
 
     const q = questions[currentIndex];
     if (q?.question_id) enterQuestion(q.question_id);
-
-    // Show violation badge now that exam has started
-    document.getElementById('violation-badge').classList.add('show');
 
     if (!bootExam.__bound) {
       bootExam.__bound = true;
@@ -1304,6 +982,14 @@ async function bootExam(){
         if (cur?.question_id) leaveQuestion(cur.question_id);
         cacheSave();
       });
+
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') {
+          const cur = questions[currentIndex];
+          if (cur?.question_id) leaveQuestion(cur.question_id);
+          cacheSave();
+        }
+      });
     }
 
   }catch(e){
@@ -1313,57 +999,9 @@ async function bootExam(){
   }
 }
 
-/* ================== STARTUP ================== */
-let fullscreenTriggered = false;
-
-async function enterFullscreenAndStartExam() {
-  if (fullscreenTriggered) return;
-  fullscreenTriggered = true;
-
-  Swal.close();
-  requestFullscreen();
-
+document.addEventListener('DOMContentLoaded', async () => {
   EXAM_STARTED = true;
   await bootExam();
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-  Swal.fire({
-    icon: 'info',
-    title: 'Before You Begin',
-    html: `
-      <p class="text-muted mb-3" style="font-size:.92rem;">Please read the exam rules carefully before starting.</p>
-      <ul class="exam-rules-list">
-        <li>
-          <i class="fa-solid fa-expand"></i>
-          <span>You <strong>must stay in fullscreen</strong> mode for the entire exam. Exiting fullscreen will be logged as a violation.</span>
-        </li>
-        <li>
-          <i class="fa-solid fa-arrow-right-from-bracket"></i>
-          <span>Do <strong>not switch tabs</strong> or minimize the browser window. Each tab switch is recorded as a violation.</span>
-        </li>
-        <li>
-          <i class="fa-solid fa-triangle-exclamation"></i>
-          <span>All violations are <strong>recorded and tracked</strong>. The violation count is always visible during your exam.</span>
-        </li>
-        <li class="rule-ok">
-          <i class="fa-solid fa-circle-check"></i>
-          <span>Click <strong>"Start Exam"</strong> below to enter fullscreen and begin. Good luck!</span>
-        </li>
-      </ul>`,
-    confirmButtonText: '<i class="fa-solid fa-play me-2"></i>Start Exam',
-    allowOutsideClick: false,
-    allowEscapeKey: false,
-    showConfirmButton: true,
-    customClass: {
-      confirmButton: 'btn btn-primary px-4'
-    },
-    buttonsStyling: false
-  }).then((result) => {
-    if (result.isConfirmed) {
-      enterFullscreenAndStartExam();
-    }
-  });
 });
 </script>
 </body>

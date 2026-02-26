@@ -907,210 +907,214 @@ class DoorGameController extends Controller
 
         return null;
     }
+public function myDoorGames(Request $r)
+{
+    // ✅ Allow student/admin/super_admin
+    if ($resp = $this->requireRole($r, ['student','admin','super_admin'])) return $resp;
 
-    public function myDoorGames(Request $r)
-    {
-        // ✅ Allow student/admin/super_admin
-        if ($resp = $this->requireRole($r, ['student','admin','super_admin'])) return $resp;
+    $actor  = $this->actor($r);
+    $userId = (int) ($actor['id'] ?? 0);
+    $role   = (string) ($actor['role'] ?? '');
 
-        $actor  = $this->actor($r);
-        $userId = (int) ($actor['id'] ?? 0);
-        $role   = (string) ($actor['role'] ?? '');
-
-        if (!$userId) {
-            return response()->json(['success' => false, 'message' => 'Unable to resolve user from token'], 403);
-        }
-
-        $page    = max(1, (int) $r->query('page', 1));
-        $perPage = max(1, min(50, (int) $r->query('per_page', 12)));
-        $search  = trim((string) $r->query('q', ''));
-
-        // ---- Subquery: latest result per game for this user ----
-        $resultSub = DB::table('door_game_results')
-            ->select('door_game_id', DB::raw('MAX(id) as latest_id'))
-            ->where('user_id', $userId)
-            ->whereNull('deleted_at')
-            ->groupBy('door_game_id');
-
-        // ✅ attempts stats per game for this user (COUNT + MAX(attempt_no))
-        $attemptStatSub = DB::table('door_game_results')
-            ->select([
-                'door_game_id',
-                DB::raw('COUNT(*) as attempts_count'),
-                DB::raw('COALESCE(MAX(attempt_no), 0) as max_attempt_no'),
-            ])
-            ->where('user_id', $userId)
-            ->whereNull('deleted_at')
-            ->groupBy('door_game_id');
-
-        // ✅ NEW: assignment info (latest assigned_at for this user)
-        $assignSub = DB::table('user_door_game_assignments as uga')
-            ->select([
-                'uga.door_game_id',
-                DB::raw('MAX(uga.assigned_at) as assigned_at'),
-            ])
-            ->where('uga.user_id', '=', $userId)
-            ->where('uga.status', '=', 'active')
-            ->whereNull('uga.deleted_at')
-            ->groupBy('uga.door_game_id');
-
-        $q = DB::table('door_game as dg')
-            ->leftJoinSub($resultSub, 'lr', function ($join) {
-                $join->on('lr.door_game_id', '=', 'dg.id');
-            })
-            ->leftJoin('door_game_results as dgr', 'dgr.id', '=', 'lr.latest_id')
-            ->leftJoinSub($attemptStatSub, 'ats', function ($join) {
-                $join->on('ats.door_game_id', '=', 'dg.id');
-            })
-            // ✅ JOIN assignment subquery so we can return assigned_at
-            ->leftJoinSub($assignSub, 'asgn', function ($join) {
-                $join->on('asgn.door_game_id', '=', 'dg.id');
-            })
-            ->whereNull('dg.deleted_at')
-            ->where('dg.status', '=', 'active');
-
-        // ✅ STUDENT VISIBILITY: only assigned games
-        if (!in_array($role, ['admin','super_admin'], true)) {
-            // assignment must exist for student
-            $q->whereNotNull('asgn.assigned_at');
-        }
-
-        // Optional text search
-        if ($search !== '') {
-            $q->where(function ($w) use ($search) {
-                $w->where('dg.title', 'like', "%{$search}%")
-                  ->orWhere('dg.description', 'like', "%{$search}%");
-            });
-        }
-
-        $select = [
-            'dg.id',
-            'dg.uuid',
-            'dg.title',
-            'dg.description',
-            'dg.grid_dim',
-            'dg.max_attempts',
-            'dg.time_limit_sec',
-            'dg.status',
-            'dg.created_at',
-
-            // ✅ NEW assigned_at
-            'asgn.assigned_at as assigned_at',
-
-            // attempt stats
-            DB::raw('COALESCE(ats.attempts_count, 0) as attempts_count'),
-            DB::raw('COALESCE(ats.max_attempt_no, 0) as max_attempt_no'),
-
-            // latest result
-            'dgr.id         as result_id',
-            'dgr.created_at as result_created_at',
-            'dgr.score      as result_score',
-            'dgr.attempt_no as result_attempt_no',
-            'dgr.status     as result_status',
-            'dgr.time_taken_ms as result_time_taken_ms',
-        ];
-
-        $paginator = $q->select($select)
-            ->orderBy('dg.created_at', 'desc')
-            ->paginate($perPage, ['*'], 'page', $page);
-
-        $items = collect($paginator->items())->map(function ($row) {
-
-            // ✅ allowed attempts (default 1 if null)
-            $allowed = ($row->max_attempts !== null)
-                ? (int) $row->max_attempts
-                : 1;
-
-            // ✅ used attempts (safe: max(attempt_no, count))
-            $usedByCount = (int) ($row->attempts_count ?? 0);
-            $usedByMaxNo = (int) ($row->max_attempt_no ?? 0);
-            $used = max($usedByCount, $usedByMaxNo);
-
-            // ✅ remaining attempts
-            $remaining = $allowed > 0 ? max($allowed - $used, 0) : 0;
-
-            $maxReached = ($allowed > 0) ? ($used >= $allowed) : false;
-            $canAttempt = !$maxReached;
-
-            // ✅ my_status:
-            $latestStatus = (string) ($row->result_status ?? '');
-            if ($row->result_id && $latestStatus === 'in_progress') {
-                $myStatus = 'in_progress';
-            } elseif ($row->result_id) {
-                $myStatus = 'completed';
-            } else {
-                $myStatus = 'upcoming';
-            }
-
-            // total_time for UI (minutes) — uses time_limit_sec
-            $totalMinutes = null;
-            $limitSec = (int) ($row->time_limit_sec ?? 0);
-            if ($limitSec > 0) $totalMinutes = (int) ceil($limitSec / 60);
-
-            // total_questions not meaningful for door game; keep 0
-            $totalQuestions = 0;
-
-            return [
-                'id'              => (int) $row->id,
-                'uuid'            => (string) $row->uuid,
-
-                // ✅ NEW: assignment timestamp
-                'assigned_at'     => $row->assigned_at
-                    ? \Carbon\Carbon::parse($row->assigned_at)->toDateTimeString()
-                    : null,
-
-                // UI fields
-                'title'           => (string) ($row->title ?? 'Door Game'),
-                'excerpt'         => (string) ($row->description ?? ''),
-                'total_time'      => $totalMinutes,
-                'total_questions' => $totalQuestions,
-
-                // extra info useful for door game UI
-                'grid_dim'        => (int) ($row->grid_dim ?? 3),
-                'time_limit_sec'  => (int) ($row->time_limit_sec ?? 0),
-
-                // ✅ old key (keep for backward compatibility)
-                'total_attempts'  => $allowed,
-
-                // ✅ NEW KEYS (frontend max-attempt logic uses these)
-                'max_attempts_allowed' => $allowed,
-                'my_attempts'           => $used,
-                'remaining_attempts'    => $remaining,
-                'max_attempt_reached'   => $maxReached,
-                'can_attempt'           => $canAttempt,
-
-                'is_public'       => false,
-                'status'          => (string) ($row->status ?? 'active'),
-
-                'created_at'      => $row->created_at
-                    ? \Carbon\Carbon::parse($row->created_at)->toDateTimeString()
-                    : null,
-
-                'my_status'       => $myStatus,
-
-                // Result info (if exists)
-                'result' => $row->result_id ? [
-                    'id'            => (int) $row->result_id,
-                    'created_at'    => $row->result_created_at
-                        ? \Carbon\Carbon::parse($row->result_created_at)->toDateTimeString()
-                        : null,
-                    'score'         => $row->result_score !== null ? (int) $row->result_score : null,
-                    'attempt_no'    => $row->result_attempt_no !== null ? (int) $row->result_attempt_no : null,
-                    'status'        => (string) ($row->result_status ?? null),
-                    'time_taken_ms' => $row->result_time_taken_ms !== null ? (int) $row->result_time_taken_ms : null,
-                ] : null,
-            ];
-        })->values();
-
-        return response()->json([
-            'success'    => true,
-            'data'       => $items,
-            'pagination' => [
-                'total'        => (int) $paginator->total(),
-                'per_page'     => (int) $paginator->perPage(),
-                'current_page' => (int) $paginator->currentPage(),
-                'last_page'    => (int) $paginator->lastPage(),
-            ],
-        ]);
+    if (!$userId) {
+        return response()->json(['success' => false, 'message' => 'Unable to resolve user from token'], 403);
     }
+
+    $page    = max(1, (int) $r->query('page', 1));
+    $perPage = max(1, min(50, (int) $r->query('per_page', 12)));
+    $search  = trim((string) $r->query('q', ''));
+
+    // ✅ Column safety (won’t break if column doesn’t exist)
+    $hasInstr        = Schema::hasColumn('door_game', 'instructions');
+    $hasInstrAlt     = Schema::hasColumn('door_game', 'instruction');
+    $hasInstrHtml    = Schema::hasColumn('door_game', 'instructions_html');
+    $hasInstrHtmlAlt = Schema::hasColumn('door_game', 'instruction_html');
+
+    // ---- Subquery: latest result per game for this user ----
+    $resultSub = DB::table('door_game_results')
+        ->select('door_game_id', DB::raw('MAX(id) as latest_id'))
+        ->where('user_id', $userId)
+        ->whereNull('deleted_at')
+        ->groupBy('door_game_id');
+
+    // ✅ attempts stats per game for this user (COUNT + MAX(attempt_no))
+    $attemptStatSub = DB::table('door_game_results')
+        ->select([
+            'door_game_id',
+            DB::raw('COUNT(*) as attempts_count'),
+            DB::raw('COALESCE(MAX(attempt_no), 0) as max_attempt_no'),
+        ])
+        ->where('user_id', $userId)
+        ->whereNull('deleted_at')
+        ->groupBy('door_game_id');
+
+    // ✅ assignment info (latest assigned_at for this user)
+    $assignSub = DB::table('user_door_game_assignments as uga')
+        ->select([
+            'uga.door_game_id',
+            DB::raw('MAX(uga.assigned_at) as assigned_at'),
+        ])
+        ->where('uga.user_id', '=', $userId)
+        ->where('uga.status', '=', 'active')
+        ->whereNull('uga.deleted_at')
+        ->groupBy('uga.door_game_id');
+
+    $q = DB::table('door_game as dg')
+        ->leftJoinSub($resultSub, 'lr', function ($join) {
+            $join->on('lr.door_game_id', '=', 'dg.id');
+        })
+        ->leftJoin('door_game_results as dgr', 'dgr.id', '=', 'lr.latest_id')
+        ->leftJoinSub($attemptStatSub, 'ats', function ($join) {
+            $join->on('ats.door_game_id', '=', 'dg.id');
+        })
+        ->leftJoinSub($assignSub, 'asgn', function ($join) {
+            $join->on('asgn.door_game_id', '=', 'dg.id');
+        })
+        ->whereNull('dg.deleted_at')
+        ->where('dg.status', '=', 'active');
+
+    // ✅ STUDENT VISIBILITY: only assigned games
+    if (!in_array($role, ['admin','super_admin'], true)) {
+        $q->whereNotNull('asgn.assigned_at');
+    }
+
+    // Optional text search
+    if ($search !== '') {
+        $q->where(function ($w) use ($search, $hasInstr, $hasInstrAlt) {
+            $w->where('dg.title', 'like', "%{$search}%")
+              ->orWhere('dg.description', 'like', "%{$search}%");
+
+            // ✅ include instructions in search if available
+            if ($hasInstr)    $w->orWhere('dg.instructions', 'like', "%{$search}%");
+            if ($hasInstrAlt) $w->orWhere('dg.instruction', 'like', "%{$search}%");
+        });
+    }
+
+    $select = [
+        'dg.id',
+        'dg.uuid',
+        'dg.title',
+
+        // ✅ send description separately (don’t only hide in excerpt)
+        'dg.description as description',
+
+        // ✅ instructions + instructions_html (safe fallback)
+        $hasInstr
+            ? 'dg.instructions as instructions'
+            : ($hasInstrAlt ? 'dg.instruction as instructions' : DB::raw("'' as instructions")),
+
+        $hasInstrHtml
+            ? 'dg.instructions_html as instructions_html'
+            : ($hasInstrHtmlAlt ? 'dg.instruction_html as instructions_html' : DB::raw("'' as instructions_html")),
+
+        'dg.grid_dim',
+        'dg.max_attempts',
+        'dg.time_limit_sec',
+        'dg.status',
+        'dg.created_at',
+
+        'asgn.assigned_at as assigned_at',
+
+        DB::raw('COALESCE(ats.attempts_count, 0) as attempts_count'),
+        DB::raw('COALESCE(ats.max_attempt_no, 0) as max_attempt_no'),
+
+        'dgr.id         as result_id',
+        'dgr.created_at as result_created_at',
+        'dgr.score      as result_score',
+        'dgr.attempt_no as result_attempt_no',
+        'dgr.status     as result_status',
+        'dgr.time_taken_ms as result_time_taken_ms',
+    ];
+
+    $paginator = $q->select($select)
+        ->orderBy('dg.created_at', 'desc')
+        ->paginate($perPage, ['*'], 'page', $page);
+
+    $items = collect($paginator->items())->map(function ($row) {
+
+        $allowed = ($row->max_attempts !== null) ? (int) $row->max_attempts : 1;
+
+        $usedByCount = (int) ($row->attempts_count ?? 0);
+        $usedByMaxNo = (int) ($row->max_attempt_no ?? 0);
+        $used = max($usedByCount, $usedByMaxNo);
+
+        $remaining = $allowed > 0 ? max($allowed - $used, 0) : 0;
+
+        $maxReached = ($allowed > 0) ? ($used >= $allowed) : false;
+        $canAttempt = !$maxReached;
+
+        $latestStatus = (string) ($row->result_status ?? '');
+        if ($row->result_id && $latestStatus === 'in_progress') $myStatus = 'in_progress';
+        elseif ($row->result_id) $myStatus = 'completed';
+        else $myStatus = 'upcoming';
+
+        $totalMinutes = null;
+        $limitSec = (int) ($row->time_limit_sec ?? 0);
+        if ($limitSec > 0) $totalMinutes = (int) ceil($limitSec / 60);
+
+        return [
+            'id'              => (int) $row->id,
+            'uuid'            => (string) $row->uuid,
+
+            'assigned_at'     => $row->assigned_at
+                ? \Carbon\Carbon::parse($row->assigned_at)->toDateTimeString()
+                : null,
+
+            'title'           => (string) ($row->title ?? 'Door Game'),
+
+            // ✅ NEW: separate fields for your modal
+            'description'       => (string) ($row->description ?? ''),
+            'instructions_html' => (string) ($row->instructions_html ?? ''),
+
+            // ✅ keep old key so UI won’t break anywhere else
+            'excerpt'         => (string) ($row->description ?? ''),
+
+            'total_time'      => $totalMinutes,
+            'total_questions' => 0,
+
+            'grid_dim'        => (int) ($row->grid_dim ?? 3),
+            'time_limit_sec'  => (int) ($row->time_limit_sec ?? 0),
+
+            'total_attempts'  => $allowed,
+
+            'max_attempts_allowed' => $allowed,
+            'my_attempts'           => $used,
+            'remaining_attempts'    => $remaining,
+            'max_attempt_reached'   => $maxReached,
+            'can_attempt'           => $canAttempt,
+
+            'is_public'       => false,
+            'status'          => (string) ($row->status ?? 'active'),
+
+            'created_at'      => $row->created_at
+                ? \Carbon\Carbon::parse($row->created_at)->toDateTimeString()
+                : null,
+
+            'my_status'       => $myStatus,
+
+            'result' => $row->result_id ? [
+                'id'            => (int) $row->result_id,
+                'created_at'    => $row->result_created_at
+                    ? \Carbon\Carbon::parse($row->result_created_at)->toDateTimeString()
+                    : null,
+                'score'         => $row->result_score !== null ? (int) $row->result_score : null,
+                'attempt_no'    => $row->result_attempt_no !== null ? (int) $row->result_attempt_no : null,
+                'status'        => (string) ($row->result_status ?? null),
+                'time_taken_ms' => $row->result_time_taken_ms !== null ? (int) $row->result_time_taken_ms : null,
+            ] : null,
+        ];
+    })->values();
+
+    return response()->json([
+        'success'    => true,
+        'data'       => $items,
+        'pagination' => [
+            'total'        => (int) $paginator->total(),
+            'per_page'     => (int) $paginator->perPage(),
+            'current_page' => (int) $paginator->currentPage(),
+            'last_page'    => (int) $paginator->lastPage(),
+        ],
+    ]);
+}
+
 }

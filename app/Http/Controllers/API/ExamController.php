@@ -852,183 +852,305 @@ public function questions(Request $request, string $attemptUuid)
      | body optional: { answers: [...] } same as bulkAnswer
      |============================================ */
     private function writeAttemptAnswerDerived(int $attemptId, array $breakdown): void
-    {
-        $now = now();
-        foreach ($breakdown as $row) {
-            $qid = (int) $row['question_id'];
-            $upd = [
-                'is_correct'          => $row['is_correct'],
-                'awarded_mark'        => (int) $row['awarded_mark'],
-                'selected_answer_ids' => isset($row['selected_answer_ids']) ? json_encode($row['selected_answer_ids'], JSON_UNESCAPED_UNICODE) : null,
-                'selected_text'       => isset($row['selected_text']) ? (string)$row['selected_text'] : null,
-                'updated_at'          => $now,
-            ];
+{
+    if (empty($breakdown)) return;
 
-            $exists = DB::table('quizz_attempt_answers')
+    $now = now();
+
+    // 1 query to know which rows already exist
+    $existingQids = DB::table('quizz_attempt_answers')
+        ->where('attempt_id', $attemptId)
+        ->pluck('question_id')
+        ->map(fn($v) => (int)$v)
+        ->flip()
+        ->all();
+
+    $toInsert   = [];
+    $qTypeCache = [];  // avoid re-querying same question_type
+
+    foreach ($breakdown as $snap) {
+        $qid = (int) $snap['question_id'];
+
+        // Derive selected_answer_ids + selected_text from new format
+        if (array_key_exists('answer_ids', $snap)) {
+            // multi-select
+            $ansIds  = $snap['answer_ids'];             // int[]
+            $ansText = null;
+        } elseif (array_key_exists('answer_text', $snap)) {
+            // fill in the blank
+            $ansIds  = null;
+            $ansText = (string)($snap['answer_text'] ?? '');
+        } else {
+            // single MCQ — answer_id (int|null)
+            $aid     = $snap['answer_id'] ?? null;
+            $ansIds  = is_null($aid) ? null : [$aid];
+            $ansText = null;
+        }
+
+        $upd = [
+            'is_correct'          => (int) $snap['is_correct'],
+            'awarded_mark'        => (int) $snap['awarded_mark'],
+            'selected_answer_ids' => $ansIds !== null
+                ? json_encode($ansIds, JSON_UNESCAPED_UNICODE)
+                : null,
+            'selected_text'       => $ansText,
+            'updated_at'          => $now,
+        ];
+
+        if (isset($existingQids[$qid])) {
+            DB::table('quizz_attempt_answers')
                 ->where('attempt_id', $attemptId)
                 ->where('question_id', $qid)
-                ->exists();
-
-            if ($exists) {
-                DB::table('quizz_attempt_answers')
-                    ->where('attempt_id', $attemptId)->where('question_id', $qid)
-                    ->update($upd + ['answered_at' => DB::raw('COALESCE(answered_at, NOW())')]);
-            } else {
-                DB::table('quizz_attempt_answers')->insert([
-                    'attempt_id'     => $attemptId,
-                    'question_id'    => $qid,
-                    'question_type'  => DB::table('quizz_questions')->where('id',$qid)->value('question_type') ?? 'mcq',
-                    'selected_raw'   => null,
-                    'time_spent_sec' => 0,
-                    'answered_at'    => $now,
-                    'created_at'     => $now,
-                    'updated_at'     => $now,
-                ] + $upd);
+                ->update($upd + ['answered_at' => DB::raw('COALESCE(answered_at, NOW())')]);
+        } else {
+            if (!isset($qTypeCache[$qid])) {
+                $qTypeCache[$qid] = DB::table('quizz_questions')
+                    ->where('id', $qid)->value('question_type') ?? 'mcq';
             }
+            $toInsert[] = array_merge($upd, [
+                'attempt_id'     => $attemptId,
+                'question_id'    => $qid,
+                'question_type'  => $qTypeCache[$qid],
+                'selected_raw'   => null,
+                'time_spent_sec' => 0,
+                'answered_at'    => $now,
+                'created_at'     => $now,
+            ]);
         }
     }
 
+    if (!empty($toInsert)) {
+        DB::table('quizz_attempt_answers')->insert($toInsert);
+    }
+}
+    /**
+ * Normalize a single snapshot row to the new format.
+ * Old format used: selected, selected_answer_ids, selected_text
+ * New format uses: answer_id | answer_ids | answer_text, time_sec
+ */
+private function normalizeSnap(array $snap): array
+{
+    // Already new format — has at least one of the new keys
+    if (
+        array_key_exists('answer_id', $snap) ||
+        array_key_exists('answer_ids', $snap) ||
+        array_key_exists('answer_text', $snap)
+    ) {
+        return $snap;
+    }
+
+    // ---- Legacy format → convert ----
+    $ids  = $snap['selected_answer_ids'] ?? null;   // null | int[] 
+    $text = $snap['selected_text'] ?? null;          // string | null
+
+    // FIB: had selected_text, no ids
+    if ($text !== null && (is_null($ids) || $ids === [])) {
+        $snap['answer_text'] = $text;
+    }
+    // Multi-select: array with more than 1 id
+    elseif (is_array($ids) && count($ids) > 1) {
+        $snap['answer_ids'] = array_values(array_map('intval', $ids));
+    }
+    // Single MCQ: array with 1 id, or a bare int
+    else {
+        $snap['answer_id'] = is_array($ids) ? ($ids[0] ?? null) : (is_null($ids) ? null : (int)$ids);
+    }
+
+    // Legacy had no per-question time in the snapshot
+    if (!array_key_exists('time_sec', $snap)) {
+        $snap['time_sec'] = 0;
+    }
+
+    // Keep selected for FIB fibExplain compat — don't remove it
+    return $snap;
+}
+
     public function submit(Request $request, string $attemptUuid)
-    {
-        $user = $this->getUserFromToken($request);
-        if (!$user) return response()->json(['success'=>false,'message'=>'Unauthorized'], 401);
+{
+    $user = $this->getUserFromToken($request);
+    if (!$user) return response()->json(['success'=>false,'message'=>'Unauthorized'], 401);
 
-        $attempt = DB::table('quizz_attempts')->where('uuid', $attemptUuid)->first();
-        if (!$attempt || (int)$attempt->user_id !== (int)$user->id) {
-            return response()->json(['success'=>false,'message'=>'Attempt not found'], 404);
-        }
+    $attempt = DB::table('quizz_attempts')->where('uuid', $attemptUuid)->first();
+    if (!$attempt || (int)$attempt->user_id !== (int)$user->id) {
+        return response()->json(['success'=>false,'message'=>'Attempt not found'], 404);
+    }
 
-        if (in_array($attempt->status, ['submitted','auto_submitted'], true)) {
-            $summary = $this->resultSummaryForAttempt($attempt);
-            return response()->json(['success'=>true] + $summary, 200);
-        }
+    // Already submitted — return existing result idempotently
+    if (in_array($attempt->status, ['submitted','auto_submitted'], true)) {
+        $summary = $this->resultSummaryForAttempt($attempt);
+        return response()->json(['success'=>true] + $summary, 200);
+    }
 
-        if ($this->deadlinePassed($attempt)) {
-            $attempt = $this->autoFinalize($attempt, true);
-            $summary = $this->resultSummaryForAttempt($attempt);
-            return response()->json(['success'=>true] + $summary, 200);
-        }
+    // Deadline passed — auto finalize and return
+    if ($this->deadlinePassed($attempt)) {
+        $attempt = $this->autoFinalize($attempt, true);
+        $summary = $this->resultSummaryForAttempt($attempt);
+        return response()->json(['success'=>true] + $summary, 200);
+    }
 
-        $now = Carbon::now();
+    $now = Carbon::now();
 
-        DB::beginTransaction();
-        try {
-            // OPTIONAL: if frontend posts answers in submit → persist them first
-            if ($request->has('answers') && is_array($request->input('answers'))) {
-                // reuse bulk logic inline (without returning)
-                $payload = $request->input('answers', []);
-                $qIds = array_values(array_unique(array_map(fn($x)=> (int)($x['question_id'] ?? 0), $payload)));
-                $qIds = array_values(array_filter($qIds, fn($x)=> $x > 0));
+    // ========================================================
+    // STEP 1 — Save any answers posted inline with submit
+    // Done OUTSIDE the transaction — these are safe idempotent
+    // writes and don't need to be atomic with result creation
+    // ========================================================
+    if ($request->has('answers') && is_array($request->input('answers'))) {
+        $payload = $request->input('answers', []);
 
-                $qMap = DB::table('quizz_questions')
-                    ->where('quiz_id', $attempt->quiz_id)
-                    ->whereIn('id', $qIds)
-                    ->get(['id','question_type'])
-                    ->keyBy('id');
+        $qIds = array_values(array_unique(
+            array_filter(
+                array_map(fn($x) => (int)($x['question_id'] ?? 0), $payload),
+                fn($x) => $x > 0
+            )
+        ));
 
-                if ($qMap->count() !== count($qIds)) {
-                    DB::rollBack();
-                    return response()->json([
-                        'success'=>false,
-                        'message'=>'One or more questions are invalid for this quiz',
-                    ], 422);
-                }
+        if (!empty($qIds)) {
+            $qMap = DB::table('quizz_questions')
+                ->where('quiz_id', $attempt->quiz_id)
+                ->whereIn('id', $qIds)
+                ->get(['id','question_type'])
+                ->keyBy('id');
 
-                foreach ($payload as $row) {
-                    $qid = (int)($row['question_id'] ?? 0);
-                    if ($qid <= 0) continue;
+            if ($qMap->count() !== count($qIds)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'One or more questions are invalid for this quiz',
+                ], 422);
+            }
 
-                    $selected  = $row['selected'] ?? null;
-                    $timeSpent = (int)($row['time_spent_sec'] ?? 0);
-                    if ($timeSpent < 0) $timeSpent = 0;
+            foreach ($payload as $row) {
+                $qid = (int)($row['question_id'] ?? 0);
+                if ($qid <= 0) continue;
 
-                    $qType = (string)($qMap[$qid]->question_type ?? 'mcq');
-                    $selectedJson = json_encode($selected, JSON_UNESCAPED_UNICODE);
+                $selected     = $row['selected'] ?? null;
+                $timeSpent    = max(0, (int)($row['time_spent_sec'] ?? 0));
+                $qType        = (string)($qMap[$qid]->question_type ?? 'mcq');
+                $selectedJson = json_encode($selected, JSON_UNESCAPED_UNICODE);
 
-                    $existing = DB::table('quizz_attempt_answers')
-                        ->where('attempt_id', $attempt->id)
-                        ->where('question_id', $qid)
-                        ->lockForUpdate()
-                        ->first();
+                $existing = DB::table('quizz_attempt_answers')
+                    ->where('attempt_id', $attempt->id)
+                    ->where('question_id', $qid)
+                    ->first();
 
-                    if ($existing) {
-                        DB::table('quizz_attempt_answers')->where('id', $existing->id)->update([
+                if ($existing) {
+                    DB::table('quizz_attempt_answers')
+                        ->where('id', $existing->id)
+                        ->update([
                             'selected_raw'   => $selectedJson,
                             'question_type'  => $existing->question_type ?: $qType,
                             'time_spent_sec' => (int)($existing->time_spent_sec ?? 0) + $timeSpent,
                             'answered_at'    => $existing->answered_at ?: $now,
                             'updated_at'     => $now,
                         ]);
-                    } else {
-                        DB::table('quizz_attempt_answers')->insert([
-                            'attempt_id'     => $attempt->id,
-                            'question_id'    => $qid,
-                            'question_type'  => $qType,
-                            'selected_raw'   => $selectedJson,
-                            'time_spent_sec' => $timeSpent,
-                            'answered_at'    => $now,
-                            'created_at'     => $now,
-                            'updated_at'     => $now,
-                        ]);
-                    }
+                } else {
+                    DB::table('quizz_attempt_answers')->insert([
+                        'attempt_id'     => $attempt->id,
+                        'question_id'    => $qid,
+                        'question_type'  => $qType,
+                        'selected_raw'   => $selectedJson,
+                        'time_spent_sec' => $timeSpent,
+                        'answered_at'    => $now,
+                        'created_at'     => $now,
+                        'updated_at'     => $now,
+                    ]);
                 }
-
-                DB::table('quizz_attempts')->where('id', $attempt->id)->update([
-                    'last_activity_at' => $now,
-                    'updated_at'       => $now,
-                ]);
             }
 
-            // Score & persist result
-            $scored  = $this->scoreAttempt($attempt->id);
-            $this->writeAttemptAnswerDerived($attempt->id, $scored['answers']);
-            $publish = $this->shouldPublishToStudent((int)$attempt->quiz_id);
-
-            $cnt = $scored['counters'];
-            $pct = $scored['total_marks'] ? round($scored['marks_obtained'] / $scored['total_marks'] * 100, 2) : 0;
-
-            $resultId = DB::table('quizz_results')->insertGetId([
-                'uuid'               => (string) Str::uuid(),
-                'attempt_id'         => (int) $attempt->id,
-                'quiz_id'            => (int) $attempt->quiz_id,
-                'user_id'            => (int) $attempt->user_id,
-                'marks_obtained'     => (int) $scored['marks_obtained'],
-                'total_marks'        => (int) $scored['total_marks'],
-                'marks_total'        => (int) $scored['total_marks'],
-                'total_questions'    => (int) $cnt['total_questions'],
-                'total_correct'      => (int) $cnt['total_correct'],
-                'total_incorrect'    => (int) $cnt['total_incorrect'],
-                'total_skipped'      => (int) $cnt['total_skipped'],
-                'percentage'         => $pct,
-                'attempt_number'     => (int) $this->attemptNumberForUser((int)$attempt->quiz_id, (int)$attempt->user_id) + 1,
-                'students_answer'    => json_encode($scored['answers'], JSON_UNESCAPED_UNICODE),
-                'publish_to_student' => $publish ? 1 : 0,
-                'result_set_up_type' => DB::table('quizz')->where('id',$attempt->quiz_id)->value('result_set_up_type') ?? 'Immediately',
-                'result_release_date'=> DB::table('quizz')->where('id',$attempt->quiz_id)->value('result_release_date'),
-                'created_at'         => $now,
-                'updated_at'         => $now,
-            ]);
-
             DB::table('quizz_attempts')->where('id', $attempt->id)->update([
-                'status'      => 'submitted',
-                'finished_at' => $now,
-                'updated_at'  => $now,
-                'result_id'   => $resultId,
+                'last_activity_at' => $now,
+                'updated_at'       => $now,
             ]);
-
-            DB::commit();
-
-            $attempt = DB::table('quizz_attempts')->where('id', $attempt->id)->first();
-            $summary = $this->resultSummaryForAttempt($attempt);
-
-            return response()->json(['success'=>true] + $summary, 201);
-        } catch (\Throwable $e) {
-            DB::rollBack();
-            Log::error('[Exam submit] failed', ['e'=>$e->getMessage()]);
-            return response()->json(['success'=>false,'message'=>'Failed to submit'], 500);
         }
     }
 
+    // ========================================================
+    // STEP 2 — All reads/computation OUTSIDE the transaction
+    // scoreAttempt fires 3 flat queries — no reason to hold
+    // a DB lock while PHP is doing scoring logic
+    // ========================================================
+    $scored = $this->scoreAttempt($attempt->id);
+
+    // Fetch quiz data once — avoids 2 separate ->value() calls
+    // inside the transaction
+    $quiz = DB::table('quizz')
+        ->where('id', $attempt->quiz_id)
+        ->first(['result_set_up_type', 'result_release_date']);
+
+    // Compute attempt number before opening transaction
+    $nextAttemptNumber = $this->attemptNumberForUser(
+        (int)$attempt->quiz_id,
+        (int)$attempt->user_id
+    ) + 1;
+
+    // Compute publish flag before opening transaction
+    $publish = $this->shouldPublishToStudent((int)$attempt->quiz_id);
+
+    $cnt = $scored['counters'];
+    $pct = $scored['total_marks']
+        ? round($scored['marks_obtained'] / $scored['total_marks'] * 100, 2)
+        : 0;
+
+    // ========================================================
+    // STEP 3 — Transaction is now TINY: just 3 writes
+    // writeAttemptAnswerDerived  → 1 SELECT + N updates + 1 INSERT
+    // quizz_results INSERT        → 1 query
+    // quizz_attempts UPDATE       → 1 query
+    // ========================================================
+    DB::beginTransaction();
+    try {
+        // Write scored derived columns back to attempt_answers
+        // Uses new snapshot format (answer_id / answer_ids / answer_text + time_sec)
+        $this->writeAttemptAnswerDerived($attempt->id, $scored['answers']);
+
+        $resultId = DB::table('quizz_results')->insertGetId([
+            'uuid'               => (string) Str::uuid(),
+            'attempt_id'         => (int) $attempt->id,
+            'quiz_id'            => (int) $attempt->quiz_id,
+            'user_id'            => (int) $attempt->user_id,
+            'marks_obtained'     => (int) $scored['marks_obtained'],
+            'total_marks'        => (int) $scored['total_marks'],
+            'marks_total'        => (int) $scored['total_marks'],
+            'total_questions'    => (int) $cnt['total_questions'],
+            'total_correct'      => (int) $cnt['total_correct'],
+            'total_incorrect'    => (int) $cnt['total_incorrect'],
+            'total_skipped'      => (int) $cnt['total_skipped'],
+            'percentage'         => $pct,
+            'attempt_number'     => $nextAttemptNumber,
+            // students_answer now stores new compact format:
+            // [{question_id, answer_id|answer_ids|answer_text, is_correct, awarded_mark, time_sec}]
+            'students_answer'    => json_encode($scored['answers'], JSON_UNESCAPED_UNICODE),
+            'publish_to_student' => $publish ? 1 : 0,
+            'result_set_up_type' => $quiz->result_set_up_type ?? 'Immediately',
+            'result_release_date'=> $quiz->result_release_date ?? null,
+            'created_at'         => $now,
+            'updated_at'         => $now,
+        ]);
+
+        DB::table('quizz_attempts')->where('id', $attempt->id)->update([
+            'status'      => 'submitted',
+            'finished_at' => $now,
+            'updated_at'  => $now,
+            'result_id'   => $resultId,
+        ]);
+
+        DB::commit();
+
+        $attempt = DB::table('quizz_attempts')->where('id', $attempt->id)->first();
+        $summary = $this->resultSummaryForAttempt($attempt);
+
+        return response()->json(['success'=>true] + $summary, 201);
+
+    } catch (\Throwable $e) {
+        DB::rollBack();
+        Log::error('[Exam submit] failed', [
+            'e'           => $e->getMessage(),
+            'attempt_uuid'=> $attemptUuid,
+            'trace'       => $e->getTraceAsString(),
+        ]);
+        return response()->json(['success'=>false,'message'=>'Failed to submit'], 500);
+    }
+}
     /* ============================================
      | Status
      |============================================ */
@@ -1110,11 +1232,19 @@ h1,h2{margin:6px 0}
 
                 $stuSel = null;
                 foreach ($ans as $row) {
-                    if ((int)($row['question_id'] ?? 0) === (int)$q->id) {
-                        $stuSel = $row['selected'] ?? null;
-                        break;
-                    }
-                }
+    if ((int)($row['question_id'] ?? 0) === (int)$q->id) {
+        $row = $this->normalizeSnap($row);
+        // For FIB fibExplain needs the raw text; for MCQ it needs an id or array of ids
+        if (array_key_exists('answer_text', $row)) {
+            $stuSel = $row['answer_text'];
+        } elseif (array_key_exists('answer_ids', $row)) {
+            $stuSel = $row['answer_ids'];
+        } else {
+            $stuSel = $row['answer_id'] ?? null;
+        }
+        break;
+    }
+}
 
                 // derive correctness (for print)
                 if ($q->question_type === 'fill_in_the_blank') {
@@ -1339,112 +1469,134 @@ h1,h2{margin:6px 0}
             'correct_display' => implode(' | ', $correctParts),
         ];
     }
-
-    private function scoreAttempt(int $attemptId): array
-    {
-        $attempt = DB::table('quizz_attempts')->where('id', $attemptId)->first();
-        if (!$attempt) {
-            return [
-                'marks_obtained'=>0,'total_marks'=>0,'answers'=>[],
-                'counters'=>['total_questions'=>0,'total_correct'=>0,'total_incorrect'=>0,'total_skipped'=>0]
-            ];
-        }
-
-        $qRows = DB::table('quizz_questions')
-            ->where('quiz_id', $attempt->quiz_id)
-            ->orderBy('question_order')
-            ->get();
-
-        $aRows = DB::table('quizz_question_answers')
-            ->whereIn('belongs_question_id', $qRows->pluck('id'))
-            ->orderBy('belongs_question_id')
-            ->orderBy('answer_order')
-            ->get()
-            ->groupBy('belongs_question_id');
-
-        $saved = DB::table('quizz_attempt_answers')
-            ->where('attempt_id', $attemptId)
-            ->get()
-            ->keyBy('question_id');
-
-        $marksObtained = 0;
-        $totalMarks    = (int) $qRows->sum('question_mark');
-
-        $totalQuestions = (int) $qRows->count();
-        $totalCorrect = 0; $totalIncorrect = 0; $totalSkipped = 0;
-
-        $snapshot = [];
-
-        foreach ($qRows as $q) {
-            $qid = (int)$q->id;
-            $answers = $aRows[$qid] ?? collect();
-            $selRaw  = null;
-
-            if (isset($saved[$qid])) {
-                try { $selRaw = json_decode($saved[$qid]->selected_raw ?? 'null', true); }
-                catch (\Throwable $e) { $selRaw = null; }
-            }
-
-            $type = (string)$q->question_type;
-            $awarded = 0; $isCorrect = false;
-            $selectedIds = null; $selectedText = null;
-
-            if ($type === 'fill_in_the_blank') {
-                $fib = $this->fibExplain($q, $answers, $selRaw);
-                $isCorrect    = $fib['correct'];
-                $awarded      = $isCorrect ? (int)$q->question_mark : 0;
-                $selectedIds  = null;
-                $selectedText = $fib['student_display'];
-            } else {
-                $correctIds = $answers->where('is_correct',1)->pluck('id')->values()->all();
-                if (count($correctIds) > 1) {
-                    $l = is_array($selRaw) ? array_values(array_map('intval', $selRaw)) : [];
-                    sort($l);
-                    $r = $correctIds; sort($r);
-                    $isCorrect = ($l === $r);
-                    $selectedIds = $l;
-                } else {
-                    $isCorrect = ((int)$selRaw === (int)($correctIds[0] ?? -1));
-                    $selectedIds = is_null($selRaw) ? null : [(int)$selRaw];
-                }
-                if ($isCorrect) $awarded = (int)$q->question_mark;
-
-                if (is_array($selectedIds) && !empty($selectedIds)) {
-                    $labels = [];
-                    foreach ($answers as $a) if (in_array((int)$a->id, $selectedIds, true)) $labels[] = (string)$a->answer_title;
-                    $selectedText = implode(', ', $labels);
-                }
-            }
-
-            $isEmpty = ($selRaw === null) || (is_array($selRaw) && count(array_filter($selRaw, fn($v)=>trim((string)$v) !== '')) === 0);
-            if ($isEmpty) $totalSkipped++;
-            else $isCorrect ? $totalCorrect++ : $totalIncorrect++;
-
-            $marksObtained += $awarded;
-
-            $snapshot[] = [
-                'question_id'         => $qid,
-                'selected'            => $selRaw,
-                'is_correct'          => $isCorrect ? 1 : 0,
-                'awarded_mark'        => $awarded,
-                'selected_answer_ids' => $selectedIds,
-                'selected_text'       => $selectedText,
-            ];
-        }
-
+private function scoreAttempt(int $attemptId): array
+{
+    $attempt = DB::table('quizz_attempts')->where('id', $attemptId)->first();
+    if (!$attempt) {
         return [
-            'marks_obtained' => $marksObtained,
-            'total_marks'    => $totalMarks,
-            'answers'        => $snapshot,
-            'counters'       => [
-                'total_questions' => $totalQuestions,
-                'total_correct'   => $totalCorrect,
-                'total_incorrect' => $totalIncorrect,
-                'total_skipped'   => $totalSkipped,
-            ],
+            'marks_obtained' => 0, 'total_marks' => 0, 'answers' => [],
+            'counters' => ['total_questions'=>0,'total_correct'=>0,'total_incorrect'=>0,'total_skipped'=>0]
         ];
     }
 
+    // 3 flat queries — no per-question queries
+    $qRows = DB::table('quizz_questions')
+        ->where('quiz_id', $attempt->quiz_id)
+        ->orderBy('question_order')
+        ->get();
+
+    $aRows = DB::table('quizz_question_answers')
+        ->whereIn('belongs_question_id', $qRows->pluck('id'))
+        ->orderBy('belongs_question_id')
+        ->orderBy('answer_order')
+        ->get()
+        ->groupBy('belongs_question_id');
+
+    $saved = DB::table('quizz_attempt_answers')
+        ->where('attempt_id', $attemptId)
+        ->get()
+        ->keyBy('question_id');
+
+    $marksObtained  = 0;
+    $totalMarks     = (int) $qRows->sum('question_mark');
+    $totalCorrect   = 0;
+    $totalIncorrect = 0;
+    $totalSkipped   = 0;
+    $snapshot       = [];
+
+    foreach ($qRows as $q) {
+        $qid     = (int) $q->id;
+        $answers = $aRows[$qid] ?? collect();
+        $savedRow = $saved[$qid] ?? null;
+        $selRaw  = null;
+
+        if ($savedRow) {
+            try { $selRaw = json_decode($savedRow->selected_raw ?? 'null', true); }
+            catch (\Throwable $e) { $selRaw = null; }
+        }
+
+        // Time spent is already stored in quizz_attempt_answers
+        $timeSec = $savedRow ? (int)($savedRow->time_spent_sec ?? 0) : 0;
+
+        $type        = (string) $q->question_type;
+        $awarded     = 0;
+        $isCorrect   = false;
+
+        if ($type === 'fill_in_the_blank') {
+            $fib       = $this->fibExplain($q, $answers, $selRaw);
+            $isCorrect = $fib['correct'];
+            $awarded   = $isCorrect ? (int) $q->question_mark : 0;
+
+            // ── NEW snapshot format for FIB ──
+            $snapEntry = [
+                'question_id' => $qid,
+                'answer_text' => $fib['student_display'],   // string
+                'is_correct'  => $isCorrect ? 1 : 0,
+                'awarded_mark'=> $awarded,
+                'time_sec'    => $timeSec,
+            ];
+
+        } else {
+            $correctIds = $answers->where('is_correct', 1)->pluck('id')->values()->all();
+            $isMulti    = count($correctIds) > 1;
+
+            if ($isMulti) {
+                $selected = is_array($selRaw)
+                    ? array_values(array_map('intval', $selRaw))
+                    : [];
+                $l = $selected; sort($l);
+                $r = $correctIds; sort($r);
+                $isCorrect = ($l === $r);
+
+                // ── NEW snapshot format for multi-select ──
+                $snapEntry = [
+                    'question_id' => $qid,
+                    'answer_ids'  => $selected,             // int[]
+                    'is_correct'  => $isCorrect ? 1 : 0,
+                    'awarded_mark'=> $isCorrect ? (int)$q->question_mark : 0,
+                    'time_sec'    => $timeSec,
+                ];
+            } else {
+                $selectedId = is_null($selRaw) ? null : (int)$selRaw;
+                $isCorrect  = ($selectedId === (int)($correctIds[0] ?? -1));
+
+                // ── NEW snapshot format for single MCQ ──
+                $snapEntry = [
+                    'question_id' => $qid,
+                    'answer_id'   => $selectedId,           // int | null
+                    'is_correct'  => $isCorrect ? 1 : 0,
+                    'awarded_mark'=> $isCorrect ? (int)$q->question_mark : 0,
+                    'time_sec'    => $timeSec,
+                ];
+            }
+
+            $awarded = $snapEntry['awarded_mark'];
+        }
+
+        // Skipped / correct / incorrect counters
+        $isEmpty = ($selRaw === null) ||
+            (is_array($selRaw) && count(array_filter($selRaw, fn($v) => trim((string)$v) !== '')) === 0);
+
+        if ($isEmpty)       $totalSkipped++;
+        elseif ($isCorrect) $totalCorrect++;
+        else                $totalIncorrect++;
+
+        $marksObtained += $awarded;
+        $snapshot[]     = $snapEntry;
+    }
+
+    return [
+        'marks_obtained' => $marksObtained,
+        'total_marks'    => $totalMarks,
+        'answers'        => $snapshot,
+        'counters'       => [
+            'total_questions' => (int) $qRows->count(),
+            'total_correct'   => $totalCorrect,
+            'total_incorrect' => $totalIncorrect,
+            'total_skipped'   => $totalSkipped,
+        ],
+    ];
+}
     private function resultSummaryForAttempt(object $attempt): array
     {
         $res = $attempt->result_id
@@ -1534,12 +1686,12 @@ h1,h2{margin:6px 0}
         $snapshot = [];
     }
 
-    $snapByQ = [];
-    foreach ($snapshot as $s) {
-        if (isset($s['question_id'])) {
-            $snapByQ[(int)$s['question_id']] = $s;
-        }
+   $snapByQ = [];
+foreach ($snapshot as $s) {
+    if (isset($s['question_id'])) {
+        $snapByQ[(int)$s['question_id']] = $this->normalizeSnap($s); // ← add normalizer
     }
+}
 
     // ---------- 3. Load questions + answer options ----------
     $questions = DB::table('quizz_questions')
@@ -1597,11 +1749,19 @@ h1,h2{margin:6px 0}
             'description'         => $q->question_description,
             'type'                => $qType,
             'mark'                => (int) $q->question_mark,
-            'time_spent_sec'      => $timeRow ? (int) $timeRow->time_spent_sec : 0,
+            // 'time_spent_sec'      => $timeRow ? (int) $timeRow->time_spent_sec : 0,
             'is_correct'          => $snap ? (int) ($snap['is_correct'] ?? 0) : 0,
             'awarded_mark'        => $snap ? (int) ($snap['awarded_mark'] ?? 0) : 0,
-            'selected_answer_ids' => $snap['selected_answer_ids'] ?? null,
-            'selected_text'       => $snap['selected_text'] ?? null,
+            // New format — derive selected_answer_ids and selected_text from normalized snap
+'selected_answer_ids' => $snap
+    ? ($snap['answer_ids'] ?? (isset($snap['answer_id']) && $snap['answer_id'] !== null ? [$snap['answer_id']] : null))
+    : null,
+'selected_text'       => $snap
+    ? ($snap['answer_text'] ?? null)
+    : null,
+'time_spent_sec'      => $snap
+    ? (int)($snap['time_sec'] ?? ($timeRow?->time_spent_sec ?? 0))  // prefer snap, fallback to DB row
+    : ($timeRow ? (int)$timeRow->time_spent_sec : 0),
             'correct_text'        => $correctText,
             'answers'             => $ansRows->map(function ($a) {
                 return [
@@ -1942,8 +2102,14 @@ h1,h2{margin:6px 0}
                 'mark'       => (int)$q->question_mark,
                 'is_correct' => (int)($snap['is_correct'] ?? 0),
                 'awarded'    => (int)($snap['awarded_mark'] ?? 0),
-                'your'       => isset($snap['selected_text']) ? (string)$snap['selected_text'] : '',
-                'correct'    => implode(', ', $correctLabels),
+'your' => (function() use ($snap) {
+    if (!$snap) return '';
+    $snap = $this->normalizeSnap($snap);
+    if (isset($snap['answer_text'])) return (string)$snap['answer_text'];
+    if (isset($snap['answer_ids']))  return implode(', ', $snap['answer_ids']);
+    if (isset($snap['answer_id']) && $snap['answer_id'] !== null) return (string)$snap['answer_id'];
+    return '';
+})(),                'correct'    => implode(', ', $correctLabels),
             ];
         }
     

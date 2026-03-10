@@ -13,7 +13,6 @@
   <title>Exam</title>
 
   <link rel="stylesheet" href="{{ asset('assets/css/common/main.css') }}"/>
-  <link rel="icon" type="image/png" sizes="32x32" href="{{ asset('assets/media/images/web/favicon.png') }}">
 
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"/>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
@@ -90,19 +89,141 @@
 
     @media (min-width:992px){.col-fixed-260{flex:0 0 260px;max-width:260px}}
 
-    /* Intro Modal */
-    .intro-card{border:1px solid var(--line-strong,#e5e7eb);border-radius:14px;background:var(--surface,#fff);padding:12px 14px;}
-    .intro-title{font-weight:800;font-size:.95rem;margin-bottom:6px;display:flex;align-items:center;gap:8px;}
-    .intro-body{color:var(--muted,#6b7280);font-size:.9rem;line-height:1.45;}
-    .intro-body ul, .intro-body ol{margin:8px 0 0 18px}
-    .intro-body li{margin:4px 0}
+    .exam-locked{pointer-events:none;opacity:.85;filter:saturate(.85)}
 
-    /* Fixed-size images inside answer options */
-    .opt .form-check-label img{width:220px !important;height:auto !important;max-width:100% !important;display:block;margin-top:6px;border-radius:8px;object-fit:contain;}
-    @media (max-width:576px){.opt .form-check-label img{width:160px !important;}}
+    /* Fullscreen Warning Overlay */
+    #fullscreen-warning-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.95);
+      z-index: 9999;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(10px);
+    }
+    #fullscreen-warning-overlay.active {
+      display: flex;
+    }
+    .warning-content {
+      background: white;
+      padding: 3rem;
+      border-radius: 20px;
+      text-align: center;
+      max-width: 500px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    }
+    .warning-icon {
+      font-size: 4rem;
+      color: #ef4444;
+      margin-bottom: 1rem;
+    }
+    .warning-title {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #111827;
+      margin-bottom: 1rem;
+    }
+    .warning-message {
+      color: #6b7280;
+      margin-bottom: 2rem;
+      line-height: 1.6;
+    }
+    .warning-count {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #ef4444;
+      margin-bottom: 1rem;
+    }
+
+    /* Violation badge — always visible once exam starts */
+    #violation-badge {
+      position: fixed;
+      top: 80px;
+      right: 20px;
+      z-index: 1000;
+      background: #fee;
+      border: 2px solid #ef4444;
+      padding: 0.5rem 1rem;
+      border-radius: 10px;
+      font-weight: 600;
+      color: #dc2626;
+      display: none;
+    }
+    #violation-badge.show {
+      display: block;
+    }
+    #violation-badge.pulse {
+      animation: pulse 1s ease 3;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.7; transform: scale(1.05); }
+    }
+
+    /* Ready to start rules list */
+    .exam-rules-list {
+      text-align: left;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    .exam-rules-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: .6rem;
+      padding: .5rem .75rem;
+      border-radius: 10px;
+      margin-bottom: .4rem;
+      font-size: .9rem;
+      background: #fef2f2;
+      color: #7f1d1d;
+      border: 1px solid #fecaca;
+    }
+    .exam-rules-list li i {
+      margin-top: .15rem;
+      flex-shrink: 0;
+      color: #ef4444;
+    }
+    .exam-rules-list li.rule-ok {
+      background: #f0fdf4;
+      color: #14532d;
+      border-color: #bbf7d0;
+    }
+    .exam-rules-list li.rule-ok i { color: #16a34a; }
   </style>
 </head>
 <body>
+
+<!-- Fullscreen Warning Overlay -->
+<div id="fullscreen-warning-overlay">
+  <div class="warning-content">
+    <div class="warning-icon">
+      <i class="fa-solid fa-triangle-exclamation"></i>
+    </div>
+    <div class="warning-title">Tab Switch Detected!</div>
+    <div class="warning-message">
+      You have left the exam window. This action has been logged.
+      <br><br>
+      <strong>Please return to the exam and stay focused.</strong>
+    </div>
+    <div class="warning-count">
+      Violation #<span id="violation-count">1</span>
+    </div>
+    <button id="return-to-exam-btn" class="btn btn-primary btn-lg">
+      <i class="fa-solid fa-arrow-left me-2"></i>Return to Exam
+    </button>
+  </div>
+</div>
+
+<!-- Violation Badge — shown after exam starts -->
+<div id="violation-badge">
+  <i class="fa-solid fa-exclamation-triangle me-2"></i>
+  Violations: <span id="badge-count">0</span>
+</div>
 
 <header class="exam-header sticky-top">
   <div class="container-xxl d-flex align-items-center justify-content-between py-3">
@@ -111,10 +232,15 @@
       <span class="badge rounded-pill text-bg-light border">
         <i class="fa-solid fa-pencil me-1"></i> Live
       </span>
+      <span id="fullscreen-status" class="badge rounded-pill text-bg-success">
+        <i class="fa-solid fa-expand me-1"></i> Fullscreen
+      </span>
     </div>
-    <div id="timer-pill" class="timer-pill">
-      <i class="fa-solid fa-clock"></i>
-      <span id="time-left">--:--</span>
+    <div class="d-flex align-items-center gap-2">
+      <div id="timer-pill" class="timer-pill">
+        <i class="fa-solid fa-clock"></i>
+        <span id="time-left">--:--</span>
+      </div>
     </div>
   </div>
 </header>
@@ -186,66 +312,6 @@
   </div>
 </main>
 
-{{-- Intro Modal --}}
-<div class="modal fade" id="examIntroModal" tabindex="-1"
-     data-bs-backdrop="static" data-bs-keyboard="false" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered modal-lg">
-    <div class="modal-content" style="border-radius:16px;border:1px solid var(--line-strong,#e5e7eb);box-shadow:0 18px 60px rgba(15,23,42,.2);">
-      <div class="modal-header" style="border-bottom:1px solid var(--line-strong,#e5e7eb);background:var(--surface,#fff);border-top-left-radius:16px;border-top-right-radius:16px;">
-        <div class="d-flex align-items-center gap-2">
-          <div style="width:38px;height:38px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:rgba(79,70,229,.08);border:1px solid rgba(79,70,229,.2);">
-            <i class="fa-solid fa-circle-info" style="color:var(--accent-color,#4f46e5)"></i>
-          </div>
-          <div>
-            <div id="introQuizTitle" style="font-weight:900;font-size:1.02rem;line-height:1.15;">Exam Instructions</div>
-            <div class="small text-muted">Read carefully before starting</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="modal-body" style="background:var(--surface,#fff);">
-        <div class="intro-card mb-3">
-          <div class="intro-title">
-            <i class="fa-solid fa-note-sticky" style="color:var(--accent-color,#4f46e5)"></i>
-            Description
-          </div>
-          <div id="introDesc" class="intro-body">
-            <div class="skeleton" style="height:14px;width:70%;margin-bottom:8px;"></div>
-            <div class="skeleton" style="height:14px;width:92%;margin-bottom:8px;"></div>
-            <div class="skeleton" style="height:14px;width:85%;"></div>
-          </div>
-        </div>
-
-        <div class="intro-card">
-          <div class="intro-title">
-            <i class="fa-solid fa-book-open-reader" style="color:var(--accent-color,#4f46e5)"></i>
-            Instructions
-          </div>
-          <div id="introInstr" class="intro-body">
-            <div class="skeleton" style="height:14px;width:80%;margin-bottom:8px;"></div>
-            <div class="skeleton" style="height:14px;width:90%;margin-bottom:8px;"></div>
-            <div class="skeleton" style="height:14px;width:72%;"></div>
-          </div>
-        </div>
-
-        <div class="mt-3 small text-muted">
-          <i class="fa-solid fa-clock me-1"></i>
-          Timer will start only after you press <b>Start Exam</b>.
-        </div>
-      </div>
-
-      <div class="modal-footer" style="border-top:1px solid var(--line-strong,#e5e7eb);background:var(--surface,#fff);border-bottom-left-radius:16px;border-bottom-right-radius:16px;">
-        <button type="button" id="introBackBtn" class="btn btn-light">
-          <i class="fa-solid fa-arrow-left me-2"></i>Back
-        </button>
-        <button type="button" id="introStartBtn" class="btn btn-primary">
-          <i class="fa-solid fa-play me-2"></i>Start Exam
-        </button>
-      </div>
-    </div>
-  </div>
-</div>
-
 <script>
 function typeset(el){
   if (!el) return;
@@ -261,6 +327,141 @@ function typeset(el){
 </script>
 
 <script>
+/* ================== Fullscreen & Tab Switch Detection ================== */
+let violationCount = 0;
+let isFullscreenActive = false;
+let tabSwitchLogged = false;
+
+function requestFullscreen() {
+  const elem = document.documentElement;
+  if (elem.requestFullscreen) {
+    elem.requestFullscreen().catch(err => {
+      console.warn('Fullscreen request failed:', err);
+    });
+  } else if (elem.webkitRequestFullscreen) {
+    elem.webkitRequestFullscreen();
+  } else if (elem.msRequestFullscreen) {
+    elem.msRequestFullscreen();
+  }
+}
+
+// Trigger fullscreen on hover, left-click, and right-click anywhere on the page
+document.addEventListener('mouseover', () => {
+  if (EXAM_STARTED && !isFullscreenActive && !isSubmitting) {
+    requestFullscreen();
+  }
+});
+document.addEventListener('click', () => {
+  if (EXAM_STARTED && !isFullscreenActive && !isSubmitting) {
+    requestFullscreen();
+  }
+});
+document.addEventListener('contextmenu', (e) => {
+  if (EXAM_STARTED && !isSubmitting) {
+    e.preventDefault();
+    if (!isFullscreenActive) {
+      requestFullscreen();
+    }
+    return false;
+  }
+});
+
+function updateFullscreenStatus() {
+  isFullscreenActive = !!(document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement);
+
+  const statusBadge = document.getElementById('fullscreen-status');
+  if (isFullscreenActive) {
+    statusBadge.innerHTML = '<i class="fa-solid fa-expand me-1"></i> Fullscreen';
+    statusBadge.className = 'badge rounded-pill text-bg-success';
+  } else {
+    statusBadge.innerHTML = '<i class="fa-solid fa-compress me-1"></i> Windowed';
+    statusBadge.className = 'badge rounded-pill text-bg-warning';
+  }
+}
+
+function logViolation(type) {
+  violationCount++;
+
+  // Update badge count and show it
+  const badge = document.getElementById('violation-badge');
+  document.getElementById('badge-count').textContent = violationCount;
+  badge.classList.add('show');
+
+  // Pulse animation on each new violation
+  badge.classList.remove('pulse');
+  void badge.offsetWidth; // reflow to restart animation
+  badge.classList.add('pulse');
+
+  console.warn(`Violation #${violationCount}: ${type}`);
+  // api('/api/exam/log-violation', { method: 'POST', body: JSON.stringify({ type, count: violationCount }) });
+
+  return violationCount;
+}
+
+function handleTabSwitch() {
+  if (tabSwitchLogged || !EXAM_STARTED || isSubmitting) return;
+
+  tabSwitchLogged = true;
+  const currentCount = logViolation('Tab Switch');
+
+  // Show warning overlay
+  document.getElementById('violation-count').textContent = currentCount;
+  document.getElementById('fullscreen-warning-overlay').classList.add('active');
+}
+function handleFullscreenExit() {
+  if (!EXAM_STARTED || isSubmitting) return;
+  requestFullscreen();
+}
+
+// Return to exam button
+document.getElementById('return-to-exam-btn')?.addEventListener('click', () => {
+  document.getElementById('fullscreen-warning-overlay').classList.remove('active');
+  tabSwitchLogged = false;
+  requestFullscreen();
+});
+
+// Detect visibility change (tab switch)
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    handleTabSwitch();
+    const cur = questions[currentIndex];
+    if (cur?.question_id) leaveQuestion(cur.question_id);
+    cacheSave();
+  } else {
+    tabSwitchLogged = false;
+  }
+});
+
+// Detect fullscreen change
+document.addEventListener('fullscreenchange', () => {
+  updateFullscreenStatus();
+  // Check AFTER updating — isFullscreenActive now reflects current state
+  if (!isFullscreenActive && EXAM_STARTED && !isSubmitting) {
+    handleFullscreenExit();
+  }
+});
+document.addEventListener('webkitfullscreenchange', updateFullscreenStatus);
+document.addEventListener('msfullscreenchange', updateFullscreenStatus);
+// Prevent common shortcuts
+document.addEventListener('keydown', (e) => {
+  if (!EXAM_STARTED || isSubmitting) return;
+
+  if (e.key === 'F11') {
+    e.preventDefault();
+    return false;
+  }
+
+  if ((e.ctrlKey || e.metaKey) && ['w', 't', 'n'].includes(e.key.toLowerCase())) {
+    e.preventDefault();
+    return false;
+  }
+
+  if (e.altKey && e.key === 'Tab') {
+    e.preventDefault();
+    return false;
+  }
+});
+
 /* ================== Globals ================== */
 const $  = s => document.querySelector(s);
 const $$ = s => Array.from(document.querySelectorAll(s));
@@ -272,6 +473,20 @@ const QUIZ_KEY =
 
 const STORAGE_ATTEMPT_KEY = 'attempt_uuid:' + QUIZ_KEY;
 const STORAGE_CACHE_KEY   = 'exam_cache:'   + QUIZ_KEY;
+
+if (!QUIZ_KEY) {
+  document.addEventListener('DOMContentLoaded', () => {
+    Swal.fire({icon:'error',title:'Missing quiz key',text:'No quiz id/uuid provided in URL.'})
+      .then(() => history.back());
+  });
+}
+
+if (!token) {
+  document.addEventListener('DOMContentLoaded', () => {
+    Swal.fire({icon:'error',title:'Not authenticated',text:'Please log in again to continue the exam.'})
+      .then(() => window.location.href = '/login');
+  });
+}
 
 let ATTEMPT_UUID = localStorage.getItem(STORAGE_ATTEMPT_KEY) || null;
 
@@ -289,12 +504,26 @@ let isSubmitting  = false;
 let activeQid     = null;
 let activeStartMs = null;
 
-let EXAM_STARTED      = false;
+let EXAM_STARTED  = false;
+
 let AUTO_SUBMIT_FIRED = false;
 
 /* ================== Utilities ================== */
+function disableExamUI(lock=true){
+  const wrap = $('#question-wrap');
+  const nav  = $('#nav-grid');
+  [wrap, nav, $('#prev-btn'), $('#next-btn'), $('#review-btn')].forEach(el=>{
+    if(!el) return;
+    if(lock) el.classList.add('exam-locked');
+    else el.classList.remove('exam-locked');
+    if (el.tagName === 'BUTTON') el.disabled = !!lock;
+  });
 
-// FIX 1: Recover attempt UUID from cache if primary key is missing
+  $$('#question-wrap input, #question-wrap textarea, #question-wrap select').forEach(i=>{
+    i.disabled = !!lock;
+  });
+}
+
 function ensureAttemptUuid(){
   if (ATTEMPT_UUID) return ATTEMPT_UUID;
 
@@ -303,9 +532,9 @@ function ensureAttemptUuid(){
 
   try{
     const raw = localStorage.getItem(STORAGE_CACHE_KEY);
-    if (raw){
+    if(raw){
       const c = JSON.parse(raw);
-      if (c?.attempt_uuid){
+      if(c?.attempt_uuid){
         ATTEMPT_UUID = c.attempt_uuid;
         localStorage.setItem(STORAGE_ATTEMPT_KEY, ATTEMPT_UUID);
         return ATTEMPT_UUID;
@@ -316,29 +545,21 @@ function ensureAttemptUuid(){
   return null;
 }
 
-// FIX 15: parseServerDate — try ISO parse first (preserves UTC offset if present),
-// then fall back to local-time construction for bare "YYYY-MM-DD HH:MM:SS" strings.
-// NOTE: bare datetime strings from MySQL are assumed to be in the SERVER's local timezone.
-// If your server sends UTC, append 'Z'. If it sends a timezone offset, it's handled automatically.
 function parseServerDate(val){
-  if (!val) return null;
+  if(!val) return null;
   const s = String(val).trim();
-  if (!s) return null;
+  if(!s) return null;
 
-  // If string already has timezone info (Z or +HH:MM), Date can parse it natively
-  if (/[Zz]$/.test(s) || /[+-]\d{2}:\d{2}$/.test(s)){
-    const d = new Date(s);
-    return isNaN(d.getTime()) ? null : d;
-  }
-
-  // MySQL "YYYY-MM-DD HH:MM:SS[.mmm]" — treat as local time (same as server)
-  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?(?:\.(\d+))?/);
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?(?:\.(\d+))?$/);
   if (m){
-    const d = new Date(
-      Number(m[1]), Number(m[2])-1, Number(m[3]),
-      Number(m[4]), Number(m[5]), Number(m[6]||0),
-      Number(String(m[7]||'0').slice(0,3))
-    );
+    const yyyy = Number(m[1]);
+    const mm   = Number(m[2]) - 1;
+    const dd   = Number(m[3]);
+    const hh   = Number(m[4]);
+    const mi   = Number(m[5]);
+    const ss   = Number(m[6] || 0);
+    const ms   = Number(String(m[7] || '0').slice(0,3));
+    const d = new Date(yyyy, mm, dd, hh, mi, ss, ms);
     return isNaN(d.getTime()) ? null : d;
   }
 
@@ -346,22 +567,10 @@ function parseServerDate(val){
   return isNaN(d.getTime()) ? null : d;
 }
 
-// FIX 3: Returns null (not 0) when serverEndAt is missing — prevents premature auto-submit
 function computeTimeLeft(){
   const endDate = parseServerDate(serverEndAt);
   if (!endDate) return null;
   return Math.max(0, Math.floor((endDate.getTime() - Date.now()) / 1000));
-}
-
-// FIX 12: Tightened — 'not found' alone was too broad and could match quiz-not-found or network errors
-function isAttemptMissingError(e){
-  const msg        = String(e?.message || '').toLowerCase();
-  const payloadMsg = String(e?.payload?.message || '').toLowerCase();
-  return (
-    (e?.status === 404 && (msg.includes('attempt') || payloadMsg.includes('attempt'))) ||
-    msg.includes('attempt not found') ||
-    payloadMsg.includes('attempt not found')
-  );
 }
 
 const mmss = s => {
@@ -371,10 +580,9 @@ const mmss = s => {
   return `${m}:${n}`;
 };
 
-/* ================== API helper ================== */
 async function api(path, opts = {}) {
   const controller = new AbortController();
-  const timeoutMs  = Number(opts.timeoutMs || 20000);
+  const timeoutMs = Number(opts.timeoutMs || 20000);
   const t = setTimeout(() => controller.abort(), timeoutMs);
 
   try{
@@ -394,146 +602,22 @@ async function api(path, opts = {}) {
 
     if (!res.ok || data.success === false) {
       const err = new Error(data.message || `HTTP ${res.status}`);
-      err.status  = res.status;
+      err.status = res.status;
       err.payload = data;
       throw err;
     }
+
     return data;
-  }catch(e){
-    if (e?.name === 'AbortError'){
+  } catch (e){
+    if (e?.name === 'AbortError') {
       const err = new Error('Request timed out. Please check your internet and try again.');
       err.status = 408;
       throw err;
     }
     throw e;
-  }finally{
+  } finally {
     clearTimeout(t);
   }
-}
-
-/* ================== Intro Modal ================== */
-function pickFirstNonEmpty(...vals){
-  for(const v of vals){
-    if(v === null || v === undefined) continue;
-    const s = String(v).trim();
-    if(s !== '') return s;
-  }
-  return '';
-}
-
-function escapeHtml(str){
-  return (str ?? '').toString()
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-}
-
-function sanitizeHtmlAllowList(inputHtml){
-  const html = String(inputHtml ?? '').trim();
-  if(!html) return '';
-
-  const allowed = new Set([
-    'B','I','EM','STRONG','U','BR','P','DIV','SPAN','UL','OL','LI',
-    'A','CODE','PRE','HR','BLOCKQUOTE','SMALL','SUP','SUB',
-    'H1','H2','H3','H4','H5','H6'
-  ]);
-
-  const doc = new DOMParser().parseFromString(html, 'text/html');
-  const cleanNode = (node) => {
-    if (node.nodeType === Node.COMMENT_NODE){ node.remove(); return; }
-    if (node.nodeType === Node.ELEMENT_NODE){
-      const tag = node.tagName;
-      if (!allowed.has(tag)){
-        const parent = node.parentNode;
-        if (!parent) return;
-        while (node.firstChild) parent.insertBefore(node.firstChild, node);
-        parent.removeChild(node);
-        return;
-      }
-      [...node.attributes].forEach(attr => {
-        const name = attr.name.toLowerCase();
-        const val  = String(attr.value || '');
-        if (name.startsWith('on') || name === 'style'){ node.removeAttribute(attr.name); return; }
-        if (tag === 'A'){
-          if (name === 'href'){
-            const href = val.trim();
-            const safe = /^https?:\/\//i.test(href) || /^mailto:/i.test(href) || href.startsWith('#');
-            if (!safe) node.removeAttribute('href');
-            return;
-          }
-          if (!['href','target','rel'].includes(name)) node.removeAttribute(attr.name);
-          return;
-        }
-        node.removeAttribute(attr.name);
-      });
-      if (tag === 'A'){ node.setAttribute('target','_blank'); node.setAttribute('rel','noopener noreferrer'); }
-    }
-    [...node.childNodes].forEach(cleanNode);
-  };
-  [...doc.body.childNodes].forEach(cleanNode);
-  return doc.body.innerHTML.trim();
-}
-
-function renderSafeHtmlOrText(raw){
-  const s = String(raw ?? '').trim();
-  if(!s) return '';
-  const looksHtml = /<\/?[a-z][\s\S]*>/i.test(s);
-  if (looksHtml){
-    const cleaned = sanitizeHtmlAllowList(s);
-    return cleaned || `<div>${escapeHtml(s)}</div>`;
-  }
-  return `<div>${escapeHtml(s).replace(/\n/g,'<br>')}</div>`;
-}
-
-async function fetchQuizMeta(){
-  try{
-    const res  = await api(`/api/exam/quizzes/${encodeURIComponent(QUIZ_KEY)}`, { method:'GET' });
-    const meta = res?.data || res?.quiz || res;
-    return meta && typeof meta === 'object' ? meta : null;
-  }catch(e){
-    console.error('fetchQuizMeta failed:', e);
-    return null;
-  }
-}
-
-async function openIntroModal(){
-  const el    = document.getElementById('examIntroModal');
-  const modal = new bootstrap.Modal(el, { backdrop:'static', keyboard:false });
-
-  modal.show();
-
-  document.getElementById('introQuizTitle').textContent = 'Loading…';
-  document.getElementById('introDesc').innerHTML  = `<div class="text-muted small">Loading description…</div>`;
-  document.getElementById('introInstr').innerHTML = `<div class="text-muted small">Loading instructions…</div>`;
-
-  const meta = await fetchQuizMeta();
-
-  const title = pickFirstNonEmpty(meta?.quiz_name, meta?.title, meta?.name, 'Exam');
-
-  const descRaw = pickFirstNonEmpty(
-    meta?.quiz_description, meta?.description_html, meta?.description, meta?.desc
-  );
-  const instRaw = pickFirstNonEmpty(
-    meta?.instructions, meta?.instructions_html, meta?.instruction, meta?.rules
-  );
-
-  document.getElementById('introQuizTitle').textContent = `${title} • Instructions`;
-  document.getElementById('introDesc').innerHTML  = renderSafeHtmlOrText(descRaw  || 'No description provided.');
-  document.getElementById('introInstr').innerHTML = renderSafeHtmlOrText(instRaw || 'No instructions provided.');
-
-  document.getElementById('introBackBtn').onclick = () => {
-    modal.hide();
-    history.back();
-  };
-
-  document.getElementById('introStartBtn').onclick = async () => {
-    // FIX 11: Prevent double-click from calling bootExam twice
-    const btn = document.getElementById('introStartBtn');
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Starting…';
-    modal.hide();
-    EXAM_STARTED = true;
-    await bootExam();
-  };
 }
 
 /* ================== Cache ================== */
@@ -544,27 +628,26 @@ function cacheLoad(){
     const c = JSON.parse(raw);
     if (!c || typeof c !== 'object') return false;
 
-    // Recover attempt UUID from cache if missing
-    if (!ATTEMPT_UUID && c.attempt_uuid){
+    if(!ATTEMPT_UUID && c.attempt_uuid){
       ATTEMPT_UUID = c.attempt_uuid;
       localStorage.setItem(STORAGE_ATTEMPT_KEY, ATTEMPT_UUID);
     }
 
     if (c.attempt_uuid && ATTEMPT_UUID && c.attempt_uuid !== ATTEMPT_UUID) return false;
 
-    questions    = Array.isArray(c.questions) ? c.questions : [];
-    selections   = (c.selections   && typeof c.selections === 'object')   ? c.selections   : {};
-    reviews      = (c.reviews      && typeof c.reviews === 'object')      ? c.reviews      : {};
-    visited      = (c.visited      && typeof c.visited === 'object')      ? c.visited      : {};
-    timeSpentSec = (c.timeSpentSec && typeof c.timeSpentSec === 'object') ? c.timeSpentSec : {};
-    currentIndex = Number.isFinite(Number(c.currentIndex)) ? Number(c.currentIndex) : 0;
-    serverEndAt  = c.serverEndAt || null;
+    questions     = Array.isArray(c.questions) ? c.questions : [];
+    selections    = (c.selections && typeof c.selections === 'object') ? c.selections : {};
+    reviews       = (c.reviews   && typeof c.reviews === 'object') ? c.reviews   : {};
+    visited       = (c.visited   && typeof c.visited === 'object') ? c.visited   : {};
+    timeSpentSec  = (c.timeSpentSec && typeof c.timeSpentSec === 'object') ? c.timeSpentSec : {};
+    currentIndex  = Number.isFinite(Number(c.currentIndex)) ? Number(c.currentIndex) : 0;
+    serverEndAt   = c.serverEndAt || null;
 
     questions.forEach(q => {
       if (String(q.question_type).toLowerCase() === 'fill_in_the_blank') {
         const cur = selections[q.question_id];
         if (cur == null) selections[q.question_id] = [];
-        else if (!Array.isArray(cur)){
+        else if (!Array.isArray(cur)) {
           const val = String(cur).trim();
           selections[q.question_id] = val ? [val] : [];
         }
@@ -572,7 +655,9 @@ function cacheLoad(){
     });
 
     return questions.length > 0;
-  }catch(_){ return false; }
+  }catch(_){
+    return false;
+  }
 }
 
 let cacheSaveTimer = null;
@@ -584,8 +669,13 @@ function cacheSave(){
   try{
     const payload = {
       attempt_uuid: ATTEMPT_UUID,
-      serverEndAt, currentIndex, questions,
-      selections, reviews, visited, timeSpentSec,
+      serverEndAt,
+      currentIndex,
+      questions,
+      selections,
+      reviews,
+      visited,
+      timeSpentSec,
       savedAt: Date.now()
     };
     localStorage.setItem(STORAGE_CACHE_KEY, JSON.stringify(payload));
@@ -594,64 +684,64 @@ function cacheSave(){
 
 function clearAllExamClientState(){
   try{
-    if (timerHandle)    { clearInterval(timerHandle);  timerHandle    = null; }
+    if (timerHandle) { clearInterval(timerHandle); timerHandle = null; }
     if (cacheSaveTimer) { clearTimeout(cacheSaveTimer); cacheSaveTimer = null; }
 
-    if (QUIZ_KEY){
+    if (QUIZ_KEY) {
       localStorage.removeItem(STORAGE_ATTEMPT_KEY);
       localStorage.removeItem(STORAGE_CACHE_KEY);
       sessionStorage.removeItem(STORAGE_ATTEMPT_KEY);
       sessionStorage.removeItem(STORAGE_CACHE_KEY);
     }
 
-    ATTEMPT_UUID      = null;
-    questions         = [];
-    selections        = {};
-    reviews           = {};
-    visited           = {};
-    timeSpentSec      = {};
-    currentIndex      = 0;
-    serverEndAt       = null;
-    activeQid         = null;
-    activeStartMs     = null;
+    ATTEMPT_UUID = null;
+    questions = [];
+    selections = {};
+    reviews = {};
+    visited = {};
+    timeSpentSec = {};
+    currentIndex = 0;
+    serverEndAt = null;
+    activeQid = null;
+    activeStartMs = null;
     AUTO_SUBMIT_FIRED = false;
   }catch(_){}
 }
 
 /* ================== Timer ================== */
 function startTimerFromServerEnd(){
-  // Always kill any existing interval first — safe to call multiple times
-  // AUTO_SUBMIT_FIRED is module-level, so even if this is called twice,
-  // only one submit can ever fire.
-  if (timerHandle){ clearInterval(timerHandle); timerHandle = null; }
-
-  const tick = () => {
+  const tick = async () => {
     const left = computeTimeLeft();
 
-    if (left === null){
+    if (left === null) {
       $('#time-left').textContent = '--:--';
       return;
     }
 
     $('#time-left').textContent = mmss(left);
 
-    if (left <= 0 && !AUTO_SUBMIT_FIRED){
+    if (left <= 0 && !AUTO_SUBMIT_FIRED) {
       AUTO_SUBMIT_FIRED = true;
-      if (timerHandle){ clearInterval(timerHandle); timerHandle = null; }
+      if (timerHandle) { clearInterval(timerHandle); timerHandle = null; }
+      disableExamUI(true);
 
       Swal.fire({
-        icon:'info', title:"Time's Up!",
-        text:'Your exam time has ended. Submitting your answers automatically…',
-        allowOutsideClick:false, allowEscapeKey:false,
-        showConfirmButton:false,
-        didOpen:() => Swal.showLoading()
+        icon: 'info',
+        title: 'Time\'s Up!',
+        text: 'Your exam time has ended. Submitting your answers automatically...',
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        showConfirmButton: false,
+        didOpen: () => Swal.showLoading()
       });
 
-      setTimeout(() => doSubmit(true), 1500);
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      await doSubmit(true);
     }
   };
 
   tick();
+  if (timerHandle) clearInterval(timerHandle);
   timerHandle = setInterval(tick, 1000);
 }
 
@@ -661,14 +751,17 @@ function showSkeleton(on=true){ $('#q-skeleton')?.classList.toggle('d-none', !on
 function typeLabel(t){
   t = String(t || '').toLowerCase();
   if (t === 'fill_in_the_blank') return 'Fill in the blanks';
-  if (t === 'true_false')        return 'True / False';
+  if (t === 'true_false')       return 'True / False';
+  if (t === 'mcq')              return 'Single choice';
   return 'Single choice';
 }
 
-function normalizeTeX(s){
+function normalizeTeX(s) {
   return String(s ?? '')
-    .replace(/\\\\\[/g,'\\[').replace(/\\\\\]/g,'\\]')
-    .replace(/\\\\\(/g,'\\(').replace(/\\\\\)/g,'\\)');
+    .replace(/\\\\\[/g, '\\[')
+    .replace(/\\\\\]/g, '\\]')
+    .replace(/\\\\\(/g, '\\(')
+    .replace(/\\\\\)/g, '\\)');
 }
 
 function answeredVal(qid){
@@ -682,9 +775,9 @@ function updateProgress(){
   const done  = questions.filter(q => answeredVal(q.question_id)).length;
   const total = questions.length || 1;
   const pct   = Math.round((done / total) * 100);
-  $('#progress-count').textContent    = String(done);
-  $('#progress-total').textContent    = String(questions.length);
-  $('#progress-pct').textContent      = pct + '%';
+  $('#progress-count').textContent = String(done);
+  $('#progress-total').textContent = String(questions.length);
+  $('#progress-pct').textContent   = pct + '%';
   $('#progress-bar-fill').style.width = pct + '%';
 }
 
@@ -693,10 +786,10 @@ function refreshNav(){
   questions.forEach((q, idx) => {
     const btn = grid[idx];
     btn.className = 'nav-btn';
-    if      (idx === currentIndex)         btn.classList.add('current');
-    else if (reviews[q.question_id])       btn.classList.add('review');
-    else if (answeredVal(q.question_id))   btn.classList.add('answered');
-    else if (visited[q.question_id])       btn.classList.add('visited');
+    if (idx === currentIndex) btn.classList.add('current');
+    else if (reviews[q.question_id]) btn.classList.add('review');
+    else if (answeredVal(q.question_id)) btn.classList.add('answered');
+    else if (visited[q.question_id]) btn.classList.add('visited');
   });
 }
 
@@ -704,7 +797,7 @@ function refreshNav(){
 function enterQuestion(qid){
   if (!qid) return;
   if (activeQid && activeQid !== qid) leaveQuestion(activeQid);
-  activeQid     = Number(qid);
+  activeQid = Number(qid);
   activeStartMs = Date.now();
 }
 function leaveQuestion(qid){
@@ -715,16 +808,19 @@ function leaveQuestion(qid){
   const diffSec = Math.max(1, Math.round((Date.now() - activeStartMs) / 1000));
   timeSpentSec[qid] = (Number(timeSpentSec[qid] || 0) + diffSec);
 
-  activeQid     = null;
+  activeQid = null;
   activeStartMs = null;
+
   cacheSaveDebounced();
 }
 
 /* ================== Render ================== */
 function countGaps(q){
-  const re = /\{dash\}/gi;
-  const n1 = (String(q.question_title       || '').match(re) || []).length;
-  const n2 = (String(q.question_description || '').match(re) || []).length;
+  const title = String(q.question_title || '');
+  const desc  = String(q.question_description || '');
+  const re    = /\{dash\}/gi;
+  const n1    = (title.match(re) || []).length;
+  const n2    = (desc.match(re)  || []).length;
   if (n1 + n2 > 0) return n1 + n2;
   const ansLen = Array.isArray(q.answers) ? q.answers.length : 0;
   return ansLen > 0 ? ansLen : 1;
@@ -733,7 +829,8 @@ function countGaps(q){
 function collectSelectionFor(q){
   const multi = !!q.has_multiple_correct_answer;
   const type  = String(q.question_type || '').toLowerCase();
-  if (type === 'fill_in_the_blank'){
+
+  if (type === 'fill_in_the_blank') {
     return $$('#options input[data-fib-index]').map(i => i.value || '');
   }
   const checked = $$('#options input:checked').map(i => Number(i.value));
@@ -747,16 +844,18 @@ function renderQuestion(){
   visited[q.question_id] = true;
   cacheSaveDebounced();
 
-  const wrap    = $('#question-wrap');
+  const wrap = $('#question-wrap');
   const rawType = String(q.question_type || '').toLowerCase();
   const multi   = !!q.has_multiple_correct_answer;
-  const label   = (multi && rawType !== 'fill_in_the_blank') ? 'Multiple choice' : typeLabel(rawType);
+  const label   = multi && rawType !== 'fill_in_the_blank' ? 'Multiple choice' : typeLabel(rawType);
 
   let hintBadge = '';
-  if (rawType !== 'fill_in_the_blank' && rawType !== 'true_false'){
-    hintBadge = multi
-      ? `<span class="question-badge-hint ms-1"><i class="fa-solid fa-list-check me-1"></i>One or more answers</span>`
-      : `<span class="question-badge-hint ms-1"><i class="fa-solid fa-circle-dot me-1"></i>One answer only</span>`;
+  if (rawType !== 'fill_in_the_blank' && rawType !== 'true_false') {
+    if (multi) {
+      hintBadge = `<span class="question-badge-hint ms-1"><i class="fa-solid fa-list-check me-1"></i>One or more answers</span>`;
+    } else {
+      hintBadge = `<span class="question-badge-hint ms-1"><i class="fa-solid fa-circle-dot me-1"></i>One answer only</span>`;
+    }
   }
 
   const toDisplay = s =>
@@ -782,34 +881,45 @@ function renderQuestion(){
 
   const sel = selections[q.question_id];
 
-  if (rawType === 'fill_in_the_blank'){
-    const gaps   = countGaps(q);
+  const escapeHtml = (str) => (str ?? '').toString()
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#39;');
+
+  if (rawType === 'fill_in_the_blank') {
+    const gaps = countGaps(q);
     const values = Array.isArray(sel) ? sel.slice(0, gaps).map(v => String(v)) : [];
     while (values.length < gaps) values.push('');
 
-    html += `<div class="opt p-3 fib-fields">
-      <label class="form-label small mb-2">Your answers</label>
-      <div class="row g-2">`;
-    for (let i = 0; i < gaps; i++){
-      html += `<div class="col-12 col-sm-6 col-md-4">
-        <input class="form-control" data-fib-index="${i}" placeholder="Answer ${i+1}"
-               value="${escapeHtml(values[i] || '')}">
-      </div>`;
+    html += `
+      <div class="opt p-3 fib-fields">
+        <label class="form-label small mb-2">Your answers</label>
+        <div class="row g-2">`;
+    for (let i = 0; i < gaps; i++) {
+      html += `
+        <div class="col-12 col-sm-6 col-md-4">
+          <input class="form-control" data-fib-index="${i}" placeholder="Answer ${i+1}"
+                 value="${escapeHtml(values[i] || '')}">
+        </div>`;
     }
-    html += `</div>
-      <div class="form-text">Enter each blank separately. Answers are case-insensitive.</div>
-    </div>`;
+    html += `
+        </div>
+        <div class="form-text">Enter each blank separately. Answers are case-insensitive.</div>
+      </div>`;
   } else {
     (q.answers || []).forEach(a => {
       const checked = multi
         ? Array.isArray(sel) && sel.map(Number).includes(Number(a.answer_id))
         : (!Array.isArray(sel) && Number(sel) === Number(a.answer_id));
 
-      html += `<label class="opt form-check d-flex align-items-center gap-2">
-        <input class="form-check-input" type="${multi ? 'checkbox' : 'radio'}"
-               name="q_${q.question_id}${multi ? '[]' : ''}" value="${a.answer_id}" ${checked ? 'checked' : ''}/>
-        <span class="form-check-label">${a.answer_title ?? ''}</span>
-      </label>`;
+      html += `
+        <label class="opt form-check d-flex align-items-center gap-2">
+          <input class="form-check-input" type="${multi ? 'checkbox' : 'radio'}"
+                 name="q_${q.question_id}${multi ? '[]' : ''}" value="${a.answer_id}" ${checked ? 'checked' : ''}/>
+          <span class="form-check-label">${a.answer_title ?? ''}</span>
+        </label>`;
     });
   }
 
@@ -821,28 +931,34 @@ function renderQuestion(){
   wrap.querySelectorAll('.fib-fields').forEach(n => n.classList.add('tex2jax_process'));
   typeset(wrap);
 
-  if (rawType === 'fill_in_the_blank'){
+  if (rawType === 'fill_in_the_blank') {
     $$('#options input[data-fib-index]').forEach(inp => {
       const updateLocal = () => {
-        selections[q.question_id] = $$('#options input[data-fib-index]').map(i => i.value || '');
-        cacheSaveDebounced(); updateProgress(); refreshNav();
+        const arr = $$('#options input[data-fib-index]').map(i => i.value || '');
+        selections[q.question_id] = arr;
+        cacheSaveDebounced();
+        updateProgress();
+        refreshNav();
       };
       inp.addEventListener('input', updateLocal);
-      inp.addEventListener('blur',  updateLocal);
+      inp.addEventListener('blur', updateLocal);
     });
   } else {
     $$('#options input').forEach(inp => {
       inp.addEventListener('change', () => {
         selections[q.question_id] = collectSelectionFor(q);
-        cacheSaveDebounced(); updateProgress(); refreshNav();
+        cacheSaveDebounced();
+        updateProgress();
+        refreshNav();
       });
     });
   }
 
   $('#prev-btn').disabled = currentIndex === 0;
-  $('#next-btn .lbl').innerHTML = (currentIndex < questions.length - 1)
-    ? `Next<i class="fa-solid fa-arrow-right ms-2"></i>`
-    : `Submit<i class="fa-solid fa-paper-plane ms-2"></i>`;
+  $('#next-btn .lbl').innerHTML =
+    (currentIndex < questions.length - 1)
+      ? `Next<i class="fa-solid fa-arrow-right ms-2"></i>`
+      : `Submit<i class="fa-solid fa-paper-plane ms-2"></i>`;
 
   $('#review-btn').innerHTML = reviews[q.question_id]
     ? `<i class="fa-solid fa-flag me-2"></i>Unmark Review`
@@ -856,6 +972,7 @@ function renderQuestion(){
 function buildNavigator(){
   const grid = $('#nav-grid');
   grid.innerHTML = '';
+
   questions.forEach((q, idx) => {
     const b = document.createElement('button');
     b.type = 'button';
@@ -864,6 +981,7 @@ function buildNavigator(){
     b.addEventListener('click', () => navigateTo(idx));
     grid.appendChild(b);
   });
+
   refreshNav();
 }
 
@@ -877,6 +995,7 @@ function navigateTo(targetIdx){
 
   currentIndex = targetIdx;
   cacheSaveDebounced();
+
   renderQuestion();
 
   const nextQ = questions[currentIndex];
@@ -884,7 +1003,11 @@ function navigateTo(targetIdx){
 }
 
 /* ================== Actions ================== */
-function onPrev(){ if (EXAM_STARTED && currentIndex > 0) navigateTo(currentIndex - 1); }
+function onPrev(){
+  if (!EXAM_STARTED) return;
+  if (currentIndex <= 0) return;
+  navigateTo(currentIndex - 1);
+}
 
 function onNext(){
   if (!EXAM_STARTED) return;
@@ -904,29 +1027,36 @@ function onToggleReview(){
 /* ================== Submit ================== */
 function showSubmitting(){
   Swal.fire({
-    title:'Submitting…',
-    html:'Saving your answers, please wait.',
-    allowOutsideClick:false, allowEscapeKey:false,
-    showConfirmButton:false,
-    didOpen:() => Swal.showLoading()
+    title: 'Submitting…',
+    html: 'Saving your answers in bulk, please wait.',
+    allowOutsideClick: false,
+    allowEscapeKey: false,
+    showConfirmButton: false,
+    didOpen: () => Swal.showLoading()
   });
 }
 
-// FIX 6: Full submit with attempt UUID guard + attempt-missing error handling
+function isAttemptMissingError(e){
+  const msg = String(e?.message || '').toLowerCase();
+  const payloadMsg = String(e?.payload?.message || '').toLowerCase();
+  return (
+    e?.status === 404 ||
+    msg.includes('attempt not found') ||
+    payloadMsg.includes('attempt not found') ||
+    msg.includes('not found')
+  );
+}
+
 async function doSubmit(auto){
   if (isSubmitting) return;
 
-  // Guard: ensure we have an attempt UUID before even trying
   const au = ensureAttemptUuid();
-  if (!au){
-    await Swal.fire({
-      icon:'error', title:'Cannot submit',
-      text:'Attempt ID is missing. Please refresh and try again.'
-    });
+  if (!au) {
+    await Swal.fire({icon:'error', title:'Cannot submit', text:'Attempt id missing. Please refresh once and try again.'});
     return;
   }
 
-  if (!auto){
+  if (!auto) {
     const res = await Swal.fire({
       title:'Submit exam?',
       text:'Once submitted, answers cannot be changed.',
@@ -941,32 +1071,39 @@ async function doSubmit(auto){
 
   try{
     isSubmitting = true;
+    disableExamUI(true);
 
     $('#submit-btn').disabled = true;
     $('#submit-btn .btn-label').classList.add('d-none');
     $('#submit-btn .btn-spinner').classList.remove('d-none');
 
-    if (!auto) showSubmitting();
+    if (!auto) {
+      showSubmitting();
+    }
 
     const curQ = questions[currentIndex];
     if (curQ?.question_id) leaveQuestion(curQ.question_id);
 
-    const answers = questions.map(q => ({
-      question_id:    Number(q.question_id),
-      selected:       (selections[Number(q.question_id)] ?? null),
-      time_spent_sec: Number(timeSpentSec[Number(q.question_id)] || 0)
-    }));
+    const answers = questions.map(q => {
+      const qid = Number(q.question_id);
+      return {
+        question_id: qid,
+        selected: (selections[qid] ?? null),
+        time_spent_sec: Number(timeSpentSec[qid] || 0)
+      };
+    });
 
-    // Bulk answer — non-fatal if attempt already closed server-side
-    try{
+    try {
       await api(`/api/exam/attempts/${encodeURIComponent(au)}/bulk-answer`, {
         method:'POST',
         body: JSON.stringify({ answers }),
         timeoutMs: 25000
       });
-    }catch(bulkErr){
-      if (isAttemptMissingError(bulkErr)) throw bulkErr; // let outer catch handle it
-      console.warn('Bulk answer warning (non-fatal):', bulkErr);
+    } catch (bulkErr) {
+      if (isAttemptMissingError(bulkErr)) {
+        throw bulkErr;
+      }
+      console.warn('Bulk answer error:', bulkErr);
     }
 
     await api(`/api/exam/attempts/${encodeURIComponent(au)}/submit`, {
@@ -981,76 +1118,77 @@ async function doSubmit(auto){
     await Swal.fire({
       icon:'success',
       title: auto ? 'Exam Auto-Submitted' : 'Exam Submitted Successfully',
-      text: auto
-        ? 'Your exam time ended and your responses have been automatically recorded.'
-        : 'Your responses have been recorded.',
+      text: auto ? 'Your exam time ended and your responses have been automatically recorded.' : 'Your responses have been recorded.',
       confirmButtonText:'OK',
-      allowOutsideClick:false, allowEscapeKey:false
+      allowOutsideClick: false,
+      allowEscapeKey: false
     });
 
-    window.location.replace('/dashboard');
+    window.location.replace(`/quizzes`);
 
   }catch(e){
     console.error('Submit error:', e);
     Swal.close();
 
-    // FIX 7: Graceful handling of "attempt not found" — don't show generic error
-    if (isAttemptMissingError(e)){
+    if (isAttemptMissingError(e)) {
       clearAllExamClientState();
+
       await Swal.fire({
         icon:'info',
         title: auto ? 'Exam Time Ended' : 'Exam Already Closed',
         text: auto
-          ? 'Your exam time has ended. Your responses have been recorded automatically.'
+          ? 'Your exam time has ended. Your responses have been recorded automatically by the system.'
           : 'This attempt is no longer active. Your responses may have already been recorded.',
         confirmButtonText:'Go to Dashboard',
-        allowOutsideClick:false, allowEscapeKey:false
+        allowOutsideClick: false,
+        allowEscapeKey: false
       });
-      window.location.replace('/dashboard');
+
+      window.location.replace('/quizzes');
       return;
     }
 
-    // Timeout during auto-submit
-    if (auto && (e?.status === 408 || e?.name === 'AbortError')){
+    if (auto && (e?.status === 408 || e?.name === 'AbortError' || e?.message?.includes('timeout'))) {
       clearAllExamClientState();
       await Swal.fire({
-        icon:'warning', title:'Connection Issue',
-        text:'There was a connection issue while submitting. Your responses were saved and will be processed.',
+        icon:'warning',
+        title:'Connection Issue',
+        text: 'There was a connection issue while submitting. Your responses were saved and will be processed. Please check your dashboard.',
         confirmButtonText:'Go to Dashboard',
-        allowOutsideClick:false, allowEscapeKey:false
+        allowOutsideClick: false,
+        allowEscapeKey: false
       });
-      window.location.replace('/dashboard');
+      window.location.replace('/quizzes');
       return;
     }
 
-    // Manual submit error — allow retry
-    if (!auto){
-      isSubmitting = false; // allow retry
+    if (!auto) {
       Swal.fire({
-        icon:'error', title:'Submit Failed',
+        icon:'error',
+        title:'Submit Failed',
         text: e.message || 'Failed to submit exam. Please try again.',
         confirmButtonText:'OK'
       });
       return;
     }
 
-    // Auto-submit fallback
     clearAllExamClientState();
     await Swal.fire({
-      icon:'info', title:'Exam Ended',
-      text:'Your exam time has ended. Please check your dashboard to verify your submission.',
+      icon:'info',
+      title:'Exam Ended',
+      text: 'Your exam time has ended. Please check your dashboard to verify your submission.',
       confirmButtonText:'Go to Dashboard',
-      allowOutsideClick:false, allowEscapeKey:false
+      allowOutsideClick: false,
+      allowEscapeKey: false
     });
-    window.location.replace('/dashboard');
+    window.location.replace('/quizzes');
 
   }finally{
-    // FIX 14: Don't restore UI state if we're navigating away (auto-submit or attempt-missing redirect)
-    if (!isSubmitting) return; // already cleaned up by a redirect path
     isSubmitting = false;
     $('#submit-btn').disabled = false;
     $('#submit-btn .btn-label').classList.remove('d-none');
     $('#submit-btn .btn-spinner').classList.add('d-none');
+    if (!auto) disableExamUI(false);
   }
 }
 
@@ -1061,30 +1199,26 @@ async function bootExam(){
 
     const hasCache = cacheLoad();
 
-    // FIX 8: Validate existing attempt with server before trusting cache
-    if (ATTEMPT_UUID){
+    if (ATTEMPT_UUID) {
       try{
-        const data = await api(`/api/exam/attempts/${encodeURIComponent(ATTEMPT_UUID)}/questions`, {
-          method:'GET', timeoutMs:20000
-        });
+        const data = await api(`/api/exam/attempts/${encodeURIComponent(ATTEMPT_UUID)}/questions`, { method:'GET', timeoutMs: 20000 });
         const pack = data.data || data;
 
         if (pack?.attempt?.server_end_at) serverEndAt = pack.attempt.server_end_at;
 
-        if (!hasCache || !questions.length){
-          questions  = pack.questions  || [];
+        if (!hasCache || !questions.length) {
+          questions  = pack.questions || [];
           selections = pack.selections || {};
         }
 
-        // If time already expired, clear everything and start fresh
         const left = computeTimeLeft();
-        if (left !== null && left <= 0){
+        if (left !== null && left <= 0) {
           clearAllExamClientState();
         } else {
           cacheSave();
         }
       }catch(e){
-        if (isAttemptMissingError(e) || e?.status === 401 || e?.status === 403){
+        if (isAttemptMissingError(e) || e?.status === 401 || e?.status === 403) {
           clearAllExamClientState();
         } else {
           console.warn('Attempt validate warning:', e);
@@ -1092,38 +1226,37 @@ async function bootExam(){
       }
     }
 
-    if (!ATTEMPT_UUID){
-      const started = await api(`/api/exam/quizzes/${encodeURIComponent(QUIZ_KEY)}/start`, {
-        method:'POST', timeoutMs:20000
-      });
+    if (!ATTEMPT_UUID) {
+      const started = await api(`/api/exam/quizzes/${encodeURIComponent(QUIZ_KEY)}/start`, { method:'POST', timeoutMs: 20000 });
+
       const attempt = started.attempt || started.data?.attempt || started.data || {};
       ATTEMPT_UUID  = attempt.attempt_uuid || null;
 
-      if (!ATTEMPT_UUID) throw new Error('Attempt ID missing from start API response.');
+      if (!ATTEMPT_UUID) throw new Error('Attempt id missing from start API.');
 
       localStorage.setItem(STORAGE_ATTEMPT_KEY, ATTEMPT_UUID);
+
       serverEndAt = attempt.server_end_at || attempt.serverEndAt || null;
 
       if (attempt.quiz_name) document.title = attempt.quiz_name + ' • Exam';
+
       cacheSave();
     }
 
-    if (!hasCache || !questions.length){
-      const data = await api(`/api/exam/attempts/${encodeURIComponent(ATTEMPT_UUID)}/questions`, {
-        method:'GET', timeoutMs:20000
-      });
+    if (!hasCache || !questions.length) {
+      const data = await api(`/api/exam/attempts/${encodeURIComponent(ATTEMPT_UUID)}/questions`, { method:'GET', timeoutMs: 20000 });
       const pack = data.data || data;
 
-      questions  = pack.questions  || [];
+      questions  = pack.questions || [];
       selections = pack.selections || {};
 
       if (pack?.attempt?.server_end_at) serverEndAt = pack.attempt.server_end_at;
 
       questions.forEach(q => {
-        if (String(q.question_type).toLowerCase() === 'fill_in_the_blank'){
+        if (String(q.question_type).toLowerCase() === 'fill_in_the_blank') {
           const cur = selections[q.question_id];
           if (cur == null) selections[q.question_id] = [];
-          else if (!Array.isArray(cur)){
+          else if (!Array.isArray(cur)) {
             const val = String(cur).trim();
             selections[q.question_id] = val ? [val] : [];
           }
@@ -1134,21 +1267,31 @@ async function bootExam(){
       cacheSave();
     }
 
-    if (!questions.length){
+    if (!questions.length) {
       showSkeleton(false);
       throw new Error('No questions found for this attempt.');
     }
 
     showSkeleton(false);
+
     buildNavigator();
-    currentIndex = Math.min(Math.max(0, currentIndex), questions.length - 1);
+    currentIndex = Math.min(Math.max(0, currentIndex), Math.max(0, questions.length - 1));
     renderQuestion();
+
+    if (parseServerDate(serverEndAt)) startTimerFromServerEnd();
+    else {
+      const timeEl = document.getElementById('time-left');
+      if (timeEl) timeEl.textContent = '--:--';
+      console.warn('serverEndAt missing/invalid → timer not started');
+    }
 
     const q = questions[currentIndex];
     if (q?.question_id) enterQuestion(q.question_id);
 
-    // FIX 10: Bind event listeners only once — must come before timer start
-    if (!bootExam.__bound){
+    // Show violation badge now that exam has started
+    document.getElementById('violation-badge').classList.add('show');
+
+    if (!bootExam.__bound) {
       bootExam.__bound = true;
 
       $('#prev-btn').addEventListener('click', onPrev);
@@ -1163,36 +1306,64 @@ async function bootExam(){
       });
     }
 
-    // FIX 9: Only start timer when serverEndAt is valid
-    // Placed AFTER __bound guard so submit button is always wired before timer can fire
-    if (parseServerDate(serverEndAt)){
-      startTimerFromServerEnd();
-    } else {
-      $('#time-left').textContent = '--:--';
-      console.warn('serverEndAt missing or invalid — timer not started');
-    }
-
   }catch(e){
     console.error(e);
     showSkeleton(false);
-    Swal.fire({icon:'error', title:'Cannot start exam', text: e.message || 'Please try again.'});
+    Swal.fire({icon:'error',title:'Cannot start exam',text:e.message || 'Please try again.'});
   }
 }
 
-/* ================== Boot ================== */
-document.addEventListener('DOMContentLoaded', async () => {
-  // FIX 13: Validate QUIZ_KEY and token BEFORE opening modal, not in separate deferred listeners
-  if (!QUIZ_KEY){
-    await Swal.fire({icon:'error',title:'Missing quiz key',text:'No quiz ID provided in URL.'});
-    history.back();
-    return;
-  }
-  if (!token){
-    await Swal.fire({icon:'error',title:'Not authenticated',text:'Please log in again to continue the exam.'});
-    window.location.href = '/login';
-    return;
-  }
-  await openIntroModal();
+/* ================== STARTUP ================== */
+let fullscreenTriggered = false;
+
+async function enterFullscreenAndStartExam() {
+  if (fullscreenTriggered) return;
+  fullscreenTriggered = true;
+
+  Swal.close();
+  requestFullscreen();
+
+  EXAM_STARTED = true;
+  await bootExam();
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  Swal.fire({
+    icon: 'info',
+    title: 'Before You Begin',
+    html: `
+      <p class="text-muted mb-3" style="font-size:.92rem;">Please read the exam rules carefully before starting.</p>
+      <ul class="exam-rules-list">
+        <li>
+          <i class="fa-solid fa-expand"></i>
+          <span>You <strong>must stay in fullscreen</strong> mode for the entire exam. Exiting fullscreen will be logged as a violation.</span>
+        </li>
+        <li>
+          <i class="fa-solid fa-arrow-right-from-bracket"></i>
+          <span>Do <strong>not switch tabs</strong> or minimize the browser window. Each tab switch is recorded as a violation.</span>
+        </li>
+        <li>
+          <i class="fa-solid fa-triangle-exclamation"></i>
+          <span>All violations are <strong>recorded and tracked</strong>. The violation count is always visible during your exam.</span>
+        </li>
+        <li class="rule-ok">
+          <i class="fa-solid fa-circle-check"></i>
+          <span>Click <strong>"Start Exam"</strong> below to enter fullscreen and begin. Good luck!</span>
+        </li>
+      </ul>`,
+    confirmButtonText: '<i class="fa-solid fa-play me-2"></i>Start Exam',
+    allowOutsideClick: false,
+    allowEscapeKey: false,
+    showConfirmButton: true,
+    customClass: {
+      confirmButton: 'btn btn-primary px-4'
+    },
+    buttonsStyling: false
+  }).then((result) => {
+    if (result.isConfirmed) {
+      enterFullscreenAndStartExam();
+    }
+  });
 });
 </script>
 </body>

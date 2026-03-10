@@ -1237,9 +1237,17 @@ mjx-container,
                             <i class="fa fa-info-circle"></i> Basic Information
                         </div>
                         <div class="form-group">
-                            <label class="form-label">Group Title (Optional)</label>
-                            <input id="qGroupTitle" type="text" class="form-control" placeholder="e.g., Algebra - Part A">
-                          </div>
+    <label class="form-label">Group Title (Optional)</label>
+    <select id="qGroupTitle" class="form-select">
+        <option value="">— None —</option>
+        <!-- populated dynamically -->
+        <option value="__other__">Other…</option>
+    </select>
+    <div id="qGroupTitleNewWrap" style="display:none; margin-top:8px;">
+        <input id="qGroupTitleNew" type="text" class="form-control"
+               placeholder="Enter new group title…">
+    </div>
+</div>
                         
                         <div class="row">
                             <div class="col">
@@ -1576,7 +1584,142 @@ function closePreviewModal(){
     previewOverlay.style.display = 'none';
     document.body.style.overflow = '';
 }
+/**
+ * Rebuild the Group-Title dropdown from the current questions array.
+ * Preserves the currently selected value when possible.
+ */
+function rebuildGroupTitleDropdown(selectedValue) {
+    const sel  = document.getElementById('qGroupTitle');
+    if (!sel) return;
 
+    // Collect unique, non-empty group titles from loaded questions
+    const titles = Array.from(
+        new Set(
+            questions
+                .map(q => (q.question_group_title || q.group_title || '').trim())
+                .filter(Boolean)
+        )
+    ).sort();
+
+    // Remember what was selected (or use the passed-in value)
+    const current = selectedValue !== undefined
+        ? selectedValue
+        : sel.value;
+
+    // Rebuild options
+    sel.innerHTML =
+        `<option value="">— None —</option>` +
+        titles.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('') +
+        `<option value="__other__">Other…</option>`;
+
+    // Re-apply selection
+    if (current && current !== '__other__') {
+        sel.value = current;        // works if option exists
+    }
+}
+document.getElementById('qGroupTitle')?.addEventListener('change', function () {
+    const newWrap = document.getElementById('qGroupTitleNewWrap');
+    const newInput = document.getElementById('qGroupTitleNew');
+
+    if (this.value === '__other__') {
+        newWrap.style.display = 'block';
+        newInput.focus();
+    } else {
+        newWrap.style.display = 'none';
+        newInput.value = '';
+    }
+});
+function commitNewGroupTitle() {
+    const sel      = document.getElementById('qGroupTitle');
+    const newInput = document.getElementById('qGroupTitleNew');
+    const newWrap  = document.getElementById('qGroupTitleNewWrap');
+    if (!sel || !newInput) return;
+
+    const val = newInput.value.trim();
+    if (!val) {
+        // nothing typed – revert to "None"
+        sel.value = '';
+        newWrap.style.display = 'none';
+        return;
+    }
+
+    // Add to dropdown if not already present
+    const exists = Array.from(sel.options).some(o => o.value === val);
+    if (!exists) {
+        const opt = document.createElement('option');
+        opt.value = val;
+        opt.textContent = val;
+        // Insert before the last "Other…" option
+        sel.insertBefore(opt, sel.lastElementChild);
+    }
+
+    sel.value = val;
+    newWrap.style.display = 'none';
+    newInput.value = '';
+}
+
+document.getElementById('qGroupTitleNew')?.addEventListener('blur',  commitNewGroupTitle);
+document.getElementById('qGroupTitleNew')?.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); commitNewGroupTitle(); }
+});
+// Convert raster image files to WebP in browser (frontend)
+// Keeps non-images unchanged. Skips SVG/GIF to preserve vector/animation.
+async function convertImageToWebP(file, quality = 0.82) {
+    try {
+        if (!(file instanceof File)) return file;
+
+        const mime = String(file.type || '').toLowerCase();
+
+        // Non-images -> keep as is
+        if (!mime.startsWith('image/')) return file;
+
+        // Keep these as-is (SVG vector, GIF animation)
+        if (mime === 'image/svg+xml' || mime === 'image/gif') return file;
+
+        // Already webp -> keep as is
+        if (mime === 'image/webp') return file;
+
+        const objectUrl = URL.createObjectURL(file);
+
+        const img = await new Promise((resolve, reject) => {
+            const i = new Image();
+            i.onload = () => resolve(i);
+            i.onerror = reject;
+            i.src = objectUrl;
+        });
+
+        const canvas = document.createElement('canvas');
+        canvas.width  = img.naturalWidth || img.width || 1;
+        canvas.height = img.naturalHeight || img.height || 1;
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+            URL.revokeObjectURL(objectUrl);
+            return file;
+        }
+
+        ctx.drawImage(img, 0, 0);
+
+        const blob = await new Promise((resolve) => {
+            canvas.toBlob((b) => resolve(b), 'image/webp', quality);
+        });
+
+        URL.revokeObjectURL(objectUrl);
+
+        // Browser may fail to create webp blob (rare) -> fallback original
+        if (!blob) return file;
+
+        const baseName = (file.name || 'upload').replace(/\.[^/.]+$/, '');
+        return new File([blob], `${baseName}.webp`, {
+            type: 'image/webp',
+            lastModified: Date.now()
+        });
+
+    } catch (err) {
+        console.warn('WebP conversion failed, using original file:', err);
+        return file; // fallback safely
+    }
+}
 function attachPasteImageUpload(editorArea, usageTag = 'question') {
   editorArea.addEventListener('paste', async (e) => {
     const cb = e.clipboardData;
@@ -1599,10 +1742,12 @@ function attachPasteImageUpload(editorArea, usageTag = 'question') {
 
       for (const file of imgFiles) {
         try {
-          const fd = new FormData();
-          fd.append('file', file);
-          fd.append('status', 'active');
-          fd.append('usage_tag', usageTag);
+          const convertedFile = await convertImageToWebP(file, 0.82);
+
+const fd = new FormData();
+fd.append('file', convertedFile);
+fd.append('status', 'active');
+fd.append('usage_tag', usageTag);
 
           const resp = await apiFetch('/api/media', { method: 'POST', body: fd });
           if (!resp.ok) { handleApiFailure('Upload failed', resp); continue; }
@@ -2083,16 +2228,17 @@ async function deleteMedia(id){
   mpDrop.addEventListener('drop', e => { const f = e.dataTransfer.files?.[0]; if (f) { mpFile.files = e.dataTransfer.files; showPreview(f); } });
   mpClear.addEventListener('click', clearPreview);
 
-  mpUploadBtn.addEventListener('click', async ()=>{
-    const f = mpFileObj;
-    if (!f){
+ mpUploadBtn.addEventListener('click', async ()=>{
+    const originalFile = mpFileObj;
+    if (!originalFile){
         const msg = 'Choose a file';
         showToast('error', msg);
-        showInlineError(msg, 'mpUploadBtn');   // inline error + tooltip on Upload
+        showInlineError(msg, 'mpUploadBtn');
         return;
-}
+    }
 
-
+    // ✅ Convert image to WebP on frontend before upload
+    const f = await convertImageToWebP(originalFile, 0.82);
     // Prepare form-data
     const fd = new FormData();
     fd.append('file', f);
@@ -2906,6 +3052,7 @@ li.innerHTML = `
                             dropdown.style.top = '100%';
                             dropdown.style.bottom = 'auto';
                         }
+                        
                     }
                 });
             });
@@ -2976,6 +3123,7 @@ li.innerHTML = `
 });
 
 typesetMath(box);
+rebuildGroupTitleDropdown();
 
         }
 
@@ -3012,8 +3160,9 @@ typesetMath(box);
             var qDifficulty = document.getElementById('qDifficulty');
             if (qDifficulty) qDifficulty.value = 'medium';
 
-            var qGroupTitle = document.getElementById('qGroupTitle');
-            if (qGroupTitle) qGroupTitle.value = '';
+           rebuildGroupTitleDropdown('');   // resets to "— None —"
+document.getElementById('qGroupTitleNewWrap').style.display = 'none';
+document.getElementById('qGroupTitleNew').value = '';
 
             var qMarks = document.getElementById('qMarks');
             if (qMarks) qMarks.value = '1';
@@ -3301,8 +3450,8 @@ function typeMetaForList(q){
             }
              if (qTypeEl) qTypeEl.disabled = true;
 
-             var qGroupTitle = document.getElementById('qGroupTitle');
-             if (qGroupTitle) qGroupTitle.value = (q.question_group_title || q.group_title || '');
+             const gt = (q.question_group_title || q.group_title || '').trim();
+rebuildGroupTitleDropdown(gt);   // ensures the value exists as an option
 
             var qType = document.getElementById('qType');
             if (qType) qType.value = uiType;
@@ -3393,7 +3542,8 @@ function typeMetaForList(q){
             
             var titleHTML = edTitleArea.innerHTML.trim();
             
-            if (!stripHtml(titleHTML).trim()){
+var titleHasImages = edTitleArea.querySelectorAll('img').length > 0;
+if (!stripHtml(titleHTML).trim() && !titleHasImages){
                 const msg = 'Please enter question text';
                 showToast('error', msg);
                 showInlineError(msg, 'btnSave');
@@ -3434,22 +3584,25 @@ function typeMetaForList(q){
                 // Handle regular multiple/single choice answers
                 var single = (type==='single_choice' || type==='true_false');
 
-                document.querySelectorAll('#ansWrap .answer-option').forEach(function(blk, i){
-                    var area = blk.querySelector('.rte-area');
-                    var html = area ? area.innerHTML.trim() : '';
-                    var plain = stripHtml(html).trim();
-                    var correct = blk.querySelector('.answer-check').checked;
+                // REPLACE WITH:
+document.querySelectorAll('#ansWrap .answer-option').forEach(function(blk, i){
+    var area      = blk.querySelector('.rte-area');
+    var html      = area ? area.innerHTML.trim() : '';
+    var plain     = stripHtml(html).trim();
+    var correct   = blk.querySelector('.answer-check').checked;
+    var hasImages = area ? area.querySelectorAll('img').length > 0 : false;
 
-                    if (plain.length){
-                        answers.push({
-                            answer_title: html,
-                            is_correct: correct ? 1 : 0,
-                            answer_order: i+1,
-                            belongs_question_type: type
-                        });
-                        if (correct) hasCorrect = true;
-                    }
-                });
+    // ✅ Accept answer if it has text OR images
+    if (plain.length > 0 || hasImages) {
+        answers.push({
+            answer_title:           html,
+            is_correct:             correct ? true : false,  // ✅ boolean not integer
+            answer_order:           i + 1,
+            belongs_question_type:  type
+        });
+        if (correct) hasCorrect = true;
+    }
+});
 
                 if (!answers.length){
                     showToast('error', 'Add at least one answer option');
@@ -3461,7 +3614,7 @@ function typeMetaForList(q){
                 
                 if (single){
                     var ccount = 0; 
-                    answers.forEach(function(a){ if(a.is_correct===1) ccount++; });
+answers.forEach(function(a){ if(a.is_correct === true) ccount++; });
                     if (ccount !== 1){ 
                         showToast('error', 'Select exactly one correct answer');
                         showInlineError('error', 'Select exactly one correct answer');
@@ -3481,7 +3634,12 @@ function typeMetaForList(q){
 
             var edExplainArea = document.querySelector('#edExplain .rte-area');
             var explHTML = edExplainArea ? (edExplainArea.innerHTML || '') : '';
-            var groupTitle = (document.getElementById('qGroupTitle')?.value || '').trim();
+const _gtSel = document.getElementById('qGroupTitle');
+const _gtNew = document.getElementById('qGroupTitleNew');
+// If "Other…" was chosen but user hasn't blurred yet, grab the live typed value
+let groupTitle = (_gtSel?.value === '__other__')
+    ? (_gtNew?.value.trim() || '')
+    : (_gtSel?.value.trim() || '');
 
 
             var body = {
